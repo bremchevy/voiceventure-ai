@@ -1,4 +1,5 @@
 import { WhisperConfig } from './ConfigurationService';
+import { AudioProcessor } from './AudioProcessor';
 
 export interface TranscriptionResult {
   text: string;
@@ -20,20 +21,41 @@ export class WhisperService {
   private apiKey: string;
   private apiEndpoint: string;
   private config: WhisperConfig;
+  private audioProcessor: AudioProcessor;
 
   constructor(apiKey: string, config: WhisperConfig) {
     this.apiKey = apiKey;
     this.apiEndpoint = 'https://api.openai.com/v1/audio';
     this.config = config;
+    this.audioProcessor = new AudioProcessor();
+  }
+
+  private async preprocessAudio(audioBlob: Blob): Promise<Blob> {
+    // Convert to optimal format for Whisper (16kHz mono WAV)
+    const processedBlob = await this.audioProcessor.process(audioBlob, {
+      sampleRate: 16000,
+      channels: 1,
+      format: 'wav',
+      normalize: true, // Normalize audio levels
+      removeSilence: true, // Remove silence for better accuracy
+      denoise: true // Apply noise reduction
+    });
+    return processedBlob;
   }
 
   public async transcribe(audioBlob: Blob): Promise<TranscriptionResult> {
+    // Preprocess audio for optimal results
+    const processedBlob = await this.preprocessAudio(audioBlob);
+    
     const formData = new FormData();
-    formData.append('file', audioBlob, 'audio.webm');
+    formData.append('file', processedBlob, 'audio.wav');
     formData.append('model', `whisper-${this.config.model}`);
     formData.append('language', this.config.language);
     formData.append('response_format', 'verbose_json');
-
+    
+    // Add timestamp tokens for better segmentation
+    formData.append('timestamp_granularities', ['word', 'segment']);
+    
     try {
       const response = await fetch(`${this.apiEndpoint}/transcriptions`, {
         method: 'POST',

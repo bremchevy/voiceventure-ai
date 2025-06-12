@@ -19,12 +19,15 @@ export class StreamingTranscriptionService {
   private transcriptionBuffer: string = ''
   private retryCount: number = 0
   private maxRetries: number = 3
+  private noiseGate: number = -50 // dB threshold for noise gate
+  private vadTimeout: number = 1500 // ms of silence before stopping
+  private lastVoiceActivity: number = 0
 
   constructor(openAIKey: string, config: Partial<WhisperConfig> = {}) {
     this.openAIKey = openAIKey
     this.config = {
-      model: 'base',
-      language: 'en',
+      model: 'medium', // Use medium model for better accuracy
+      language: 'auto', // Auto language detection
       task: 'transcribe',
       ...config
     }
@@ -46,38 +49,73 @@ export class StreamingTranscriptionService {
   }
 
   private async initializeAudioContext(stream: MediaStream) {
-    // Create audio context and processing nodes
     this.audioContext = new AudioContext({
-      sampleRate: 16000, // Whisper works best with 16kHz audio
+      sampleRate: 16000,
       latencyHint: 'interactive'
     })
 
-    // Create processing stream for real-time audio
-    this.processingStream = this.audioContext.createMediaStreamDestination()
-
-    // Connect input stream to processing
+    // Create audio processing chain
     const source = this.audioContext.createMediaStreamSource(stream)
     
-    // Add a script processor to handle audio chunks
-    const bufferSize = 4096
-    const processor = this.audioContext.createScriptProcessor(bufferSize, 1, 1)
+    // Create dynamics compressor for better audio levels
+    const compressor = this.audioContext.createDynamicsCompressor()
+    compressor.threshold.value = -24
+    compressor.knee.value = 30
+    compressor.ratio.value = 12
+    compressor.attack.value = 0.003
+    compressor.release.value = 0.25
     
+    // Create noise gate
+    const gainNode = this.audioContext.createGain()
+    
+    // Create analyzer for VAD
+    const analyzer = this.audioContext.createAnalyser()
+    analyzer.fftSize = 2048
+    
+    // Create processing node
+    const processor = this.audioContext.createScriptProcessor(4096, 1, 1)
+    
+    // Connect the audio processing chain
+    source
+      .connect(compressor)
+      .connect(gainNode)
+      .connect(analyzer)
+      .connect(processor)
+      .connect(this.audioContext.destination)
+
+    const bufferLength = analyzer.frequencyBinCount
+    const dataArray = new Float32Array(bufferLength)
+
     processor.onaudioprocess = (e) => {
-      if (this.isProcessing && this.socket?.readyState === WebSocket.OPEN) {
-        // Get audio data from input channel
+      if (!this.isProcessing) return
+
+      // Get audio data
+      analyzer.getFloatFrequencyData(dataArray)
+      
+      // Calculate RMS value for VAD
+      const rms = Math.sqrt(dataArray.reduce((acc, val) => acc + (val * val), 0) / bufferLength)
+      
+      // Apply noise gate
+      if (rms > this.noiseGate) {
+        this.lastVoiceActivity = Date.now()
+        gainNode.gain.value = 1
+      } else {
+        gainNode.gain.value = 0
+        
+        // Check for silence timeout
+        if (Date.now() - this.lastVoiceActivity > this.vadTimeout) {
+          this.callbacks.onPartialTranscript?.('')
+          return
+        }
+      }
+
+      // Send processed audio data
+      if (this.socket?.readyState === WebSocket.OPEN) {
         const inputData = e.inputBuffer.getChannelData(0)
-        
-        // Convert to 16-bit PCM
         const pcmData = this.convertToPCM(inputData)
-        
-        // Send audio data through WebSocket
         this.socket.send(pcmData.buffer)
       }
     }
-
-    // Connect the processing chain
-    source.connect(processor)
-    processor.connect(this.processingStream)
   }
 
   private initializeWebSocket() {

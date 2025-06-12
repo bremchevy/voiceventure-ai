@@ -10,9 +10,32 @@ export const VoiceRecordingConfigSchema = z.object({
 })
 
 export const WhisperConfigSchema = z.object({
-  model: z.enum(['base', 'small', 'medium', 'large']).default('base'),
-  language: z.string().min(2).max(5).default('en'),
-  task: z.enum(['transcribe', 'translate']).default('transcribe')
+  // Use medium model by default for better accuracy
+  model: z.enum(['base', 'small', 'medium', 'large']).default('medium'),
+  
+  // Language detection with fallback
+  language: z.string().min(2).max(5).default('auto'),
+  
+  // Task type
+  task: z.enum(['transcribe', 'translate']).default('transcribe'),
+  
+  // Additional options for better accuracy
+  temperature: z.number().min(0).max(1).default(0.2), // Slight variation for better natural language understanding
+  prompt: z.string().optional(), // Context prompt for domain-specific terms
+  
+  // Audio preprocessing options
+  audioOptions: z.object({
+    removeSilence: z.boolean().default(true),
+    denoise: z.boolean().default(true),
+    normalize: z.boolean().default(true),
+    enhanceSpeech: z.boolean().default(true)
+  }).default({}),
+  
+  // Response format options
+  response_format: z.enum(['json', 'text', 'srt', 'verbose_json', 'vtt']).default('verbose_json'),
+  
+  // Timestamp options for better segmentation
+  timestamp_granularities: z.array(z.enum(['word', 'segment'])).default(['word', 'segment'])
 })
 
 // Configuration Types
