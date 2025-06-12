@@ -53,4 +53,10 @@ export function getErrorMessage(error: unknown): string {
   }
   
   return ERROR_MESSAGES[ErrorCodes.UNKNOWN_ERROR]
+}
+
+export function handleError(error: unknown): string {
+  const message = getErrorMessage(error)
+  console.error(message)
+  return message
 } 
