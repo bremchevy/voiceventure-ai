@@ -200,8 +200,19 @@ export function useProfile() {
   useEffect(() => {
     if (!user) return
 
+    // Create a stable channel name based on user ID
+    const channelName = `profile_changes_${user.id}`
+
+    // Check if channel already exists and remove it
+    const existingChannel = supabase.getChannels().find(channel => 
+      channel.topic === channelName
+    )
+    if (existingChannel) {
+      supabase.removeChannel(existingChannel)
+    }
+
     const channel = supabase
-      .channel('profile_changes')
+      .channel(channelName)
       .on(
         'postgres_changes',
         {
@@ -216,12 +227,24 @@ export function useProfile() {
           }
         }
       )
-      .subscribe()
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('Successfully subscribed to profile changes')
+        }
+        if (status === 'CHANNEL_ERROR') {
+          console.error('Failed to subscribe to profile changes')
+        }
+      })
 
     return () => {
-      supabase.removeChannel(channel)
+      // Ensure we remove the channel on cleanup
+      supabase.removeChannel(channel).then(() => {
+        console.log('Successfully unsubscribed from profile changes')
+      }).catch(error => {
+        console.error('Error unsubscribing from profile changes:', error)
+      })
     }
-  }, [user?.id])
+  }, [user?.id, supabase])
 
   useEffect(() => {
     fetchProfile()
