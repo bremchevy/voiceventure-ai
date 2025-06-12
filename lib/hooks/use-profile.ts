@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/lib/context/auth-context'
 import { validateProfile } from '@/lib/validations/profile'
 import { createError, ErrorCodes, handleError } from '@/lib/utils/errors'
+import { RealtimeChannel } from '@supabase/supabase-js'
 
 export interface Profile {
   id: string
@@ -200,51 +201,60 @@ export function useProfile() {
   useEffect(() => {
     if (!user) return
 
-    // Create a stable channel name based on user ID
-    const channelName = `profile_changes_${user.id}`
+    // Create a unique channel name for this profile subscription
+    const channelName = `profile:${user.id}`
 
-    // Check if channel already exists and remove it
-    const existingChannel = supabase.getChannels().find(channel => 
-      channel.topic === channelName
-    )
-    if (existingChannel) {
-      supabase.removeChannel(existingChannel)
-    }
+    // Remove any existing subscriptions first
+    supabase.getChannels().forEach(channel => {
+      if (channel.topic === channelName) {
+        supabase.removeChannel(channel)
+      }
+    })
 
-    const channel = supabase
-      .channel(channelName)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'profiles',
-          filter: `id=eq.${user.id}`,
-        },
-        (payload) => {
-          if (payload.new) {
-            setProfile(payload.new as Profile)
+    let channel: RealtimeChannel | null = null
+    try {
+      channel = supabase
+        .channel(channelName)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'profiles',
+            filter: `id=eq.${user.id}`,
+          },
+          (payload) => {
+            if (payload.new) {
+              setProfile(payload.new as Profile)
+            }
           }
-        }
-      )
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          console.log('Successfully subscribed to profile changes')
-        }
-        if (status === 'CHANNEL_ERROR') {
-          console.error('Failed to subscribe to profile changes')
-        }
-      })
+        )
 
-    return () => {
-      // Ensure we remove the channel on cleanup
-      supabase.removeChannel(channel).then(() => {
-        console.log('Successfully unsubscribed from profile changes')
-      }).catch(error => {
-        console.error('Error unsubscribing from profile changes:', error)
+      // Subscribe and handle subscription status
+      channel.subscribe(status => {
+        if (status === 'SUBSCRIBED') {
+          console.log(`Subscribed to profile changes for user ${user.id}`)
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error(`Failed to subscribe to profile changes for user ${user.id}`)
+        }
       })
+    } catch (error) {
+      console.error('Error setting up profile subscription:', error)
     }
-  }, [user?.id, supabase])
+
+    // Cleanup function
+    return () => {
+      if (channel) {
+        try {
+          channel.unsubscribe()
+          supabase.removeChannel(channel)
+          console.log(`Unsubscribed from profile changes for user ${user.id}`)
+        } catch (error) {
+          console.error('Error cleaning up profile subscription:', error)
+        }
+      }
+    }
+  }, [user?.id]) // Remove supabase from deps to prevent recreation
 
   useEffect(() => {
     fetchProfile()
