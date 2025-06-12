@@ -18,11 +18,14 @@ import {
   Star,
   CheckCircle,
   ChevronRight,
+  Pause,
+  Play,
 } from "lucide-react"
 import AIAssistant from "@/components/ai-assistant"
 import SubstituteBookingSystem from "@/components/substitute-booking-system"
 import WorksheetGenerator from "@/components/worksheet-generator"
 import { ProfileView } from '@/components/profile/profile-view'
+import { cn } from "@/lib/utils"
 
 interface CreationStatus {
   isActive: boolean
@@ -42,11 +45,60 @@ interface VoiceResponse {
 declare global {
   interface Window {
     worksheetTimer: number | null
+    SpeechRecognition: new () => SpeechRecognition
+    webkitSpeechRecognition: new () => SpeechRecognition
+    AudioContext: typeof AudioContext
+    webkitAudioContext: typeof AudioContext
   }
+}
+
+// Add SpeechRecognition type
+interface SpeechRecognitionEvent extends Event {
+  results: {
+    [key: number]: {
+      [key: number]: {
+        transcript: string
+      }
+      isFinal: boolean
+      length: number
+    }
+    length: number
+  }
+  resultIndex: number
+}
+
+interface SpeechRecognition extends EventTarget {
+  continuous: boolean
+  interimResults: boolean
+  lang: string
+  onresult: (event: SpeechRecognitionEvent) => void
+  onend: () => void
+  onstart: () => void
+  onerror: (event: { error: string; message?: string }) => void
+  start: () => void
+  stop: () => void
+  abort: () => void
+}
+
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>
+}
+
+// Add type declarations at the top after imports
+interface SpeechRecognitionErrorEvent extends Event {
+  error: string
+  message?: string
+}
+
+interface NotificationOptions {
+  title: string
+  body: string
 }
 
 export default function VoiceVentureAI() {
   const [isListening, setIsListening] = useState(false)
+  const [isPaused, setIsPaused] = useState(false)
   const [transcript, setTranscript] = useState("")
   const [detectedInfo, setDetectedInfo] = useState<{ grade?: string; subject?: string; theme?: string }>({})
   const recognitionRef = useRef<any>(null)
@@ -242,9 +294,9 @@ export default function VoiceVentureAI() {
 
   // PWA Install Detection
   useEffect(() => {
-    const handleBeforeInstallPrompt = (e) => {
+    const handleBeforeInstallPrompt = (e: BeforeInstallPromptEvent) => {
       e.preventDefault()
-      setDeferredPrompt(e)
+      deferredPrompt.current = e
       setShowInstallPrompt(true)
     }
 
@@ -303,14 +355,14 @@ export default function VoiceVentureAI() {
     }
   }
 
-  const sendPushNotification = (title, body) => {
-    if (notificationPermission === "granted") {
-      new Notification(title, {
-        body: body,
-        icon: "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHZpZXdCb3g9IjAgMCA2NCA2NCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iNjQiIGhlaWdodD0iNjQiIHJ4PSIxNiIgZmlsbD0iIzhCNUNGNiIvPjx0ZXh0IHg9IjMyIiB5PSI0MCIgZm9udC1mYW1pbHk9InN5c3RlbS11aSIgZm9udC1zaXplPSIyOCIgdGV4dC1hbmNob3I9Im1pZGRsZSIgZmlsbD0id2hpdGUiPuKasDwvdGV4dD48L3N2Zz4=",
-        tag: "voiceventure-ai",
-        requireInteraction: true,
-      })
+  const sendPushNotification = (title: string, body: string) => {
+    if (!("Notification" in window)) {
+      alert("This browser does not support desktop notifications")
+      return
+    }
+
+    if (Notification.permission === "granted") {
+      new Notification(title, { body })
     }
   }
 
@@ -1043,55 +1095,7 @@ What subject and grade level would you like this for?`
       return
     }
 
-    // Step 3: Check current permission state
     try {
-      const permission = await navigator.permissions.query({ name: "microphone" })
-      console.log("🔍 Current microphone permission state:", permission.state)
-
-      if (permission.state === "denied") {
-        console.log("🚫 Microphone permission explicitly denied")
-        alert(`🚫 Microphone access is blocked.
-
-To fix this:
-1. Click the 🔒 lock icon next to the URL
-2. Click "Site settings"
-3. Set Microphone to "Allow"
-4. Refresh this page
-
-Or try: chrome://settings/content/microphone`)
-        return
-      }
-
-      if (permission.state === "prompt") {
-        console.log("❓ Microphone permission will prompt user")
-        setContextHint("Browser will ask for microphone permission...")
-      }
-
-      if (permission.state === "granted") {
-        console.log("✅ Microphone permission already granted")
-        setContextHint("Permission granted, starting microphone...")
-      }
-    } catch (permissionError) {
-      console.log("⚠️ Could not check permission state:", permissionError)
-      // Continue anyway - some browsers don't support permission query
-    }
-
-    // Step 4: Check Speech Recognition support
-    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
-    console.log("🔍 SpeechRecognition support:", !!SpeechRecognition)
-
-    if (!SpeechRecognition) {
-      console.log("❌ Speech recognition not supported")
-      alert("❌ Voice recognition not supported in this browser. Please use Chrome, Safari, or Edge.")
-      return
-    }
-
-    // Step 5: Test microphone access with detailed error handling
-    try {
-      console.log("🎯 Testing microphone access...")
-      setContextHint("Requesting microphone access...")
-      setIsListening(true)
-
       // Test microphone access first
       const testStream = await navigator.mediaDevices.getUserMedia({
         audio: {
@@ -1114,66 +1118,76 @@ Or try: chrome://settings/content/microphone`)
       console.log("🧹 Cleared transcript and detected info")
 
       // Set up speech recognition
+      const SpeechRecognition = (window.SpeechRecognition || window.webkitSpeechRecognition) as typeof window.SpeechRecognition
       if (!recognitionRef.current) {
         console.log("🔄 Creating new recognition instance")
         recognitionRef.current = new SpeechRecognition()
-        recognitionRef.current.continuous = true
-        recognitionRef.current.interimResults = true
-        recognitionRef.current.lang = "en-US"
+      }
+      
+      recognitionRef.current.continuous = true
+      recognitionRef.current.interimResults = true
+      recognitionRef.current.lang = "en-US"
 
-        // Set up event handlers
-        recognitionRef.current.onstart = () => {
-          console.log("🎤 Speech recognition started successfully")
-          setContextHint("Listening... speak naturally")
-        }
+      // Set up event handlers
+      recognitionRef.current.onstart = () => {
+        console.log("🎤 Speech recognition started successfully")
+        setIsListening(true)
+        setIsPaused(false)
+        setContextHint("Listening... speak naturally")
+      }
 
-        recognitionRef.current.onresult = (event) => {
-          console.log("📝 Speech recognition result event:", event)
-          let interimTranscript = ""
-          let finalTranscript = ""
+      recognitionRef.current.onresult = (event: SpeechRecognitionEvent) => {
+        console.log("📝 Speech recognition result event:", event)
+        let interimTranscript = ""
+        let finalTranscript = ""
 
-          for (let i = 0; i < event.results.length; i++) {
-            const transcript = event.results[i][0].transcript
-            console.log(`Result ${i}: "${transcript}" (final: ${event.results[i].isFinal})`)
+        for (let i = 0; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript
+          console.log(`Result ${i}: "${transcript}" (final: ${event.results[i].isFinal})`)
 
-            if (event.results[i].isFinal) {
-              finalTranscript += transcript + " "
-            } else {
-              interimTranscript += transcript
-            }
-          }
-
-          // Show the complete transcript (final + interim)
-          const completeTranscript = finalTranscript + interimTranscript
-          console.log("📋 Complete transcript:", completeTranscript)
-          setTranscript(completeTranscript)
-
-          // Analyze final results immediately when they come in
-          if (finalTranscript) {
-            console.log("🔍 Analyzing final transcript:", completeTranscript)
-            analyzeTranscript(completeTranscript)
+          if (event.results[i].isFinal) {
+            finalTranscript += transcript + " "
+          } else {
+            interimTranscript += transcript
           }
         }
 
-        recognitionRef.current.onend = () => {
-          console.log("🛑 Speech recognition ended")
+        // Show the complete transcript (final + interim)
+        const completeTranscript = finalTranscript + interimTranscript
+        console.log("📋 Complete transcript:", completeTranscript)
+        setTranscript(completeTranscript)
+
+        // Analyze final results immediately when they come in
+        if (finalTranscript) {
+          console.log("🔍 Analyzing final transcript:", completeTranscript)
+          analyzeTranscript(completeTranscript)
+        }
+      }
+
+      recognitionRef.current.onend = () => {
+        console.log("🛑 Speech recognition ended")
+        if (!isPaused) {
+          setIsListening(false)
+          setContextHint("Try: 'Create a math worksheet for 3rd grade about dinosaurs'")
+        }
+      }
+
+      recognitionRef.current.onerror = (event) => {
+        console.error("❌ Speech recognition error:", {
+          error: event.error,
+          message: event.message,
+          type: event.type,
+        })
+        
+        if (!isPaused) {
           setIsListening(false)
           setContextHint("Try: 'Create a math worksheet for 3rd grade about dinosaurs'")
         }
 
-        recognitionRef.current.onerror = (event) => {
-          console.error("❌ Speech recognition error:", {
-            error: event.error,
-            message: event.message,
-            type: event.type,
-          })
-          setIsListening(false)
-          setContextHint("Try: 'Create a math worksheet for 3rd grade about dinosaurs'")
-
-          switch (event.error) {
-            case "not-allowed":
-              console.log("🚫 Speech recognition not allowed")
-              alert(`🚫 Microphone access denied during speech recognition.
+        switch (event.error) {
+          case "not-allowed":
+            console.log("🚫 Speech recognition not allowed")
+            alert(`🚫 Microphone access denied during speech recognition.
 
 To fix this:
 1. Click the 🔒 lock icon next to the URL
@@ -1181,129 +1195,131 @@ To fix this:
 3. Refresh the page and try again
 
 Alternative: Use the example prompts below`)
-              break
-            case "no-speech":
+            break
+          case "no-speech":
+            if (!isPaused) {
               console.log("🔇 No speech detected")
               setContextHint("No speech detected. Try speaking louder or closer to the microphone.")
-              break
-            case "audio-capture":
-              console.log("🎤 Audio capture failed")
-              alert("🎤 Microphone capture failed. Another app might be using your microphone.")
-              break
-            case "network":
-              console.log("🌐 Network error")
-              alert("🌐 Network error. Please check your internet connection and try again.")
-              break
-            case "service-not-allowed":
-              console.log("🚫 Service not allowed")
-              alert("🚫 Speech recognition service blocked. Please check your browser settings.")
-              break
-            default:
-              console.log("❓ Unknown speech recognition error:", event.error)
-              setContextHint("Speech recognition error. Please try again or use the example prompts below.")
+            }
+            break
+          case "audio-capture":
+            console.log("🎤 Audio capture failed")
+            alert("🎤 Microphone capture failed. Another app might be using your microphone.")
+            break
+          case "network":
+            console.log("🌐 Network error")
+            alert("🌐 Network error. Please check your internet connection and try again.")
+            break
+          case "service-not-allowed":
+            console.log("🚫 Service not allowed")
+            alert("🚫 Speech recognition service blocked. Please check your browser settings.")
+            break
+          default:
+            console.log("❓ Unknown speech recognition error:", event.error)
+            setContextHint("Speech recognition error. Please try again or use the example prompts below.")
+        }
+      }
+
+      // Start recognition
+      try {
+        console.log("🚀 Starting speech recognition...")
+        recognitionRef.current.start()
+        setIsListening(true)
+        setIsPaused(false)
+        console.log("✅ Speech recognition started successfully")
+      } catch (startError) {
+        console.error("❌ Failed to start recognition:", startError)
+        setIsListening(false)
+        setIsPaused(false)
+        setContextHint("Try: 'Create a math worksheet for 3rd grade about dinosaurs'")
+        alert("❌ Failed to start voice recognition. Please refresh the page and try again.")
+      }
+
+    } catch (error) {
+      console.error("❌ Microphone access error:", error)
+      setIsListening(false)
+      setIsPaused(false)
+      handleMicrophoneError(error)
+    }
+  }
+
+  const pauseListening = () => {
+    console.log("⏸️ Pausing speech recognition")
+    if (recognitionRef.current) {
+      try {
+        recognitionRef.current.stop()
+        setIsPaused(true)
+        setContextHint("Recording paused. Click to resume.")
+      } catch (error) {
+        console.error("❌ Error pausing speech recognition:", error)
+        // If error occurs during pause, reset to initial state
+        setIsListening(false)
+        setIsPaused(false)
+        setContextHint("Error occurred. Please try again.")
+      }
+    }
+  }
+
+  const resumeListening = async () => {
+    console.log("▶️ Resuming speech recognition")
+    try {
+      // Always create a new recognition instance when resuming
+      const SpeechRecognition = (window.SpeechRecognition || window.webkitSpeechRecognition) as typeof window.SpeechRecognition
+      recognitionRef.current = new SpeechRecognition()
+      
+      // Set up recognition properties
+      recognitionRef.current.continuous = true
+      recognitionRef.current.interimResults = true
+      recognitionRef.current.lang = "en-US"
+
+      // Set up event handlers
+      recognitionRef.current.onstart = () => {
+        console.log("🎤 Speech recognition resumed")
+        setIsListening(true)
+        setIsPaused(false)
+        setContextHint("Listening... speak naturally")
+      }
+
+      recognitionRef.current.onresult = (event: SpeechRecognitionEvent) => {
+        let interimTranscript = ""
+        let finalTranscript = ""
+
+        for (let i = 0; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript
+          if (event.results[i].isFinal) {
+            finalTranscript += transcript + " "
+          } else {
+            interimTranscript += transcript
           }
         }
+
+        const completeTranscript = finalTranscript + interimTranscript
+        setTranscript(completeTranscript)
+
+        if (finalTranscript) {
+          analyzeTranscript(completeTranscript)
+        }
       }
 
-      // Stop any existing recognition
-      try {
-        recognitionRef.current.abort()
-        console.log("🛑 Aborted existing recognition")
-      } catch (e) {
-        console.log("ℹ️ No existing recognition to abort")
-      }
-
-      // Start recognition after a brief delay
-      setTimeout(() => {
-        try {
-          console.log("🚀 Starting speech recognition...")
-          recognitionRef.current.start()
-          console.log("✅ Speech recognition started successfully")
-        } catch (startError) {
-          console.error("❌ Failed to start recognition:", startError)
+      recognitionRef.current.onend = () => {
+        console.log("🛑 Speech recognition ended")
+        if (!isPaused) {
           setIsListening(false)
           setContextHint("Try: 'Create a math worksheet for 3rd grade about dinosaurs'")
-          alert("❌ Failed to start voice recognition. Please refresh the page and try again.")
         }
-      }, 100)
-    } catch (error) {
-      console.error("❌ Microphone access error details:", {
-        name: error.name,
-        message: error.message,
-        constraint: error.constraint,
-      })
-      setIsListening(false)
-
-      // Detailed error handling based on error type
-      if (error.name === "NotAllowedError" || error.name === "PermissionDeniedError") {
-        console.log("🚫 Microphone permission denied")
-        alert(`🚫 Microphone access blocked by browser.
-
-SOLUTION:
-1. Click the 🔒 lock icon next to the URL
-2. Click "Site settings" 
-3. Set Microphone to "Allow"
-
-
-1. Click the 🔒 lock icon next to the URL
-2. Click "Site settings"
-3. Set Microphone to "Allow"
-4. Refresh this page
-
-OR try incognito mode to test without cached permissions.
-
-Chrome users: chrome://settings/content/microphone`)
-        setContextHint("Microphone blocked. Check browser permissions.")
-      } else if (error.name === "NotFoundError" || error.name === "DevicesNotFoundError") {
-        console.log("🎤 No microphone device found")
-        alert(`🎤 No microphone found.
-
-SOLUTIONS:
-1. Check if microphone is connected
-2. Close apps that might be using your microphone
-3. Check system privacy settings
-4. Try refreshing the page`)
-        setContextHint("No microphone found. Check device connections.")
-      } else if (error.name === "NotReadableError" || error.name === "TrackStartError") {
-        console.log("📱 Microphone hardware issue")
-        alert(`📱 Microphone hardware issue.
-
-SOLUTIONS:
-1. Close other apps using the microphone
-2. Restart your browser
-3. Check system audio settings
-4. Try a different microphone`)
-        setContextHint("Microphone hardware issue. Check other apps.")
-      } else if (error.name === "OverconstrainedError") {
-        console.log("⚙️ Microphone constraints issue")
-        alert("⚙️ Microphone settings incompatible. Trying basic settings...")
-        setContextHint("Retrying with basic microphone settings...")
-
-        // Retry with basic constraints
-        try {
-          const basicStream = await navigator.mediaDevices.getUserMedia({ audio: true })
-          console.log("✅ Basic microphone access successful")
-          basicStream.getTracks().forEach((track) => track.stop())
-          // Continue with speech recognition setup...
-        } catch (basicError) {
-          console.error("❌ Even basic microphone access failed:", basicError)
-          alert("❌ Microphone access failed completely. Please check your browser settings.")
-        }
-      } else if (error.name === "AbortError") {
-        console.log("🛑 Microphone access aborted")
-        alert("🛑 Microphone access was interrupted. Please try again.")
-        setContextHint("Microphone access interrupted. Try again.")
-      } else {
-        console.log("❓ Unknown microphone error")
-        alert(`❓ Unknown microphone error: ${error.message || error.name}
-
-Try these solutions:
-1. Refresh the page
-2. Check browser permissions
-3. Try incognito mode
-4. Use example prompts instead`)
-        setContextHint("Unknown error. Try refreshing or use example prompts.")
       }
+
+      // Start recognition
+      await recognitionRef.current.start()
+      setIsListening(true)
+      setIsPaused(false)
+      console.log("✅ Speech recognition resumed successfully")
+    } catch (error) {
+      console.error("❌ Error resuming speech recognition:", error)
+      // If error occurs during resume, reset to initial state
+      setIsListening(false)
+      setIsPaused(false)
+      setContextHint("Error resuming. Please try starting over.")
     }
   }
 
@@ -1894,18 +1910,23 @@ ${solution}`)
                         <div className="bg-white rounded-2xl p-8 flex flex-col items-center shadow-sm border border-gray-100">
                           <div className="mb-6">
                             <Button
-                              onClick={isListening ? stopListening : startListening}
+                              onClick={isListening ? (isPaused ? resumeListening : pauseListening) : startListening}
                               size="lg"
-                              className={`w-24 h-24 rounded-full ${
-                                isListening
-                                  ? "bg-red-500 hover:bg-red-600 animate-pulse shadow-lg"
-                                  : "bg-purple-600 hover:bg-purple-700 shadow-lg"
-                              }`}
+                              className={cn(
+                                "w-24 h-24 rounded-full shadow-lg",
+                                isListening && !isPaused && "bg-red-500 hover:bg-red-600 animate-pulse",
+                                isPaused && "bg-yellow-500 hover:bg-yellow-600",
+                                !isListening && "bg-purple-600 hover:bg-purple-700"
+                              )}
                             >
                               {isListening ? (
-                                <MicOff className="w-8 h-8 text-white" />
+                                isPaused ? (
+                                  <Play className="w-6 h-6 text-white" />
+                                ) : (
+                                  <Pause className="w-6 h-6 text-white" />
+                                )
                               ) : (
-                                <Mic className="w-8 h-8 text-white" />
+                                <Mic className="w-6 h-6 text-white" />
                               )}
                             </Button>
                           </div>
@@ -1913,12 +1934,28 @@ ${solution}`)
                           {/* Status Display */}
                           <div className="w-full mb-4">
                             {isListening ? (
-                              <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                              <div className={cn(
+                                "border rounded-lg p-3",
+                                isPaused ? "bg-yellow-50 border-yellow-200" : "bg-red-50 border-red-200"
+                              )}>
                                 <div className="flex items-center justify-center gap-2 mb-2">
-                                  <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
-                                  <span className="text-sm font-medium text-red-800">Listening...</span>
+                                  <div className={cn(
+                                    "w-2 h-2 rounded-full",
+                                    isPaused ? "bg-yellow-500" : "bg-red-500 animate-pulse"
+                                  )}></div>
+                                  <span className={cn(
+                                    "text-sm font-medium",
+                                    isPaused ? "text-yellow-800" : "text-red-800"
+                                  )}>
+                                    {isPaused ? "Recording Paused" : "Listening..."}
+                                  </span>
                                 </div>
-                                <p className="text-xs text-red-600 text-center">Speak clearly into your microphone</p>
+                                <p className={cn(
+                                  "text-xs text-center",
+                                  isPaused ? "text-yellow-600" : "text-red-600"
+                                )}>
+                                  {isPaused ? "Click the play button to continue recording" : "Speak clearly into your microphone"}
+                                </p>
                               </div>
                             ) : (
                               <div className="bg-white bg-opacity-80 rounded-lg p-3 border border-gray-100">
@@ -1946,293 +1983,41 @@ ${solution}`)
                             </div>
                           )}
 
-                          {/* Creation Status */}
-                          {creationStatus.isActive && (
-                            <div className="w-full bg-purple-50 border border-purple-200 rounded-lg p-3 mb-4">
-                              <div className="flex items-center justify-between mb-2">
-                                <span className="text-sm font-medium text-purple-800">{creationStatus.message}</span>
-                                <span className="text-xs text-purple-600">{creationStatus.progress}%</span>
-                              </div>
-                              <div className="w-full bg-purple-200 rounded-full h-2">
-                                <div
-                                  className="bg-purple-600 h-2 rounded-full transition-all duration-300 ease-out"
-                                  style={{ width: `${creationStatus.progress}%` }}
-                                ></div>
-                              </div>
-                            </div>
-                          )}
-
                           {/* Voice Response */}
-                          {voiceResponse && (
-                            <div className="w-full">
-                              {voiceResponse.magical ? (
-                                /* Magical Create & Sell Interface */
-                                <div
-                                  className="relative overflow-hidden rounded-2xl"
-                                  style={{
-                                    background: "linear-gradient(135deg, #667eea 0%, #764ba2 50%, #8B5CF6 100%)",
-                                    backgroundSize: "200% 200%",
-                                    animation: "magicalGradient 6s ease infinite",
-                                  }}
-                                >
-                                  {/* Floating Particles Background */}
-                                  <div className="absolute inset-0 overflow-hidden">
-                                    {[...Array(12)].map((_, i) => (
-                                      <div
-                                        key={i}
-                                        className="absolute w-1 h-1 bg-white rounded-full opacity-60"
-                                        style={{
-                                          left: `${Math.random() * 100}%`,
-                                          top: `${Math.random() * 100}%`,
-                                          animation: `float ${3 + Math.random() * 4}s ease-in-out infinite`,
-                                          animationDelay: `${Math.random() * 2}s`,
-                                        }}
-                                      />
-                                    ))}
-                                  </div>
-
-                                  <div className="relative p-6 text-white">
-                                    {/* Hero Section */}
-                                    <div
-                                      className="text-center mb-6"
-                                      style={{
-                                        animation: "slideInDown 0.8s ease-out",
-                                      }}
-                                    >
-                                      <h2
-                                        className="text-2xl font-bold mb-2"
-                                        style={{
-                                          fontFamily: "'Inter', -apple-system, sans-serif",
-                                          fontWeight: "700",
-                                          textShadow: "0 2px 4px rgba(0,0,0,0.3)",
-                                        }}
-                                      >
-                                        ✨ {voiceResponse.data.heroMessage}
-                                      </h2>
-                                      <p
-                                        className="text-purple-100 text-sm"
-                                        style={{
-                                          fontWeight: "400",
-                                          opacity: 0.9,
-                                        }}
-                                      >
-                                        {voiceResponse.data.subtitle}
-                                      </p>
-                                    </div>
-
-                                    {/* Market Analysis Cards */}
-                                    <div
-                                      className="mb-6"
-                                      style={{
-                                        animation: "slideInUp 0.8s ease-out 0.2s both",
-                                      }}
-                                    >
-                                      <h3 className="text-lg font-semibold mb-4 text-center">📊 Market Intelligence</h3>
-
-                                      <div className="space-y-3">
-                                        {voiceResponse.data.marketAnalysis.trending.map((item, index) => (
-                                          <div
-                                            key={index}
-                                            className="backdrop-blur-md bg-white/10 rounded-xl p-4 border border-white/20"
-                                            style={{
-                                              animation: `slideInLeft 0.6s ease-out ${0.4 + index * 0.1}s both`,
-                                              boxShadow: "0 8px 32px rgba(0,0,0,0.1)",
-                                            }}
-                                          >
-                                            <div className="flex items-center justify-between mb-3">
-                                              <div className="flex items-center gap-3">
-                                                <div
-                                                  className="w-10 h-10 rounded-lg flex items-center justify-center text-lg"
-                                                  style={{
-                                                    background: `${item.color}20`,
-                                                    border: `1px solid ${item.color}40`,
-                                                  }}
-                                                >
-                                                  {item.icon}
-                                                </div>
-                                                <div>
-                                                  <h4 className="font-semibold text-sm">{item.category}</h4>
-                                                  <p className="text-xs text-purple-100 opacity-80">
-                                                    Trending {item.trend}
-                                                  </p>
-                                                </div>
-                                              </div>
-                                              <div className="text-right">
-                                                <div className="text-lg font-bold" style={{ color: item.color }}>
-                                                  {item.avgPrice}
-                                                </div>
-                                              </div>
-                                            </div>
-
-                                            {/* Animated Progress Bars */}
-                                            <div className="space-y-2">
-                                              <div className="flex justify-between text-xs">
-                                                <span>Demand</span>
-                                                <span className="font-semibold">{item.demand}</span>
-                                              </div>
-                                              <div className="w-full bg-white/20 rounded-full h-2">
-                                                <div
-                                                  className="h-2 rounded-full transition-all duration-1000 ease-out"
-                                                  style={{
-                                                    width: `${item.demandLevel}%`,
-                                                    background: `linear-gradient(90deg, ${item.color}, ${item.color}CC)`,
-                                                    animation: `growBar 1.5s ease-out ${0.6 + index * 0.1}s both`,
-                                                  }}
-                                                />
-                                              </div>
-
-                                              <div className="flex justify-between text-xs mt-2">
-                                                <span>Competition</span>
-                                                <span className="font-semibold">{item.competition}</span>
-                                              </div>
-                                              <div className="w-full bg-white/20 rounded-full h-2">
-                                                <div
-                                                  className="h-2 rounded-full transition-all duration-1000 ease-out"
-                                                  style={{
-                                                    width: `${item.competitionLevel}%`,
-                                                    background: `linear-gradient(90deg, #F59E0B, #F59E0BCC)`,
-                                                    animation: `growBar 1.5s ease-out ${0.8 + index * 0.1}s both`,
-                                                  }}
-                                                />
-                                              </div>
-                                            </div>
-                                          </div>
-                                        ))}
-                                      </div>
-                                    </div>
-
-                                    {/* Insights Card */}
-                                    <div
-                                      className="backdrop-blur-md bg-white/10 rounded-xl p-4 border border-white/20 mb-6"
-                                      style={{
-                                        animation: "slideInUp 0.8s ease-out 0.8s both",
-                                        boxShadow: "0 8px 32px rgba(0,0,0,0.1)",
-                                      }}
-                                    >
-                                      <h4 className="font-semibold mb-3 text-center">💡 Success Insights</h4>
-                                      <div className="grid grid-cols-2 gap-3 text-xs">
-                                        <div className="text-center">
-                                          <div className="font-bold text-green-300">
-                                            {voiceResponse.data.marketAnalysis.insights.bestTime}
-                                          </div>
-                                          <div className="text-purple-100 opacity-80">Best selling time</div>
-                                        </div>
-                                        <div className="text-center">
-                                          <div className="font-bold text-blue-300">
-                                            {voiceResponse.data.marketAnalysis.insights.avgDownloads}
-                                          </div>
-                                          <div className="text-purple-100 opacity-80">Average downloads</div>
-                                        </div>
-                                        <div className="text-center">
-                                          <div className="font-bold text-yellow-300">
-                                            {voiceResponse.data.marketAnalysis.insights.successRate}
-                                          </div>
-                                          <div className="text-purple-100 opacity-80">Success rate</div>
-                                        </div>
-                                        <div className="text-center">
-                                          <div className="font-bold text-pink-300">
-                                            {voiceResponse.data.marketAnalysis.insights.topEarners}
-                                          </div>
-                                          <div className="text-purple-100 opacity-80">Top earners</div>
-                                        </div>
-                                      </div>
-                                    </div>
-
-                                    {/* Call to Action */}
-                                    <div
-                                      className="text-center mb-6"
-                                      style={{
-                                        animation: "slideInUp 0.8s ease-out 1s both",
-                                      }}
-                                    >
-                                      <h3
-                                        className="text-xl font-bold mb-4"
-                                        style={{
-                                          fontFamily: "'Dancing Script', cursive",
-                                          textShadow: "0 2px 4px rgba(0,0,0,0.3)",
-                                        }}
-                                      >
-                                        ✨ {voiceResponse.data.callToAction} ✨
-                                      </h3>
-                                    </div>
-
-                                    {/* Enhanced Action Buttons */}
-                                    <div className="space-y-3">
-                                      {/* Enhanced Action Buttons with Visual Hierarchy */}
-                                      <div className="space-y-3">
-                                        {voiceResponse.actions.map((action, index) => {
-                                          // Determine if this is the primary action (first button)
-                                          const isPrimary = index === 0
-
-                                          if (isPrimary) {
-                                            // Primary action button - larger and more prominent
-                                            return (
-                                              <button
-                                                key={index}
-                                                onClick={action.onClick}
-                                                className="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold text-base py-4 px-6 rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-[1.02]"
-                                              >
-                                                {action.label}
-                                              </button>
-                                            )
-                                          }
-
-                                          return null // Secondary buttons will be rendered separately
-                                        })}
-
-                                        {/* Secondary actions - horizontal layout with smaller buttons */}
-                                        {voiceResponse.actions.length > 1 && (
-                                          <div className="flex gap-2 mt-2">
-                                            {voiceResponse.actions.slice(1).map((action, index) => (
-                                              <button
-                                                key={index + 1}
-                                                onClick={action.onClick}
-                                                className="flex-1 bg-white hover:bg-gray-50 text-purple-600 font-medium text-sm py-3 px-4 rounded-lg border-2 border-purple-200 hover:border-purple-300 transition-all duration-200"
-                                              >
-                                                {action.label}
-                                              </button>
-                                            ))}
-                                          </div>
-                                        )}
-                                      </div>
-                                    </div>
-                                  </div>
+                          {voiceResponse?.text && (
+                            <div className="w-full bg-white rounded-lg p-4 shadow-sm border border-gray-100">
+                              <div className="flex items-start mb-4">
+                                <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center mr-3">
+                                  <Sparkles className="w-4 h-4 text-purple-600" />
                                 </div>
-                              ) : (
-                                /* Regular Voice Response */
-                                <div className="w-full bg-white rounded-lg p-4 shadow-sm border border-gray-100">
-                                  <div className="flex items-start mb-4">
-                                    <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center mr-3">
-                                      <Sparkles className="w-4 h-4 text-purple-600" />
-                                    </div>
-                                    <div className="flex-1">
-                                      <p className="text-sm text-gray-800 whitespace-pre-line">{voiceResponse.text}</p>
-                                    </div>
-                                  </div>
+                                <div className="flex-1">
+                                  <p className="text-sm text-gray-800 whitespace-pre-line">{voiceResponse.text}</p>
+                                </div>
+                              </div>
 
-                                  <div className="flex flex-col gap-2 mt-4">
-                                    {voiceResponse.actions.map((action, index) => {
-                                      // Determine which icon to show based on the button index
-                                      let icon = "⚡"
-                                      if (index === 1) {
-                                        icon = "✏️"
-                                      } else if (index === 2) {
-                                        icon = "💾"
-                                      }
+                              {voiceResponse.actions?.length > 0 && (
+                                <div className="flex flex-col gap-2 mt-4">
+                                  {voiceResponse.actions.map((action, index) => {
+                                    // Determine which icon to show based on the button index
+                                    let icon = "⚡"
+                                    if (index === 1) {
+                                      icon = "✏️"
+                                    } else if (index === 2) {
+                                      icon = "💾"
+                                    }
 
-                                      return (
-                                        <Button
-                                          key={index}
-                                          onClick={action.onClick}
-                                          className="bg-purple-600 hover:bg-purple-700 text-white w-full flex items-center justify-center py-3 px-4 text-sm font-medium"
-                                          size="sm"
-                                        >
-                                          <span className="mr-2">{icon}</span>
-                                          <span>{action.label}</span>
-                                        </Button>
-                                      )
-                                    })}
-                                  </div>
+                                    return (
+                                      <Button
+                                        key={index}
+                                        onClick={action.onClick}
+                                        className="bg-purple-600 hover:bg-purple-700 text-white w-full flex items-center justify-center py-3 px-4 text-sm font-medium"
+                                        size="sm"
+                                      >
+                                        <span className="mr-2">{icon}</span>
+                                        <span>{action.label}</span>
+                                      </Button>
+                                    )
+                                  })}
                                 </div>
                               )}
                             </div>

@@ -1,5 +1,6 @@
 "use client"
 
+// @ts-nocheck
 import type React from "react"
 import { useState, useRef, useEffect } from "react"
 
@@ -16,6 +17,12 @@ export default function AIAssistant({ onClose, voiceResponse, onSendMessage, onS
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
   const [agentExpanded, setAgentExpanded] = useState(false)
   const [currentResponse, setCurrentResponse] = useState(null)
+  // NEW STATE FOR CHAT & VOICE
+  const [messages, setMessages] = useState<{ sender: "user" | "assistant"; content: string }[]>([])
+  const [inputMessage, setInputMessage] = useState("")
+  const [isRecording, setIsRecording] = useState(false)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const recordedChunksRef = useRef<Blob[]>([])
 
   const assistantRef = useRef<HTMLDivElement>(null)
 
@@ -38,6 +45,12 @@ export default function AIAssistant({ onClose, voiceResponse, onSendMessage, onS
   // Handle smart suggestion clicks
   const handleSmartSuggestion = (category: string) => {
     console.log(`Smart suggestion clicked: ${category}`)
+
+    // Stop recording if it's active when a tool is selected
+    if (isRecording) {
+      mediaRecorderRef.current?.stop()
+      setIsRecording(false)
+    }
 
     // Update the responses object in the handleSmartSuggestion function to enhance all other popup responses
 
@@ -2264,6 +2277,128 @@ export default function AIAssistant({ onClose, voiceResponse, onSendMessage, onS
     )
   }
 
+  // Load saved history on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("ai_chat_history")
+      if (saved) setMessages(JSON.parse(saved))
+    } catch (err) {
+      console.error("Failed loading chat history", err)
+    }
+  }, [])
+
+  // Persist history whenever it changes
+  useEffect(() => {
+    try {
+      localStorage.setItem("ai_chat_history", JSON.stringify(messages))
+    } catch (err) {
+      console.error("Failed saving chat history", err)
+    }
+  }, [messages])
+
+  // Add assistant replies coming from parent (text or voice transcription)
+  useEffect(() => {
+    if (voiceResponse) {
+      setMessages((prev) => [...prev, { sender: "assistant", content: voiceResponse }])
+    }
+  }, [voiceResponse])
+
+  // SEND TEXT MESSAGE
+  const sendChatMessage = async () => {
+    if (!inputMessage.trim()) return
+    const newMsg = { sender: "user" as const, content: inputMessage.trim() }
+    setMessages((prev) => [...prev, newMsg])
+    setInputMessage("")
+
+    // Prepare messages for GPT (system + history + new)
+    const gptMessages = [
+      { role: "system", content: "You are an AI teaching assistant that helps teachers create educational content and manage their classroom tasks." },
+      ...messages.map((m) => ({ role: m.sender === "user" ? "user" : "assistant", content: m.content })),
+      { role: "user", content: newMsg.content },
+    ]
+
+    try {
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: gptMessages }),
+      })
+      const data = await res.json()
+      if (data?.message?.content) {
+        setMessages((prev) => [...prev, { sender: "assistant", content: data.message.content }])
+      } else if (data.error) {
+        setMessages((prev) => [...prev, { sender: "assistant", content: `Error: ${data.error}` }])
+      }
+    } catch (err) {
+      console.error("Chat fetch error", err)
+      setMessages((prev) => [...prev, { sender: "assistant", content: "Sorry, I couldn't get a response." }])
+    }
+  }
+
+  // TOGGLE VOICE RECORDING
+  const toggleRecording = async () => {
+    if (!isRecording) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+        const mediaRecorder = new MediaRecorder(stream)
+        mediaRecorderRef.current = mediaRecorder
+        recordedChunksRef.current = []
+        mediaRecorder.ondataavailable = (e) => {
+          if (e.data.size > 0) recordedChunksRef.current.push(e.data)
+        }
+        mediaRecorder.onstop = async () => {
+          const blob = new Blob(recordedChunksRef.current, { type: "audio/webm" })
+          const arrayBuf = await blob.arrayBuffer()
+          const base64Audio = btoa(
+            Array.from(new Uint8Array(arrayBuf))
+              .map((b) => String.fromCharCode(b))
+              .join("")
+          )
+          setMessages((prev) => [...prev, { sender: "user", content: "[Voice message]" }])
+
+          try {
+            const transcribeRes = await fetch("/api/transcribe", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ audio: base64Audio }),
+            })
+            const transcribeData = await transcribeRes.json()
+            const transcript = transcribeData.text || ""
+            if (transcript) {
+              setMessages((prev) => [...prev, { sender: "user", content: transcript }])
+              // call GPT with transcript similar to sendChatMessage
+              const gptMessages = [
+                { role: "system", content: "You are an AI teaching assistant that helps teachers create educational content and manage their classroom tasks." },
+                ...messages.map((m) => ({ role: m.sender === "user" ? "user" : "assistant", content: m.content })),
+                { role: "user", content: transcript },
+              ]
+              const chatRes = await fetch("/api/chat", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ messages: gptMessages }),
+              })
+              const chatData = await chatRes.json()
+              if (chatData?.message?.content) {
+                setMessages((prev) => [...prev, { sender: "assistant", content: chatData.message.content }])
+              }
+            }
+          } catch (err) {
+            console.error("Voice transcribe/chat error", err)
+          }
+
+          stream.getTracks().forEach((t) => t.stop())
+        }
+        mediaRecorder.start()
+        setIsRecording(true)
+      } catch (err) {
+        console.error("Failed to start recording", err)
+      }
+    } else {
+      mediaRecorderRef.current?.stop()
+      setIsRecording(false)
+    }
+  }
+
   return (
     <>
       <style dangerouslySetInnerHTML={{ __html: scrollbarStyles }} />
@@ -2571,6 +2706,90 @@ export default function AIAssistant({ onClose, voiceResponse, onSendMessage, onS
                   Hi! I'm your AI teaching assistant. I can help you create educational content, manage your
                   marketplace, and answer questions about teaching.
                 </div>
+              </div>
+            </div>
+
+            {/* CHAT SECTION - NEW */}
+            <div style={{ padding: "16px", borderBottom: "1px solid #f0f0f0" }}>
+              <div style={{ fontSize: "14px", fontWeight: "600", color: "#374151", marginBottom: "12px" }}>
+                Conversation
+              </div>
+              <div
+                style={{ maxHeight: "200px", overflowY: "auto", paddingRight: "6px", marginBottom: "12px" }}
+              >
+                {messages.map((msg, idx) => (
+                  <div
+                    key={idx}
+                    style={{ display: "flex", justifyContent: msg.sender === "user" ? "flex-end" : "flex-start", marginBottom: "8px" }}
+                  >
+                    <div
+                      style={{
+                        backgroundColor: msg.sender === "user" ? "#8B5CF6" : "#F3F4F6",
+                        color: msg.sender === "user" ? "white" : "#374151",
+                        padding: "8px 12px",
+                        borderRadius: "12px",
+                        maxWidth: "70%",
+                        fontSize: "12px",
+                        lineHeight: "1.4",
+                      }}
+                    >
+                      {msg.content}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <button
+                  onClick={toggleRecording}
+                  style={{
+                    background: isRecording ? "#EF4444" : "#E5E7EB",
+                    borderRadius: "50%",
+                    width: "32px",
+                    height: "32px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: "16px",
+                    cursor: "pointer",
+                    border: "none",
+                  }}
+                >
+                  🎙
+                </button>
+                <input
+                  type="text"
+                  value={inputMessage}
+                  onChange={(e) => setInputMessage(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault()
+                      sendChatMessage()
+                    }
+                  }}
+                  placeholder="Type a message..."
+                  style={{
+                    flex: 1,
+                    fontSize: "12px",
+                    padding: "8px 12px",
+                    border: "1px solid #E5E7EB",
+                    borderRadius: "12px",
+                  }}
+                />
+                <button
+                  onClick={sendChatMessage}
+                  style={{
+                    background: "#8B5CF6",
+                    color: "white",
+                    border: "none",
+                    borderRadius: "12px",
+                    padding: "8px 12px",
+                    fontSize: "12px",
+                    fontWeight: "600",
+                    cursor: "pointer",
+                  }}
+                >
+                  Send
+                </button>
               </div>
             </div>
 

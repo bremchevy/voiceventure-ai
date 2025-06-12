@@ -31,6 +31,8 @@ export function useVoiceRecording({ config, openAIKey }: UseVoiceRecordingOption
     duration: 0,
     error: null
   })
+  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null)
+  const [audioChunks, setAudioChunks] = useState<Blob[]>([])
 
   // Update duration every second while recording
   useEffect(() => {
@@ -59,6 +61,33 @@ export function useVoiceRecording({ config, openAIKey }: UseVoiceRecordingOption
     return () => window.removeEventListener('online', handleOnline)
   }, [manager])
 
+  // Initialize media recorder
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const initializeRecorder = async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+        const recorder = new MediaRecorder(stream)
+        
+        recorder.ondataavailable = (event) => {
+          if (event.data.size > 0) {
+            setAudioChunks(chunks => [...chunks, event.data])
+          }
+        }
+
+        setMediaRecorder(recorder)
+      } catch (error) {
+        setState(prev => ({
+          ...prev,
+          error: createError(ErrorCodes.VOICE_RECORDING_PERMISSION_DENIED)
+        }))
+      }
+    }
+
+    initializeRecorder()
+  }, [])
+
   const setTranscriptionCallbacks = useCallback((callbacks: TranscriptionCallbacks) => {
     manager.setTranscriptionCallbacks(callbacks)
   }, [manager])
@@ -68,8 +97,17 @@ export function useVoiceRecording({ config, openAIKey }: UseVoiceRecordingOption
       throw createError(ErrorCodes.AUTH_NOT_AUTHENTICATED)
     }
 
+    if (!mediaRecorder) {
+      setState(prev => ({
+        ...prev,
+        error: createError(ErrorCodes.VOICE_RECORDING_NOT_SUPPORTED)
+      }))
+      return
+    }
+
     try {
       await manager.startRecording(enableRealTimeTranscription)
+      setAudioChunks([])
       setState({
         isRecording: true,
         isPaused: false,
@@ -79,49 +117,57 @@ export function useVoiceRecording({ config, openAIKey }: UseVoiceRecordingOption
     } catch (error) {
       setState(prev => ({
         ...prev,
-        error: error as Error
+        error: createError(ErrorCodes.VOICE_RECORDING_FAILED)
       }))
       throw error
     }
-  }, [user, manager])
+  }, [user, manager, mediaRecorder])
 
   const stopRecording = useCallback(async () => {
-    if (!state.isRecording) {
-      return
+    if (!user) {
+      throw createError(ErrorCodes.AUTH_NOT_AUTHENTICATED)
+    }
+
+    if (!mediaRecorder || !state.isRecording) {
+      setState(prev => ({
+        ...prev,
+        error: createError(ErrorCodes.VOICE_RECORDING_NOT_STARTED)
+      }))
+      return null
     }
 
     try {
-      const { blob, duration } = await manager.stopRecording()
-      const recordingId = await manager.uploadRecording(user!.id, blob, duration)
-      
-      // Get the recording details to check for transcription
-      const { data: recordingData, error: fetchError } = await manager.supabase
-        .from('voice_recordings')
-        .select('transcription')
-        .eq('id', recordingId)
-        .single()
-
-      if (fetchError) {
-        throw fetchError
-      }
-
+      await manager.stopRecording()
       setState({
         isRecording: false,
         isPaused: false,
         duration: 0,
-        error: null,
-        transcription: recordingData.transcription
+        error: null
       })
 
+      // Convert chunks to blob
+      const audioBlob = new Blob(audioChunks, { type: 'audio/webm' })
+      
+      // Convert blob to base64
+      const base64Audio = await new Promise<string>((resolve) => {
+        const reader = new FileReader()
+        reader.onloadend = () => {
+          const base64String = reader.result as string
+          resolve(base64String.split(',')[1]) // Remove the data URL prefix
+        }
+        reader.readAsDataURL(audioBlob)
+      })
+
+      const recordingId = await manager.uploadRecording(user!.id, audioBlob, state.duration)
       return recordingId
     } catch (error) {
       setState(prev => ({
         ...prev,
-        error: error as Error
+        error: createError(ErrorCodes.VOICE_RECORDING_FAILED)
       }))
-      throw error
+      return null
     }
-  }, [user, manager, state.isRecording])
+  }, [user, manager, state.isRecording, audioChunks])
 
   const pauseRecording = useCallback(() => {
     if (!state.isRecording || state.isPaused) {

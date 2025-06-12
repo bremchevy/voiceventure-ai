@@ -1,5 +1,13 @@
 import OpenAI from 'openai'
-import { WhisperConfig } from './voice-recording'
+
+export interface WhisperConfig {
+  model: 'base' | 'small' | 'medium' | 'large';
+  language?: string;
+  task: 'transcribe' | 'translate';
+  temperature?: number;
+  prompt?: string;
+  response_format?: 'json' | 'text' | 'srt' | 'verbose_json' | 'vtt';
+}
 
 export class TranscriptionService {
   private openai: OpenAI
@@ -11,11 +19,13 @@ export class TranscriptionService {
       model: 'base',
       language: 'en',
       task: 'transcribe',
+      temperature: 0,  // Default to most accurate
+      response_format: 'text',
       ...config
     }
   }
 
-  async transcribe(audioBlob: Blob): Promise<string> {
+  async transcribe(audioBlob: Blob, options: Partial<WhisperConfig> = {}): Promise<string> {
     // Convert blob to File object
     const file = new File([audioBlob], 'audio.wav', { type: 'audio/wav' })
 
@@ -23,8 +33,10 @@ export class TranscriptionService {
       const response = await this.openai.audio.transcriptions.create({
         file,
         model: 'whisper-1',
-        language: this.config.language,
-        response_format: 'text'
+        language: options.language || this.config.language,
+        temperature: options.temperature || this.config.temperature,
+        prompt: options.prompt,  // Context prompt to improve accuracy
+        response_format: (options.response_format || this.config.response_format) as 'text'
       })
 
       return response

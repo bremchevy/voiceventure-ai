@@ -53,6 +53,14 @@ export class MobileVoiceRecordingManager {
   private offlineStorage: OfflineStorageService
   private offlineTranscriptionManager: OfflineTranscriptionManager | null = null
 
+  // VAD properties
+  private vadNode: AnalyserNode | null = null
+  private vadBuffer: Uint8Array | null = null
+  private vadFrameId: number | null = null
+  private silenceStart: number | null = null
+  private readonly silenceThreshold = 128 // Adjust this value (0-255)
+  private readonly silenceDuration = 1500 // 1.5 seconds of silence to stop
+
   constructor() {
     this.platform = detectPlatform()
     this.audioProcessor = new AudioProcessor(this.platform)
@@ -63,6 +71,57 @@ export class MobileVoiceRecordingManager {
     this.configService = new ConfigurationService()
     this.audioConverter = new AudioFormatConverter()
     this.offlineStorage = new OfflineStorageService()
+  }
+
+  private startMonitoring(): void {
+    if (!this.stream || !this.isRecording) return
+
+    if (!this.audioContext) {
+      this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)()
+    }
+    
+    if (!this.vadNode) {
+      const source = this.audioContext.createMediaStreamSource(this.stream)
+      this.vadNode = this.audioContext.createAnalyser()
+      this.vadNode.fftSize = 256
+      source.connect(this.vadNode)
+      this.vadBuffer = new Uint8Array(this.vadNode.frequencyBinCount)
+    }
+
+    const checkSilence = () => {
+      if (!this.isRecording || this.isPaused || !this.vadNode || !this.vadBuffer) {
+        this.vadFrameId = requestAnimationFrame(checkSilence)
+        return
+      }
+
+      this.vadNode.getByteFrequencyData(this.vadBuffer)
+      const sum = this.vadBuffer.reduce((a, b) => a + b, 0)
+      const avg = sum / this.vadBuffer.length
+
+      if (avg < this.silenceThreshold) {
+        if (this.silenceStart === null) {
+          this.silenceStart = Date.now()
+        } else if (Date.now() - this.silenceStart > this.silenceDuration) {
+          this.stopRecording() // Auto-stop recording
+          this.stopMonitoring()
+          return
+        }
+      } else {
+        this.silenceStart = null
+      }
+      this.vadFrameId = requestAnimationFrame(checkSilence)
+    }
+    this.vadFrameId = requestAnimationFrame(checkSilence)
+  }
+
+  private stopMonitoring(): void {
+    if (this.vadFrameId) {
+      cancelAnimationFrame(this.vadFrameId)
+      this.vadFrameId = null
+    }
+    this.vadNode?.disconnect()
+    this.vadNode = null
+    this.silenceStart = null
   }
 
   private async initializeBrowserSupport(): Promise<void> {
@@ -89,6 +148,15 @@ export class MobileVoiceRecordingManager {
       format: browserConfig.mimeType.includes('webm') ? 'webm' : 
              browserConfig.mimeType.includes('mp3') ? 'mp3' : 'wav'
     })
+
+    // Start monitoring for device metrics
+    this.metricsUpdateInterval = window.setInterval(() => this.updateDeviceMetrics(), 5000)
+
+    this.isRecording = true
+    this.isPaused = false
+
+    // Start VAD
+    this.startMonitoring()
   }
 
   private async checkDeviceStatus(): Promise<{ canRecord: boolean; reason?: string }> {
@@ -500,6 +568,20 @@ export class MobileVoiceRecordingManager {
     translation?: TranslationResult;
     recordingId?: string;
   }> {
+    if (!this.isRecording) {
+      await this.handleError(new Error('No recording in progress to stop'), 'stop_recording', 'warning')
+      // Return a default or empty response
+      return {
+        audio: new Blob(),
+      }
+    }
+
+    // Stop VAD
+    this.stopMonitoring()
+
+    this.mediaRecorder?.stop()
+
+    // The rest of the logic happens in the 'onstop' event handler
     return new Promise((resolve, reject) => {
       if (!this.mediaRecorder) {
         reject(new Error('No recording in progress'));
@@ -562,8 +644,6 @@ export class MobileVoiceRecordingManager {
           reject(error);
         }
       };
-
-      this.mediaRecorder.stop();
     });
   }
 
