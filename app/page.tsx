@@ -26,6 +26,7 @@ import SubstituteBookingSystem from "@/components/substitute-booking-system"
 import WorksheetGenerator from "@/components/worksheet-generator"
 import { ProfileView } from '@/components/profile/profile-view'
 import { cn } from "@/lib/utils"
+import VoiceAssistantOverlay from '@/components/voice-assistant-overlay'
 
 interface CreationStatus {
   isActive: boolean
@@ -1860,11 +1861,6 @@ ${solution}`)
             setTranscript("")
           }}
         />
-        <VoiceAssistantOverlay
-          isListening={isListening}
-          startListening={startListening}
-          stopListening={stopListening}
-        />
       </>
     )
   } else {
@@ -2250,6 +2246,29 @@ ${solution}`)
               </div>
             )}
 
+            {/* Offline Indicator */}
+            {!isOnline && (
+              <div
+                style={{
+                  position: "fixed",
+                  top: "70px",
+                  left: "50%",
+                  transform: "translateX(-50%)",
+                  background: "#f59e0b",
+                  color: "white",
+                  padding: "8px 16px",
+                  borderRadius: "20px",
+                  fontSize: "12px",
+                  zIndex: 2000,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                }}
+              >
+                📱 Working offline
+              </div>
+            )}
+
             {/* AI Assistant panel - Always show */}
             {showAssistant && (
               <AIAssistant
@@ -2316,147 +2335,9 @@ ${solution}`)
                 </div>
               </div>
             )}
-
-            {/* Offline Indicator */}
-            {!isOnline && (
-              <div
-                style={{
-                  position: "fixed",
-                  top: "70px",
-                  left: "50%",
-                  transform: "translateX(-50%)",
-                  background: "#f59e0b",
-                  color: "white",
-                  padding: "8px 16px",
-                  borderRadius: "20px",
-                  fontSize: "12px",
-                  zIndex: 2000,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "6px",
-                }}
-              >
-                📱 Working offline
-              </div>
-            )}
-
-            {/* PWA Features Menu */}
-            <div
-              style={{
-                position: "fixed",
-                bottom: "160px",
-                left: "20px",
-                zIndex: 1000,
-              }}
-            >
-              <button
-                onClick={() => setShowPWAMenu(!showPWAMenu)}
-                style={{
-                  width: "48px",
-                  height: "48px",
-                  background: "linear-gradient(135deg, #8B5CF6, #3B82F6)",
-                  border: "none",
-                  borderRadius: "50%",
-                  color: "white",
-                  fontSize: "20px",
-                  cursor: "pointer",
-                  boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-                }}
-              >
-                ⚡
-              </button>
-
-              {showPWAMenu && (
-                <div
-                  style={{
-                    position: "absolute",
-                    bottom: "60px",
-                    left: "0",
-                    background: "white",
-                    borderRadius: "12px",
-                    padding: "8px",
-                    boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "4px",
-                    minWidth: "160px",
-                  }}
-                >
-                  <button
-                    onClick={requestNotificationPermission}
-                    style={{
-                      background: "none",
-                      border: "none",
-                      padding: "8px 12px",
-                      borderRadius: "6px",
-                      fontSize: "12px",
-                      cursor: "pointer",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "6px",
-                      textAlign: "left",
-                    }}
-                  >
-                    🔔 Enable Notifications
-                  </button>
-                  <button
-                    onClick={handleCameraCapture}
-                    style={{
-                      background: "none",
-                      border: "none",
-                      padding: "8px 12px",
-                      borderRadius: "6px",
-                      fontSize: "12px",
-                      cursor: "pointer",
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "6px",
-                      textAlign: "left",
-                    }}
-                  >
-                    📷 Scan Document
-                  </button>
-                </div>
-              )}
-            </div>
           </div>
         </div>
-        <VoiceAssistantOverlay
-          isListening={isListening}
-          startListening={startListening}
-          stopListening={stopListening}
-        />
       </div>
     )
   }
-}
-
-// VoiceAssistantOverlay component
-const VoiceAssistantOverlay = ({ isListening, startListening, stopListening }) => {
-  console.log("VoiceAssistantOverlay mounted")
-  return (
-    <button
-      onClick={isListening ? stopListening : startListening}
-      style={{
-        position: "fixed",
-        bottom: "20px",
-        right: "20px",
-        zIndex: 9999,
-        width: "60px",
-        height: "60px",
-        borderRadius: "50%",
-        background: "linear-gradient(135deg, #8B5CF6, #3B82F6)",
-        boxShadow: "0 4px 12px rgba(0,0,0,0.2)",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        color: "white",
-        fontSize: "24px",
-        cursor: "pointer",
-        animation: isListening ? "glow 1.5s infinite" : "none",
-      }}
-    >
-      {isListening ? <MicOff className="w-6 h-6" /> : <Mic className="w-6 h-6" />}
-    </button>
-  )
 }

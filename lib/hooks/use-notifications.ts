@@ -1,10 +1,11 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/lib/context/auth-context'
 import { validateNotificationSettings } from '@/lib/validations/profile'
 import { createError, ErrorCodes, handleError } from '@/lib/utils/errors'
+import { RealtimeChannel } from '@supabase/supabase-js'
 
 export interface NotificationSettings {
   id: string
@@ -29,6 +30,14 @@ export function useNotifications() {
   const [settings, setSettings] = useState<NotificationSettings | null>(null)
   const [loading, setLoading] = useState(true)
   const supabase = createClient()
+  const channelRef = useRef<RealtimeChannel | null>(null)
+
+  // Memoize the settings update callback
+  const handleSettingsChange = useCallback((payload: any) => {
+    if (payload.new) {
+      setSettings(payload.new as NotificationSettings)
+    }
+  }, [])
 
   /**
    * Fetches the current user's notification settings
@@ -137,31 +146,85 @@ export function useNotifications() {
 
   // Set up real-time subscription for settings updates
   useEffect(() => {
-    if (!user) return
+    let isMounted = true
+    let retryCount = 0
+    const MAX_RETRIES = 3
+    const RETRY_DELAY = 2000 // 2 seconds
 
-    const channel = supabase
-      .channel('notification_changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'notification_settings',
-          filter: `user_id=eq.${user.id}`,
-        },
-        (payload) => {
-          if (payload.new) {
-            setSettings(payload.new as NotificationSettings)
-          }
+    const setupRealtimeSubscription = async () => {
+      if (!user || !isMounted) return
+
+      // Clean up existing subscription if any
+      if (channelRef.current) {
+        try {
+          await channelRef.current.unsubscribe()
+          await supabase.removeChannel(channelRef.current)
+        } catch (error) {
+          console.error('Error cleaning up channel:', error)
         }
-      )
-      .subscribe()
+        channelRef.current = null
+      }
+
+      try {
+        const channel = supabase
+          .channel(`notification_settings:${user.id}`)
+          .on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'notification_settings',
+              filter: `user_id=eq.${user.id}`,
+            },
+            handleSettingsChange
+          )
+          .on('system', (event) => {
+            if (event === 'disconnected' && isMounted && retryCount < MAX_RETRIES) {
+              setTimeout(() => {
+                retryCount++
+                setupRealtimeSubscription()
+              }, RETRY_DELAY * retryCount)
+            }
+          })
+
+        channelRef.current = channel
+
+        const status = await channel.subscribe()
+        if (status === 'SUBSCRIBED' && isMounted) {
+          console.log(`Subscribed to notification settings for user ${user.id}`)
+          retryCount = 0 // Reset retry count on successful subscription
+        }
+      } catch (error) {
+        console.error('Error setting up notification settings subscription:', error)
+        if (isMounted && retryCount < MAX_RETRIES) {
+          setTimeout(() => {
+            retryCount++
+            setupRealtimeSubscription()
+          }, RETRY_DELAY * retryCount)
+        }
+      }
+    }
+
+    setupRealtimeSubscription()
 
     return () => {
-      supabase.removeChannel(channel)
+      isMounted = false
+      const cleanup = async () => {
+        if (channelRef.current) {
+          try {
+            await channelRef.current.unsubscribe()
+            await supabase.removeChannel(channelRef.current)
+            channelRef.current = null
+          } catch (error) {
+            console.error('Error cleaning up subscription:', error)
+          }
+        }
+      }
+      cleanup()
     }
-  }, [user?.id])
+  }, [user?.id, handleSettingsChange])
 
+  // Fetch settings when user changes
   useEffect(() => {
     fetchSettings()
   }, [user?.id])

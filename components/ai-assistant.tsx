@@ -12,17 +12,20 @@ interface AIAssistantProps {
 }
 
 export default function AIAssistant({ onClose, voiceResponse, onSendMessage, onSmartSuggestion }: AIAssistantProps) {
-  const [agentPosition, setAgentPosition] = useState<{ x: number | null; y: number | null }>({ x: null, y: null })
+  const [agentPosition, setAgentPosition] = useState<{ x: number | null; y: null }>({ x: null, y: null })
   const [isDragging, setIsDragging] = useState(false)
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 })
   const [agentExpanded, setAgentExpanded] = useState(false)
   const [currentResponse, setCurrentResponse] = useState(null)
   // NEW STATE FOR CHAT & VOICE
-  const [messages, setMessages] = useState<{ sender: "user" | "assistant"; content: string }[]>([])
+  const [messages, setMessages] = useState<{ sender: "user" | "assistant"; content: string }[]>([
+    {
+      sender: "assistant",
+      content: "Hi! I'm your AI teaching assistant powered by GPT-4. I can help you create educational content, manage your classroom tasks, and answer any teaching-related questions. How can I assist you today?"
+    }
+  ])
   const [inputMessage, setInputMessage] = useState("")
-  const [isRecording, setIsRecording] = useState(false)
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
-  const recordedChunksRef = useRef<Blob[]>([])
+  const [isTyping, setIsTyping] = useState(false)
 
   const assistantRef = useRef<HTMLDivElement>(null)
 
@@ -39,6 +42,14 @@ export default function AIAssistant({ onClose, voiceResponse, onSendMessage, onS
   }
   .ai-assistant-scroll::-webkit-scrollbar-thumb:hover {
     background: rgba(209, 213, 219, 0.5);
+  }
+  @keyframes bounce {
+    0%, 100% {
+      transform: translateY(0);
+    }
+    50% {
+      transform: translateY(-2px);
+    }
   }
 `
 
@@ -2281,7 +2292,12 @@ export default function AIAssistant({ onClose, voiceResponse, onSendMessage, onS
   useEffect(() => {
     try {
       const saved = localStorage.getItem("ai_chat_history")
-      if (saved) setMessages(JSON.parse(saved))
+      if (saved) {
+        const parsedHistory = JSON.parse(saved)
+        if (parsedHistory && parsedHistory.length > 0) {
+          setMessages(parsedHistory)
+        }
+      }
     } catch (err) {
       console.error("Failed loading chat history", err)
     }
@@ -2309,8 +2325,9 @@ export default function AIAssistant({ onClose, voiceResponse, onSendMessage, onS
     const newMsg = { sender: "user" as const, content: inputMessage.trim() }
     setMessages((prev) => [...prev, newMsg])
     setInputMessage("")
+    setIsTyping(true)
 
-    // Prepare messages for GPT (system + history + new)
+    // Prepare messages for GPT
     const gptMessages = [
       { role: "system", content: "You are an AI teaching assistant that helps teachers create educational content and manage their classroom tasks." },
       ...messages.map((m) => ({ role: m.sender === "user" ? "user" : "assistant", content: m.content })),
@@ -2323,79 +2340,50 @@ export default function AIAssistant({ onClose, voiceResponse, onSendMessage, onS
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ messages: gptMessages }),
       })
+
+      if (!res.ok) {
+        const errorData = await res.json()
+        console.error("Chat API error:", {
+          status: res.status,
+          statusText: res.statusText,
+          error: errorData.error
+        })
+        
+        let errorMessage = "Sorry, I couldn't get a response."
+        
+        if (res.status === 401) {
+          errorMessage = "API key error. Please check your OpenAI API key configuration."
+        } else if (res.status === 429) {
+          errorMessage = "Rate limit exceeded. Please try again in a moment."
+        } else if (errorData.error) {
+          errorMessage = `Error: ${errorData.error}`
+        }
+        
+        setMessages((prev) => [...prev, { sender: "assistant", content: errorMessage }])
+        setIsTyping(false)
+        return
+      }
+
       const data = await res.json()
-      if (data?.message?.content) {
-        setMessages((prev) => [...prev, { sender: "assistant", content: data.message.content }])
-      } else if (data.error) {
-        setMessages((prev) => [...prev, { sender: "assistant", content: `Error: ${data.error}` }])
+      if (data?.content) {  // Changed from data?.message?.content
+        setMessages((prev) => [...prev, { sender: "assistant", content: data.content }])
+      } else if (data?.role === 'assistant' && data?.content) {  // Added this condition
+        setMessages((prev) => [...prev, { sender: "assistant", content: data.content }])
+      } else {
+        console.error("Invalid response format:", data)
+        setMessages((prev) => [...prev, { 
+          sender: "assistant", 
+          content: "Sorry, I received an invalid response format. Please try again." 
+        }])
       }
     } catch (err) {
-      console.error("Chat fetch error", err)
-      setMessages((prev) => [...prev, { sender: "assistant", content: "Sorry, I couldn't get a response." }])
-    }
-  }
-
-  // TOGGLE VOICE RECORDING
-  const toggleRecording = async () => {
-    if (!isRecording) {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-        const mediaRecorder = new MediaRecorder(stream)
-        mediaRecorderRef.current = mediaRecorder
-        recordedChunksRef.current = []
-        mediaRecorder.ondataavailable = (e) => {
-          if (e.data.size > 0) recordedChunksRef.current.push(e.data)
-        }
-        mediaRecorder.onstop = async () => {
-          const blob = new Blob(recordedChunksRef.current, { type: "audio/webm" })
-          const arrayBuf = await blob.arrayBuffer()
-          const base64Audio = btoa(
-            Array.from(new Uint8Array(arrayBuf))
-              .map((b) => String.fromCharCode(b))
-              .join("")
-          )
-          setMessages((prev) => [...prev, { sender: "user", content: "[Voice message]" }])
-
-          try {
-            const transcribeRes = await fetch("/api/transcribe", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ audio: base64Audio }),
-            })
-            const transcribeData = await transcribeRes.json()
-            const transcript = transcribeData.text || ""
-            if (transcript) {
-              setMessages((prev) => [...prev, { sender: "user", content: transcript }])
-              // call GPT with transcript similar to sendChatMessage
-              const gptMessages = [
-                { role: "system", content: "You are an AI teaching assistant that helps teachers create educational content and manage their classroom tasks." },
-                ...messages.map((m) => ({ role: m.sender === "user" ? "user" : "assistant", content: m.content })),
-                { role: "user", content: transcript },
-              ]
-              const chatRes = await fetch("/api/chat", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ messages: gptMessages }),
-              })
-              const chatData = await chatRes.json()
-              if (chatData?.message?.content) {
-                setMessages((prev) => [...prev, { sender: "assistant", content: chatData.message.content }])
-              }
-            }
-          } catch (err) {
-            console.error("Voice transcribe/chat error", err)
-          }
-
-          stream.getTracks().forEach((t) => t.stop())
-        }
-        mediaRecorder.start()
-        setIsRecording(true)
-      } catch (err) {
-        console.error("Failed to start recording", err)
-      }
-    } else {
-      mediaRecorderRef.current?.stop()
-      setIsRecording(false)
+      console.error("Chat fetch error:", err)
+      setMessages((prev) => [...prev, { 
+        sender: "assistant", 
+        content: "Network error. Please check your internet connection and try again." 
+      }])
+    } finally {
+      setIsTyping(false)
     }
   }
 
@@ -2709,14 +2697,12 @@ export default function AIAssistant({ onClose, voiceResponse, onSendMessage, onS
               </div>
             </div>
 
-            {/* CHAT SECTION - NEW */}
-            <div style={{ padding: "16px", borderBottom: "1px solid #f0f0f0" }}>
-              <div style={{ fontSize: "14px", fontWeight: "600", color: "#374151", marginBottom: "12px" }}>
-                Conversation
-              </div>
-              <div
-                style={{ maxHeight: "200px", overflowY: "auto", paddingRight: "6px", marginBottom: "12px" }}
-              >
+                      {/* CHAT SECTION - NEW */}
+          <div style={{ padding: "16px", borderBottom: "1px solid #f0f0f0" }}>
+            <div
+              style={{ maxHeight: "200px", overflowY: "auto", paddingRight: "6px", marginBottom: "12px" }}
+              className="ai-assistant-scroll"
+            >
                 {messages.map((msg, idx) => (
                   <div
                     key={idx}
@@ -2737,25 +2723,53 @@ export default function AIAssistant({ onClose, voiceResponse, onSendMessage, onS
                     </div>
                   </div>
                 ))}
+                {isTyping && (
+                  <div style={{ display: "flex", justifyContent: "flex-start", marginBottom: "8px" }}>
+                    <div
+                      style={{
+                        backgroundColor: "#F3F4F6",
+                        padding: "8px 16px",
+                        borderRadius: "12px",
+                        maxWidth: "70%",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "2px",
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: "6px",
+                          height: "6px",
+                          backgroundColor: "#6B7280",
+                          borderRadius: "50%",
+                          animation: "bounce 0.8s infinite",
+                        }}
+                      />
+                      <div
+                        style={{
+                          width: "6px",
+                          height: "6px",
+                          backgroundColor: "#6B7280",
+                          borderRadius: "50%",
+                          animation: "bounce 0.8s infinite",
+                          animationDelay: "0.2s",
+                        }}
+                      />
+                      <div
+                        style={{
+                          width: "6px",
+                          height: "6px",
+                          backgroundColor: "#6B7280",
+                          borderRadius: "50%",
+                          animation: "bounce 0.8s infinite",
+                          animationDelay: "0.4s",
+                        }}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-                <button
-                  onClick={toggleRecording}
-                  style={{
-                    background: isRecording ? "#EF4444" : "#E5E7EB",
-                    borderRadius: "50%",
-                    width: "32px",
-                    height: "32px",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    fontSize: "16px",
-                    cursor: "pointer",
-                    border: "none",
-                  }}
-                >
-                  🎙
-                </button>
                 <input
                   type="text"
                   value={inputMessage}

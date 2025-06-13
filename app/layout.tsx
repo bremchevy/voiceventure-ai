@@ -1,27 +1,29 @@
-import type React from "react"
-import type { Metadata } from "next"
+"use client"
+
+import React from "react"
 import { AuthProvider } from "@/lib/context/auth-context"
 import "./globals.css"
-
-export const metadata: Metadata = {
-  title: "VoiceVenture AI",
-  description: "AI-powered educational content creation",
-  generator: "Next.js",
-  manifest: "/manifest.json",
-}
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { SessionContextProvider } from '@supabase/auth-helpers-react'
 
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode
-}>) {
+}) {
+  const supabase = createClientComponentClient()
+
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
         <link rel="manifest" href="/manifest.json" />
       </head>
       <body>
-        <AuthProvider>{children}</AuthProvider>
+        <SessionContextProvider supabaseClient={supabase}>
+          <AuthProvider>
+            {children}
+          </AuthProvider>
+        </SessionContextProvider>
       </body>
     </html>
   )

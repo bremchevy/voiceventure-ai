@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { useAuth } from '@/lib/context/auth-context'
 import { validateProfile } from '@/lib/validations/profile'
@@ -32,6 +32,14 @@ export function useProfile() {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [loading, setLoading] = useState(true)
   const supabase = createClient()
+  const channelRef = useRef<RealtimeChannel | null>(null)
+
+  // Memoize the profile update callback
+  const handleProfileChange = useCallback((payload: any) => {
+    if (payload.new) {
+      setProfile(payload.new as Profile)
+    }
+  }, [])
 
   /**
    * Creates a new profile for the current user
@@ -199,63 +207,74 @@ export function useProfile() {
 
   // Set up real-time subscription for profile updates
   useEffect(() => {
-    if (!user) return
+    let isMounted = true
 
-    // Create a unique channel name for this profile subscription
-    const channelName = `profile:${user.id}`
+    const setupRealtimeSubscription = async () => {
+      if (!user || !isMounted) return
 
-    // Remove any existing subscriptions first
-    supabase.getChannels().forEach(channel => {
-      if (channel.topic === channelName) {
-        supabase.removeChannel(channel)
-      }
-    })
-
-    let channel: RealtimeChannel | null = null
-    try {
-      channel = supabase
-        .channel(channelName)
-        .on(
-          'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table: 'profiles',
-            filter: `id=eq.${user.id}`,
-          },
-          (payload) => {
-            if (payload.new) {
-              setProfile(payload.new as Profile)
-            }
-          }
-        )
-
-      // Subscribe and handle subscription status
-      channel.subscribe(status => {
-        if (status === 'SUBSCRIBED') {
-          console.log(`Subscribed to profile changes for user ${user.id}`)
-        } else if (status === 'CHANNEL_ERROR') {
-          console.error(`Failed to subscribe to profile changes for user ${user.id}`)
+      // Clean up existing subscription if any
+      if (channelRef.current) {
+        try {
+          await channelRef.current.unsubscribe()
+          await supabase.removeChannel(channelRef.current)
+        } catch (error) {
+          console.error('Error cleaning up channel:', error)
         }
-      })
-    } catch (error) {
-      console.error('Error setting up profile subscription:', error)
+        channelRef.current = null
+      }
+
+      try {
+        // Create a new channel
+        const channel = supabase
+          .channel(`profile:${user.id}`)
+          .on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'profiles',
+              filter: `id=eq.${user.id}`,
+            },
+            handleProfileChange
+          )
+
+        // Store the channel reference
+        channelRef.current = channel
+
+        // Subscribe to the channel
+        const status = await channel.subscribe()
+        
+        if (status === 'SUBSCRIBED' && isMounted) {
+          console.log('Successfully subscribed to profile changes')
+        }
+      } catch (error) {
+        console.error('Error setting up realtime subscription:', error)
+      }
     }
+
+    setupRealtimeSubscription()
 
     // Cleanup function
     return () => {
-      if (channel) {
-        try {
-          channel.unsubscribe()
-          supabase.removeChannel(channel)
-          console.log(`Unsubscribed from profile changes for user ${user.id}`)
-        } catch (error) {
-          console.error('Error cleaning up profile subscription:', error)
+      isMounted = false
+      
+      const cleanup = async () => {
+        if (channelRef.current) {
+          try {
+            await channelRef.current.unsubscribe()
+            await supabase.removeChannel(channelRef.current)
+            channelRef.current = null
+          } catch (error) {
+            console.error('Error cleaning up subscription:', error)
+          }
         }
       }
+      
+      cleanup()
     }
-  }, [user?.id]) // Remove supabase from deps to prevent recreation
+  }, [user?.id, handleProfileChange])
 
+  // Fetch profile when user changes
   useEffect(() => {
     fetchProfile()
   }, [user?.id])

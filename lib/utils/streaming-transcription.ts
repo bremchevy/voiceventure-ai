@@ -85,7 +85,7 @@ export class StreamingTranscriptionService {
 
     const bufferLength = analyzer.frequencyBinCount
     const dataArray = new Float32Array(bufferLength)
-
+    
     processor.onaudioprocess = (e) => {
       if (!this.isProcessing) return
 

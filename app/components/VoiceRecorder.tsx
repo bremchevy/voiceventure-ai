@@ -33,12 +33,12 @@ export function VoiceRecorder({
   const [partialTranscript, setPartialTranscript] = useState('')
   const [canGenerate, setCanGenerate] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   
   const {
     isRecording,
     isPaused,
     duration,
-    error,
     startRecording,
     stopRecording,
     pauseRecording,
@@ -115,13 +115,31 @@ export function VoiceRecorder({
     }
   }
 
+  const handleError = (error: any) => {
+    console.error("Voice recorder error:", error);
+    
+    let errorMessage = "An error occurred. Please try again.";
+    
+    if (error.name === "NotAllowedError") {
+      errorMessage = "Microphone access was denied. Please enable microphone access in your browser settings.";
+    } else if (error.name === "NotFoundError") {
+      errorMessage = "No microphone found. Please connect a microphone and try again.";
+    } else if (error.response?.data?.error) {
+      errorMessage = error.response.data.error;
+    }
+    
+    setError(errorMessage);
+    setIsRecording(false);
+    setIsProcessing(false);
+  };
+
   return (
     <Card className={cn('p-4', className)}>
       <div className="flex flex-col items-center gap-4">
         {error && (
           <Alert variant="destructive" className="mb-4">
             <AlertDescription>
-              {error.message}
+              {error}
               <Button
                 variant="link"
                 className="ml-2 h-auto p-0 text-destructive underline"
