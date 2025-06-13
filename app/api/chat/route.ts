@@ -59,7 +59,10 @@ export async function POST(request: Request) {
       throw new Error("No completion choice returned")
     }
 
-    return NextResponse.json(completion.choices[0].message)
+    return NextResponse.json({
+      content: completion.choices[0].message.content,
+      role: completion.choices[0].message.role
+    })
 
   } catch (error: any) {
     console.error("Chat error:", error.response?.data || error.message || error)

@@ -18,12 +18,7 @@ export default function AIAssistant({ onClose, voiceResponse, onSendMessage, onS
   const [agentExpanded, setAgentExpanded] = useState(false)
   const [currentResponse, setCurrentResponse] = useState(null)
   // NEW STATE FOR CHAT & VOICE
-  const [messages, setMessages] = useState<{ sender: "user" | "assistant"; content: string }[]>([
-    {
-      sender: "assistant",
-      content: "Hi! I'm your AI teaching assistant powered by GPT-4. I can help you create educational content, manage your classroom tasks, and answer any teaching-related questions. How can I assist you today?"
-    }
-  ])
+  const [messages, setMessages] = useState<{ sender: "user" | "assistant"; content: string }[]>([])
   const [inputMessage, setInputMessage] = useState("")
   const [isTyping, setIsTyping] = useState(false)
 
@@ -51,7 +46,26 @@ export default function AIAssistant({ onClose, voiceResponse, onSendMessage, onS
       transform: translateY(-2px);
     }
   }
-`
+  .typing-dot {
+    width: 6px;
+    height: 6px;
+    background-color: #6B7280;
+    border-radius: 50%;
+    display: inline-block;
+    margin: 0 1px;
+  }
+  .typing-dot:nth-child(1) {
+    animation: bounce 0.8s infinite;
+  }
+  .typing-dot:nth-child(2) {
+    animation: bounce 0.8s infinite;
+    animation-delay: 0.2s;
+  }
+  .typing-dot:nth-child(3) {
+    animation: bounce 0.8s infinite;
+    animation-delay: 0.4s;
+  }
+  `
 
   // Handle smart suggestion clicks
   const handleSmartSuggestion = (category: string) => {
@@ -2365,9 +2379,8 @@ export default function AIAssistant({ onClose, voiceResponse, onSendMessage, onS
       }
 
       const data = await res.json()
-      if (data?.content) {  // Changed from data?.message?.content
-        setMessages((prev) => [...prev, { sender: "assistant", content: data.content }])
-      } else if (data?.role === 'assistant' && data?.content) {  // Added this condition
+      
+      if (data.content) {
         setMessages((prev) => [...prev, { sender: "assistant", content: data.content }])
       } else {
         console.error("Invalid response format:", data)
@@ -2376,12 +2389,9 @@ export default function AIAssistant({ onClose, voiceResponse, onSendMessage, onS
           content: "Sorry, I received an invalid response format. Please try again." 
         }])
       }
-    } catch (err) {
-      console.error("Chat fetch error:", err)
-      setMessages((prev) => [...prev, { 
-        sender: "assistant", 
-        content: "Network error. Please check your internet connection and try again." 
-      }])
+    } catch (error) {
+      console.error("Chat error:", error)
+      setMessages((prev) => [...prev, { sender: "assistant", content: "Sorry, something went wrong. Please try again." }])
     } finally {
       setIsTyping(false)
     }
@@ -2686,89 +2696,59 @@ export default function AIAssistant({ onClose, voiceResponse, onSendMessage, onS
               </div>
             </div>
 
-            {/* GREETING MESSAGE - ADD THIS BACK */}
-            <div style={{ padding: "16px", borderBottom: "1px solid #f0f0f0" }}>
-              <div style={{ display: "flex", gap: "12px" }}>
-                <div style={{ fontSize: "16px" }}>👋</div>
-                <div style={{ fontSize: "14px", color: "#374151", lineHeight: "1.5" }}>
-                  Hi! I'm your AI teaching assistant. I can help you create educational content, manage your
-                  marketplace, and answer questions about teaching.
-                </div>
-              </div>
-            </div>
-
-                      {/* CHAT SECTION - NEW */}
-          <div style={{ padding: "16px", borderBottom: "1px solid #f0f0f0" }}>
+            {/* CHAT SECTION - NEW */}
             <div
-              style={{ maxHeight: "200px", overflowY: "auto", paddingRight: "6px", marginBottom: "12px" }}
               className="ai-assistant-scroll"
+              style={{
+                maxHeight: "250px",
+                overflowY: "auto",
+                padding: "16px",
+                display: "flex",
+                flexDirection: "column",
+                gap: "16px",
+              }}
             >
-                {messages.map((msg, idx) => (
+              {messages.map((msg, idx) => (
+                <div
+                  key={idx}
+                  style={{
+                    display: "flex",
+                    justifyContent: msg.sender === "user" ? "flex-end" : "flex-start",
+                    marginBottom: "8px",
+                  }}
+                >
                   <div
-                    key={idx}
-                    style={{ display: "flex", justifyContent: msg.sender === "user" ? "flex-end" : "flex-start", marginBottom: "8px" }}
+                    style={{
+                      maxWidth: "80%",
+                      padding: "8px 12px",
+                      borderRadius: msg.sender === "user" ? "12px 12px 0 12px" : "12px 12px 12px 0",
+                      background: msg.sender === "user" ? "#8B5CF6" : "#F3F4F6",
+                      color: msg.sender === "user" ? "white" : "#374151",
+                      fontSize: "12px",
+                      lineHeight: "1.5",
+                    }}
                   >
-                    <div
-                      style={{
-                        backgroundColor: msg.sender === "user" ? "#8B5CF6" : "#F3F4F6",
-                        color: msg.sender === "user" ? "white" : "#374151",
-                        padding: "8px 12px",
-                        borderRadius: "12px",
-                        maxWidth: "70%",
-                        fontSize: "12px",
-                        lineHeight: "1.4",
-                      }}
-                    >
-                      {msg.content}
-                    </div>
+                    {msg.content}
                   </div>
-                ))}
-                {isTyping && (
-                  <div style={{ display: "flex", justifyContent: "flex-start", marginBottom: "8px" }}>
-                    <div
-                      style={{
-                        backgroundColor: "#F3F4F6",
-                        padding: "8px 16px",
-                        borderRadius: "12px",
-                        maxWidth: "70%",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "2px",
-                      }}
-                    >
-                      <div
-                        style={{
-                          width: "6px",
-                          height: "6px",
-                          backgroundColor: "#6B7280",
-                          borderRadius: "50%",
-                          animation: "bounce 0.8s infinite",
-                        }}
-                      />
-                      <div
-                        style={{
-                          width: "6px",
-                          height: "6px",
-                          backgroundColor: "#6B7280",
-                          borderRadius: "50%",
-                          animation: "bounce 0.8s infinite",
-                          animationDelay: "0.2s",
-                        }}
-                      />
-                      <div
-                        style={{
-                          width: "6px",
-                          height: "6px",
-                          backgroundColor: "#6B7280",
-                          borderRadius: "50%",
-                          animation: "bounce 0.8s infinite",
-                          animationDelay: "0.4s",
-                        }}
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
+                </div>
+              ))}
+              {isTyping && (
+                <div style={{ 
+                  display: "flex", 
+                  alignItems: "center",
+                  padding: "8px 12px",
+                  maxWidth: "60px",
+                  background: "#F3F4F6",
+                  borderRadius: "12px 12px 12px 0",
+                  marginBottom: "8px"
+                }}>
+                  <div className="typing-dot" />
+                  <div className="typing-dot" />
+                  <div className="typing-dot" />
+                </div>
+              )}
+            </div>
+            <div style={{ padding: "16px", borderTop: "1px solid #E5E7EB" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                 <input
                   type="text"
