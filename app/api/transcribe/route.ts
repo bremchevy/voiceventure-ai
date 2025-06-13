@@ -1,15 +1,15 @@
 import { NextResponse } from 'next/server';
-import { Configuration, OpenAIApi } from 'openai';
+import OpenAI from 'openai';
 import { createError, ErrorCodes } from '@/lib/utils/errors';
+import fs from 'fs';
 
 // Configure OpenAI
-const configuration = new Configuration({
+const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
 });
-const openai = new OpenAIApi(configuration);
 
 export async function POST(request: Request) {
-  if (!configuration.apiKey) {
+  if (!process.env.OPENAI_API_KEY) {
     return NextResponse.json(
       { error: "OpenAI API key not configured" },
       { status: 500 }
@@ -33,19 +33,19 @@ export async function POST(request: Request) {
     const tempFilePath = `/tmp/audio-${Date.now()}.webm`;
     
     // Write the buffer to a temporary file
-    require('fs').writeFileSync(tempFilePath, audioBuffer);
+    fs.writeFileSync(tempFilePath, audioBuffer);
 
     // Call Whisper API
-    const response = await openai.createTranscription(
-      require('fs').createReadStream(tempFilePath),
-      'whisper-1'
-    );
+    const transcription = await openai.audio.transcriptions.create({
+      file: fs.createReadStream(tempFilePath),
+      model: 'whisper-1',
+    });
 
     // Clean up the temporary file
-    require('fs').unlinkSync(tempFilePath);
+    fs.unlinkSync(tempFilePath);
 
     return NextResponse.json({ 
-      text: response.data.text 
+      text: transcription.text 
     });
 
   } catch (error: any) {

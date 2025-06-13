@@ -1,34 +1,28 @@
 'use client'
 
 import { useEffect } from 'react'
-import { useRouter } from 'next/navigation'
-import { createClient } from '@/lib/supabase/client'
+import { useRouter, useSearchParams } from 'next/navigation'
 
 export default function AuthCallbackPage() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   
   useEffect(() => {
-    const supabase = createClient()
+    // If we have a code parameter, the route handler will handle the exchange
+    const code = searchParams.get('code')
     
-    // Get the session from URL or local storage
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      // If we have a session, redirect to the main page
-      if (session) {
+    if (code) {
+      // The route handler will automatically handle the code exchange
+      // and set up the session. We just need to redirect to home
+      // after a short delay to allow the session to be set up
+      setTimeout(() => {
         router.push('/')
-      }
-    })
-
-    // Listen for auth state changes
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
-      if (session) {
-        router.push('/')
-      }
-    })
-
-    return () => subscription.unsubscribe()
-  }, [router])
+      }, 1000)
+    } else {
+      // If no code, redirect to home
+      router.push('/')
+    }
+  }, [router, searchParams])
 
   return (
     <div className="flex items-center justify-center min-h-screen">
