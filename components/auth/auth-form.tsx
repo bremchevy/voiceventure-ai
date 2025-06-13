@@ -11,15 +11,21 @@ export function AuthForm() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
+  const [signupSuccess, setSignupSuccess] = useState(false)
   const { signIn, signUp, signInWithGoogle } = useAuth()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
+    setSignupSuccess(false)
 
     try {
       if (isSignUp) {
         await signUp(email, password)
+        setSignupSuccess(true)
+        // Clear form
+        setEmail('')
+        setPassword('')
       } else {
         await signIn(email, password)
       }
@@ -53,6 +59,11 @@ export function AuthForm() {
             ? 'Start your journey with VoiceVenture AI'
             : 'Sign in to continue with VoiceVenture AI'}
         </p>
+        {signupSuccess && (
+          <div className="mt-4 p-4 bg-green-50 text-green-700 rounded-lg">
+            <p>Account created successfully! Please check your email to verify your account.</p>
+          </div>
+        )}
       </div>
 
       {/* Google Sign In Button */}
