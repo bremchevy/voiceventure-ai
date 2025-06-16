@@ -9,7 +9,7 @@ interface AuthContextType {
   isLoading: boolean
   error: string | null
   signIn: (email: string, password: string) => Promise<void>
-  signUp: (email: string, password: string) => Promise<void>
+  signUp: (email: string, password: string) => Promise<{ data: any, error: Error | null }>
   signOut: () => Promise<void>
   signInWithGoogle: () => Promise<void>
 }
@@ -19,7 +19,7 @@ const AuthContext = createContext<AuthContextType>({
   isLoading: true,
   error: null,
   signIn: async () => {},
-  signUp: async () => {},
+  signUp: async () => ({ data: null, error: null }),
   signOut: async () => {},
   signInWithGoogle: async () => {}
 })
@@ -91,14 +91,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signUp = async (email: string, password: string) => {
     try {
-      const { error } = await supabase.auth.signUp({
+      const { data, error } = await supabase.auth.signUp({
         email,
         password,
       })
+      
       if (error) throw error
+      
+      // Check if user already exists and is confirmed
+      // Supabase returns user data even for existing users, but with identityConfirmedAt set
+      if (data?.user?.identities?.length === 0 || data?.user?.confirmed_at) {
+        // Create an error that matches the format expected by handleAuthError
+        const existingUserError = new Error('user already registered') as AuthError
+        existingUserError.status = 400
+        throw existingUserError
+      }
+      
+      return { data, error: null }
     } catch (error) {
       console.error('Error signing up:', error)
-      throw error
+      throw error // Propagate the error to be handled by handleAuthError
     }
   }
 

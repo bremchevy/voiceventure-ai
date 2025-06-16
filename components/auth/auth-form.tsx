@@ -3,7 +3,13 @@
 import { useState } from 'react'
 import { useAuth } from '@/lib/context/auth-context'
 import { Button } from '@/components/ui/button'
-import { Mail, Lock, Loader2, Eye, EyeOff } from 'lucide-react'
+import { Mail, Lock, Loader2, Eye, EyeOff, AlertCircle } from 'lucide-react'
+import { AuthError, AuthApiError } from '@supabase/supabase-js'
+
+interface AuthFormError {
+  type: 'email' | 'password' | 'general'
+  message: string
+}
 
 export function AuthForm() {
   const [isSignUp, setIsSignUp] = useState(false)
@@ -12,16 +18,104 @@ export function AuthForm() {
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [signupSuccess, setSignupSuccess] = useState(false)
+  const [error, setError] = useState<AuthFormError | null>(null)
   const { signIn, signUp, signInWithGoogle } = useAuth()
+
+  const validateForm = (): boolean => {
+    // Reset previous errors
+    setError(null)
+
+    // Email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+    if (!emailRegex.test(email)) {
+      setError({
+        type: 'email',
+        message: 'Please enter a valid email address'
+      })
+      return false
+    }
+
+    // Password validation
+    if (isSignUp && password.length < 6) {
+      setError({
+        type: 'password',
+        message: 'Password must be at least 6 characters long'
+      })
+      return false
+    }
+
+    return true
+  }
+
+  const handleAuthError = (error: AuthError) => {
+    const errorMessage = error.message?.toLowerCase() || ''
+    const errorCode = (error as AuthApiError)?.status || 0
+    
+    // Handle specific error codes
+    if (errorCode === 400 && errorMessage.includes('user already registered')) {
+      setError({
+        type: 'email',
+        message: 'This email is already registered. Please sign in instead.'
+      })
+      setIsSignUp(false)
+    } else if (errorMessage.includes('user already registered')) {
+      setError({
+        type: 'email',
+        message: 'This email is already registered. Please sign in instead.'
+      })
+      setIsSignUp(false)
+    } else if (errorCode === 422 && errorMessage.includes('email exists')) {
+      setError({
+        type: 'email',
+        message: 'An account with this email already exists. Please sign in instead.'
+      })
+      setIsSignUp(false)
+    } else if (errorCode === 400 && errorMessage.includes('invalid login credentials')) {
+      setError({
+        type: 'general',
+        message: 'Invalid email or password. Please try again.'
+      })
+    } else if (errorCode === 429) {
+      setError({
+        type: 'general',
+        message: 'Too many attempts. Please try again later.'
+      })
+    } else if (errorMessage.includes('weak password')) {
+      setError({
+        type: 'password',
+        message: 'Password is too weak. It should be at least 6 characters long and include numbers or special characters.'
+      })
+    } else if (errorMessage.includes('email not confirmed')) {
+      setError({
+        type: 'email',
+        message: 'Please verify your email address before signing in.'
+      })
+    } else {
+      setError({
+        type: 'general',
+        message: 'An error occurred. Please try again.'
+      })
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    setLoading(true)
+    
+    // Reset states
+    setError(null)
     setSignupSuccess(false)
+
+    // Validate form
+    if (!validateForm()) {
+      return
+    }
+
+    setLoading(true)
 
     try {
       if (isSignUp) {
         await signUp(email, password)
+        // Only show success if we get here (no error thrown)
         setSignupSuccess(true)
         // Clear form
         setEmail('')
@@ -31,6 +125,8 @@ export function AuthForm() {
       }
     } catch (error) {
       console.error('Auth error:', error)
+      setSignupSuccess(false) // Ensure success message is hidden on error
+      handleAuthError(error as AuthError)
     } finally {
       setLoading(false)
     }
@@ -39,12 +135,28 @@ export function AuthForm() {
   const handleGoogleSignIn = async () => {
     try {
       setLoading(true)
+      setError(null)
       await signInWithGoogle()
     } catch (error) {
       console.error('Google sign in error:', error)
+      setError({
+        type: 'general',
+        message: 'Failed to sign in with Google. Please try again.'
+      })
     } finally {
       setLoading(false)
     }
+  }
+
+  const renderErrorMessage = () => {
+    if (!error) return null
+
+    return (
+      <div className="flex items-center gap-2 text-red-600 text-sm mt-2">
+        <AlertCircle className="w-4 h-4" />
+        <span>{error.message}</span>
+      </div>
+    )
   }
 
   return (
@@ -62,6 +174,12 @@ export function AuthForm() {
         {signupSuccess && (
           <div className="mt-4 p-4 bg-green-50 text-green-700 rounded-lg">
             <p>Account created successfully! Please check your email to verify your account.</p>
+          </div>
+        )}
+        {error?.type === 'general' && (
+          <div className="mt-4 p-4 bg-red-50 text-red-700 rounded-lg flex items-center gap-2">
+            <AlertCircle className="w-5 h-5" />
+            <p>{error.message}</p>
           </div>
         )}
       </div>
@@ -117,12 +235,20 @@ export function AuthForm() {
             <input
               type="email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => {
+                setEmail(e.target.value)
+                setError(null)
+              }}
               placeholder="Email address"
               required
-              className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all"
+              className={`w-full pl-10 pr-4 py-3 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all ${
+                error?.type === 'email'
+                  ? 'border-red-500 bg-red-50'
+                  : 'border-gray-200'
+              }`}
             />
           </div>
+          {error?.type === 'email' && renderErrorMessage()}
         </div>
 
         <div>
@@ -131,10 +257,17 @@ export function AuthForm() {
             <input
               type={showPassword ? "text" : "password"}
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(e) => {
+                setPassword(e.target.value)
+                setError(null)
+              }}
               placeholder="Password"
               required
-              className="w-full pl-10 pr-12 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all"
+              className={`w-full pl-10 pr-12 py-3 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent outline-none transition-all ${
+                error?.type === 'password'
+                  ? 'border-red-500 bg-red-50'
+                  : 'border-gray-200'
+              }`}
             />
             <button
               type="button"
@@ -144,6 +277,12 @@ export function AuthForm() {
               {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
             </button>
           </div>
+          {error?.type === 'password' && renderErrorMessage()}
+          {isSignUp && !error?.type && (
+            <p className="text-sm text-gray-500 mt-2">
+              Password must be at least 6 characters long
+            </p>
+          )}
         </div>
 
         <Button
@@ -162,7 +301,11 @@ export function AuthForm() {
       <div className="text-center">
         <button
           type="button"
-          onClick={() => setIsSignUp(!isSignUp)}
+          onClick={() => {
+            setIsSignUp(!isSignUp)
+            setError(null)
+            setSignupSuccess(false)
+          }}
           className="text-sm text-purple-600 hover:text-purple-700"
         >
           {isSignUp
