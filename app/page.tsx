@@ -1924,7 +1924,7 @@ ${solution}`)
                 </div>
               </div>
               <p className="text-purple-100 text-sm text-center">
-                {activeTab === "home" && "Just Ask For What You Want®"}
+                {activeTab === "home" && "Ask It. Get It. ®"}
                 {activeTab === "marketplace" && "Discover amazing educational content"}
                 {activeTab === "profile" && "Manage your teaching business"}
               </p>
