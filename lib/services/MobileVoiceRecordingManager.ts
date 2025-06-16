@@ -59,7 +59,7 @@ export class MobileVoiceRecordingManager {
   private vadFrameId: number | null = null
   private silenceStart: number | null = null
   private readonly silenceThreshold = 128 // Adjust this value (0-255)
-  private readonly silenceDuration = 1500 // 1.5 seconds of silence to stop
+  private readonly silenceDuration = 2000 // Changed from 1500 to 2000ms
 
   constructor() {
     this.platform = detectPlatform()

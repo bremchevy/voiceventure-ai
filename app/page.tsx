@@ -1129,18 +1129,41 @@ What subject and grade level would you like this for?`
       recognitionRef.current.interimResults = true
       recognitionRef.current.lang = "en-US"
 
+      let lastSpeechTime = Date.now()
+      let silenceTimer: NodeJS.Timeout | null = null
+
+      const checkSilence = () => {
+        const silenceDuration = Date.now() - lastSpeechTime
+        if (silenceDuration > 2000) { // 2 seconds of silence
+          console.log("🤫 Detected 2 seconds of silence, stopping recognition")
+          if (recognitionRef.current) {
+            recognitionRef.current.stop()
+          }
+        }
+      }
+
       // Set up event handlers
       recognitionRef.current.onstart = () => {
         console.log("🎤 Speech recognition started successfully")
         setIsListening(true)
         setIsPaused(false)
         setContextHint("Listening... speak naturally")
+        lastSpeechTime = Date.now()
       }
 
       recognitionRef.current.onresult = (event: SpeechRecognitionEvent) => {
         console.log("📝 Speech recognition result event:", event)
         let interimTranscript = ""
         let finalTranscript = ""
+
+        lastSpeechTime = Date.now() // Update last speech time on any result
+        
+        // Clear any existing silence check timer
+        if (silenceTimer) {
+          clearInterval(silenceTimer)
+        }
+        // Start a new silence check timer
+        silenceTimer = setInterval(checkSilence, 500)
 
         for (let i = 0; i < event.results.length; i++) {
           const transcript = event.results[i][0].transcript
@@ -1167,6 +1190,11 @@ What subject and grade level would you like this for?`
 
       recognitionRef.current.onend = () => {
         console.log("🛑 Speech recognition ended")
+        // Clear silence check timer
+        if (silenceTimer) {
+          clearInterval(silenceTimer)
+          silenceTimer = null
+        }
         if (!isPaused) {
           setIsListening(false)
           setContextHint("Try: 'Create a math worksheet for 3rd grade about dinosaurs'")
