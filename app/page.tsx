@@ -1276,12 +1276,15 @@ Alternative: Use the example prompts below`)
     console.log("⏸️ Pausing speech recognition")
     if (recognitionRef.current) {
       try {
+        // Store the current transcript before stopping
+        const currentTranscript = transcript
+        console.log("📝 Storing current transcript:", currentTranscript)
+        
         recognitionRef.current.stop()
         setIsPaused(true)
         setContextHint("Recording paused. Click to resume.")
       } catch (error) {
         console.error("❌ Error pausing speech recognition:", error)
-        // If error occurs during pause, reset to initial state
         setIsListening(false)
         setIsPaused(false)
         setContextHint("Error occurred. Please try again.")
@@ -1292,7 +1295,7 @@ Alternative: Use the example prompts below`)
   const resumeListening = async () => {
     console.log("▶️ Resuming speech recognition")
     try {
-      // Always create a new recognition instance when resuming
+      // Create a new recognition instance
       const SpeechRecognition = (window.SpeechRecognition || window.webkitSpeechRecognition) as typeof window.SpeechRecognition
       recognitionRef.current = new SpeechRecognition()
       
@@ -1300,6 +1303,10 @@ Alternative: Use the example prompts below`)
       recognitionRef.current.continuous = true
       recognitionRef.current.interimResults = true
       recognitionRef.current.lang = "en-US"
+
+      // Store the existing transcript to preserve it
+      const existingTranscript = transcript
+      console.log("📝 Resuming with existing transcript:", existingTranscript)
 
       // Set up event handlers
       recognitionRef.current.onstart = () => {
@@ -1311,21 +1318,23 @@ Alternative: Use the example prompts below`)
 
       recognitionRef.current.onresult = (event: SpeechRecognitionEvent) => {
         let interimTranscript = ""
-        let finalTranscript = ""
+        let finalTranscript = existingTranscript // Start with existing transcript
 
         for (let i = 0; i < event.results.length; i++) {
-          const transcript = event.results[i][0].transcript
+          const result = event.results[i][0].transcript
           if (event.results[i].isFinal) {
-            finalTranscript += transcript + " "
+            finalTranscript += " " + result
           } else {
-            interimTranscript += transcript
+            interimTranscript += result
           }
         }
 
-        const completeTranscript = finalTranscript + interimTranscript
+        // Ensure proper spacing between segments
+        const completeTranscript = (finalTranscript + " " + interimTranscript).trim()
+        console.log("📋 Updated transcript:", completeTranscript)
         setTranscript(completeTranscript)
 
-        if (finalTranscript) {
+        if (finalTranscript.trim() !== existingTranscript.trim()) {
           analyzeTranscript(completeTranscript)
         }
       }
@@ -1345,10 +1354,9 @@ Alternative: Use the example prompts below`)
       console.log("✅ Speech recognition resumed successfully")
     } catch (error) {
       console.error("❌ Error resuming speech recognition:", error)
-      // If error occurs during resume, reset to initial state
       setIsListening(false)
       setIsPaused(false)
-      setContextHint("Error resuming. Please try starting over.")
+      setContextHint("Error occurred. Please try again.")
     }
   }
 
