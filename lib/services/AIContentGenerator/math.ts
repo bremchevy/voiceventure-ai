@@ -30,6 +30,15 @@ export class MathContentGenerator extends BaseAIContentGenerator {
     geometry: 'Generate geometry problems with shapes and measurements',
     arithmetic: 'Create arithmetic problems with basic operations',
     wordProblems: 'Generate real-world word problems',
+    fractions: `Create fraction problems that include:
+- Adding and subtracting fractions with like and unlike denominators
+- Multiplying and dividing fractions
+- Converting between mixed numbers and improper fractions
+- Comparing and ordering fractions
+- Real-world word problems involving fractions
+Make sure ALL problems involve fractions, not just whole numbers.`,
+    decimals: 'Generate decimal problems including operations and conversions',
+    percentages: 'Create percentage problems including conversions and applications',
   };
 
   async generateMathContent(
@@ -111,9 +120,13 @@ export class MathContentGenerator extends BaseAIContentGenerator {
       customInstructions,
     } = options;
 
+    // Special handling for fractions
+    const isFractionTopic = topic.toLowerCase().includes('fraction') || 
+                           (customInstructions && customInstructions.toLowerCase().includes('fraction'));
+
     let prompt = `Generate a math worksheet with the following specifications:
 
-1. Create EXACTLY ${numberOfProblems} ${difficulty} level ${topic} problems for grade ${grade}
+1. Create EXACTLY ${numberOfProblems} ${difficulty} level ${isFractionTopic ? 'fraction' : topic} problems for grade ${grade}
 2. Return the response in the following JSON format:
 {
   "title": "An engaging title for the worksheet",
@@ -128,7 +141,9 @@ export class MathContentGenerator extends BaseAIContentGenerator {
   ]
 }
 
-IMPORTANT: The response MUST contain EXACTLY ${numberOfProblems} problems, no more and no less.
+IMPORTANT: 
+- The response MUST contain EXACTLY ${numberOfProblems} problems, no more and no less.
+${isFractionTopic ? '- EVERY problem MUST involve fractions, not just whole numbers.\n- Include a mix of operations with fractions (addition, subtraction, multiplication, division).' : ''}
 
 Requirements:
 - Make problems engaging and grade-appropriate
@@ -138,7 +153,7 @@ ${includeSteps ? '- Include step-by-step solutions' : ''}
 ${includeVisuals ? '- Add text-based visual representations' : ''}
 
 Topic-specific guidelines:
-${this.topicPrompts[topic] || 'Create grade-appropriate math problems'}`;
+${isFractionTopic ? this.topicPrompts['fractions'] : (this.topicPrompts[topic] || 'Create grade-appropriate math problems')}`;
 
     return prompt;
   }

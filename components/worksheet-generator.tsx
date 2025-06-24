@@ -23,7 +23,7 @@ const BackArrow = ({
 
 interface WorksheetGeneratorProps {
   request?: string
-  onComplete?: (worksheet: any) => void
+  onComplete?: (worksheet: GeneratedWorksheet) => void
   onBack?: () => void
 }
 
@@ -90,19 +90,25 @@ interface MathProblem {
   visual?: string
 }
 
+interface Section {
+  type: string;
+  title?: string;
+  content: string;
+}
+
 interface GeneratedWorksheet {
-  title: string
-  problems?: MathProblem[]
-  theme?: string
-  grade: string
-  decorations?: string[]
-  resourceType: string
-  questions?: any[]
-  criteria?: any[]
-  duration?: string
-  objectives?: string[]
-  activities?: any[]
-  subject?: string
+  title: string;
+  content: string;
+  sections: Section[];
+  metadata: {
+    gradeLevel: string;
+    subject: string;
+    resourceType: string;
+    generatedAt: string;
+    theme?: string;
+    difficulty?: string;
+  };
+  decorations?: string[];
 }
 
 export default function WorksheetGenerator({ request, onComplete, onBack }: WorksheetGeneratorProps) {
@@ -226,6 +232,12 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
     { icon: "✨", text: "Finalizing design", completed: false },
   ]
 
+  // Add function to update generation progress
+  const updateGenerationProgress = (step: number, progress: number) => {
+    setCurrentGenerationStep(step);
+    setGenerationProgress(progress);
+  };
+
   // Parse initial request if provided
   useEffect(() => {
     if (request) {
@@ -312,8 +324,9 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
                 /\b(?:times|divided by|products|quotients)\b/i
               ],
               "Fractions & Decimals": [
-                /\b(?:fractions|decimals)\b/i,
-                /\b(?:fractional|decimal)\b/i
+                /\b(?:fractions?|fractional)\b/i,
+                /\b(?:decimals?|decimal numbers?)\b/i,
+                /\b(?:mixed numbers?|improper fractions?)\b/i
               ],
               "Word Problems": [
                 /\b(?:word problems|story problems)\b/i,
@@ -727,7 +740,15 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
     try {
       setCurrentStep("generating");
       
-      const response = await fetch('/api/generate', {
+      // Reset progress
+      setGenerationProgress(0);
+      setCurrentGenerationStep(0);
+
+      // Step 1: Analyzing request
+      updateGenerationProgress(0, 25);
+      await new Promise(resolve => setTimeout(resolve, 1000)); // Add small delay for visual feedback
+      
+      const response = await fetch(`${window.location.origin}/api/generate`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -743,8 +764,14 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
           includeExperiments: settings.includeExperiments,
           includeDiagrams: settings.includeDiagrams,
           includeVocabulary: settings.includeVocabulary,
+          questionCount: settings.problemCount,
+          focus: settings.focus,
         }),
       });
+
+      // Step 2: Generating content
+      updateGenerationProgress(1, 50);
+      await new Promise(resolve => setTimeout(resolve, 1000));
 
       if (!response.ok) {
         console.error('Server error:', response.status, response.statusText);
@@ -753,40 +780,28 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
         throw new Error(`Server error: ${response.status} ${response.statusText}`);
       }
 
-      // Log the response headers
-      console.log('Response headers:', Object.fromEntries(response.headers.entries()));
-
       const content = await response.text();
       console.log('Raw response content:', content);
 
+      // Step 3: Adding educational elements
+      updateGenerationProgress(2, 75);
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
       try {
-        // Try to parse the content and log its structure
         const parsedContent = JSON.parse(content);
-        console.log('Parsed content structure:', {
-          hasTitle: !!parsedContent.title,
-          hasProblems: Array.isArray(parsedContent.problems),
-          problemCount: parsedContent.problems?.length,
-          hasGrade: !!parsedContent.grade,
-          hasSubject: !!parsedContent.subject,
-          hasResourceType: !!parsedContent.resourceType,
-          rawContent: parsedContent
-        });
+        console.log('Parsed content structure:', parsedContent);
 
-        const formattedWorksheet = {
-          title: parsedContent.title,
-          problems: parsedContent.problems || [],
-          grade: parsedContent.grade,
-          theme: parsedContent.theme,
-          subject: parsedContent.subject,
-          resourceType: parsedContent.resourceType,
-          decorations: parsedContent.decorations || []
-        };
+        // Step 4: Finalizing design
+        updateGenerationProgress(3, 90);
+        await new Promise(resolve => setTimeout(resolve, 1000));
 
-        setGeneratedWorksheet(formattedWorksheet);
-        console.log('Generated worksheet:', formattedWorksheet);
+        setGeneratedWorksheet(parsedContent);
+        console.log('Generated worksheet:', parsedContent);
 
-        // Short delay before showing preview
-        await new Promise((resolve) => setTimeout(resolve, 500));
+        // Complete the progress
+        setGenerationProgress(100);
+        await new Promise(resolve => setTimeout(resolve, 500));
+        
         setCurrentStep("preview");
       } catch (parseError) {
         console.error('Error parsing generated content:', parseError);
@@ -813,9 +828,9 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
 
   const handleComplete = () => {
     if (onComplete && generatedWorksheet) {
-      onComplete(generatedWorksheet)
+      onComplete(generatedWorksheet);
     }
-  }
+  };
 
   // NEW: Get dynamic resource name for display
   const getResourceDisplayName = () => {
@@ -860,6 +875,7 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
     <div className="space-y-6 relative">
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
+        {/* Back Arrow */}
         {onBack && (
           <Button variant="ghost" size="sm" onClick={onBack} className="p-0 h-auto">
             <ChevronLeft className="w-4 h-4" />
@@ -1172,7 +1188,7 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
         />
       </div>
 
-      {/* Generate Button - Dynamic text */}
+      {/* Generate Button */}
       <Button
         onClick={generateWorksheet}
         className="w-full bg-purple-600 hover:bg-purple-700 text-white py-4 text-lg font-semibold"
@@ -1192,7 +1208,7 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
       <div className="relative w-32 h-32">
         {/* Center circle */}
         <div className="absolute inset-0 flex items-center justify-center">
-          <div className="w-16 h-16 bg-purple-600 rounded-full flex items-center justify-center">
+          <div className="w-16 h-16 bg-purple-600 rounded-full flex items-center justify-center animate-pulse">
             <Sparkles className="w-8 h-8 text-white" />
           </div>
         </div>
@@ -1201,11 +1217,13 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
         {[0, 1, 2, 3].map((i) => (
           <div
             key={i}
-            className="absolute w-3 h-3 bg-purple-400 rounded-full"
+            className={`absolute w-3 h-3 rounded-full transition-all duration-500 ${
+              i <= currentGenerationStep ? 'bg-purple-400' : 'bg-gray-300'
+            }`}
             style={{
               top: "50%",
               left: "50%",
-              transform: "translate(-50%, -50%)",
+              transform: `translate(-50%, -50%) rotate(${i * 90}deg) translateY(-40px)`,
               animation: `orbit 2s linear infinite`,
               animationDelay: `${i * 0.5}s`,
             }}
@@ -1222,7 +1240,7 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
               index < currentGenerationStep
                 ? "bg-green-50 border border-green-200"
                 : index === currentGenerationStep
-                  ? "bg-purple-50 border border-purple-200"
+                  ? "bg-purple-50 border border-purple-200 animate-pulse"
                   : "bg-gray-50 border border-gray-200"
             }`}
           >
@@ -1258,9 +1276,9 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
           <span>Generating...</span>
           <span>{Math.round(generationProgress)}%</span>
         </div>
-        <div className="w-full bg-gray-200 rounded-full h-2">
+        <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
           <div
-            className="bg-purple-600 h-2 rounded-full transition-all duration-300 ease-out"
+            className="bg-purple-600 h-2 rounded-full transition-all duration-700 ease-out"
             style={{ width: `${generationProgress}%` }}
           />
         </div>
@@ -1282,7 +1300,7 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
   const renderPreview = () => {
     if (!generatedWorksheet) return null;
 
-    const { title, problems } = generatedWorksheet;
+    const { title, content, sections, metadata } = generatedWorksheet;
 
     return (
       <div className="space-y-6 relative">
@@ -1314,32 +1332,110 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
         )}
 
         {/* Resource Preview */}
-        <div className="bg-white p-8 rounded-lg shadow-lg max-w-4xl mx-auto">
+        <div className="bg-white p-8 rounded-lg shadow-lg max-w-4xl mx-auto" ref={worksheetRef}>
           <div className="text-center mb-8">
             <h1 className="text-2xl font-bold mb-2">{title}</h1>
             <div className="mb-4">
               <div>Name: ________________</div>
               <div>Date: ________________</div>
             </div>
+            {content && <div className="text-gray-600 mb-6">{content}</div>}
           </div>
 
-          {/* Problems/Questions Section */}
+          {/* Sections */}
           <div className="space-y-6">
-            {problems?.map((problem: any, index: number) => (
-              <div key={index} className="border-b pb-4">
-                <p className="font-medium">{index + 1}. {problem.question}</p>
-                {problem.options && (
-                  <div className="ml-4 mt-2">
-                    {problem.options.map((option: string, optIndex: number) => (
-                      <div key={optIndex}>{option}</div>
+            {sections?.map((section, sectionIndex) => {
+              if (section.type === 'passage') {
+                return (
+                  <div key={sectionIndex} className="mb-8">
+                    {section.title && <h2 className="text-xl font-semibold mb-4">{section.title}</h2>}
+                    <div className="prose max-w-none">
+                      {section.content}
+                    </div>
+                  </div>
+                );
+              }
+
+              if (section.type === 'vocabulary') {
+                const vocabulary = JSON.parse(section.content);
+                return (
+                  <div key={sectionIndex} className="mb-8">
+                    <h2 className="text-xl font-semibold mb-4">Vocabulary</h2>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {vocabulary.map((word: any, index: number) => (
+                        <div key={index} className="border rounded-lg p-4">
+                          <div className="font-medium text-lg mb-1">{word.word}</div>
+                          <div className="text-gray-600 mb-2">{word.definition}</div>
+                          {word.context && (
+                            <div className="text-sm text-gray-500">
+                              <span className="font-medium">Context:</span> {word.context}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              }
+
+              if (section.type === 'rubric') {
+                const sectionContent = JSON.parse(section.content);
+                return (
+                  <div key={sectionIndex} className="space-y-6">
+                    {section.title && <h2 className="text-xl font-semibold mb-4">{section.title}</h2>}
+                    {sectionContent.map((criterion: any, index: number) => (
+                      <div key={index} className="border rounded-lg p-4">
+                        <h3 className="font-medium mb-2">{criterion.criterion}</h3>
+                        <p className="text-gray-600 mb-4">{criterion.description}</p>
+                        <div className="grid grid-cols-4 gap-4">
+                          {criterion.levels.map((level: any, levelIndex: number) => (
+                            <div key={levelIndex} className="text-sm">
+                              <div className="font-medium">{level.label} ({level.score})</div>
+                              <div className="text-gray-600">{level.description}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     ))}
                   </div>
-                )}
-                {problem.answer && (
-                  <div className="ml-4 mt-2 text-gray-500">Answer: {problem.answer}</div>
-                )}
-              </div>
-            ))}
+                );
+              }
+
+              const sectionContent = JSON.parse(section.content);
+              return (
+                <div key={sectionIndex} className="space-y-4">
+                  {section.title && <h2 className="text-xl font-semibold mb-4">{section.title}</h2>}
+                  {Array.isArray(sectionContent) && sectionContent.map((problem: any, index: number) => (
+                    <div key={index} className="border-b pb-6 mb-6">
+                      <p className="font-medium text-lg mb-3">{index + 1}. {problem.question}</p>
+                      {problem.options ? (
+                        <div className="ml-6 mt-3 space-y-2">
+                          {problem.options.map((option: string, optIndex: number) => (
+                            <div key={optIndex} className="flex items-center gap-3">
+                              <div className="w-6 h-6 border-2 border-gray-300 rounded-full"></div>
+                              <span>{option}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="ml-6 mt-3">
+                          {/* Simplified answer space with just two lines */}
+                          <div className="space-y-4">
+                            <div className="border-b-2 border-gray-300 h-6"></div>
+                            <div className="border-b-2 border-gray-300 h-6"></div>
+                          </div>
+                        </div>
+                      )}
+                      {problem.visual && (
+                        <div className="ml-6 mt-4 p-3 bg-gray-50 rounded-lg text-gray-600">
+                          {problem.visual}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
           </div>
         </div>
 

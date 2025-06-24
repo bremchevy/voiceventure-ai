@@ -153,6 +153,54 @@ export class ScienceContentGenerator extends BaseAIContentGenerator {
       numberOfQuestions = 5,
     } = options;
 
+    // Special handling for rubrics
+    if (options.customInstructions?.toLowerCase().includes('rubric')) {
+      return `Generate a science rubric with the following specifications:
+
+1. Create a comprehensive rubric for grade ${grade} science${topic ? ` (${topic})` : ''} evaluation
+2. Return the response in the following JSON format:
+{
+  "title": "An appropriate title for the rubric",
+  "introduction": "Brief description of what this rubric evaluates",
+  "criteria": [
+    {
+      "criterion": "Name of the criterion",
+      "description": "What this criterion evaluates",
+      "levels": [
+        {
+          "score": "4",
+          "label": "Excellent",
+          "description": "Detailed description of excellent performance"
+        },
+        {
+          "score": "3",
+          "label": "Good",
+          "description": "Detailed description of good performance"
+        },
+        {
+          "score": "2",
+          "label": "Fair",
+          "description": "Detailed description of fair performance"
+        },
+        {
+          "score": "1",
+          "label": "Needs Improvement",
+          "description": "Detailed description of performance needing improvement"
+        }
+      ]
+    }
+  ]
+}
+
+Requirements:
+- Include clear and measurable criteria
+- Use grade-appropriate language
+- Focus on scientific concepts and skills
+- Include both content and process evaluation
+- Provide detailed descriptions for each performance level`;
+    }
+
+    // Original worksheet/quiz prompt
     let prompt = `Generate a ${difficulty}-level science worksheet with the following specifications:
 
 1. Create ${numberOfQuestions} questions/activities for grade ${grade} students focusing on ${subject}${topic ? ` (${topic})` : ''}

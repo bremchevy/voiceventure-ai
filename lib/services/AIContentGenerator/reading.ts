@@ -11,6 +11,7 @@ export interface ReadingContentOptions {
   wordCount?: number;
   focus?: Array<'main_idea' | 'characters' | 'plot' | 'theme' | 'vocabulary' | 'inference'>;
   customInstructions?: string;
+  numberOfQuestions?: number;
 }
 
 export interface ReadingQuestion {
@@ -168,12 +169,24 @@ export class ReadingContentGenerator extends BaseAIContentGenerator {
       includeAnalysis = true,
       wordCount = 300,
       focus = ['main_idea', 'vocabulary'],
+      customInstructions,
+      numberOfQuestions = 3
     } = options;
+
+    // Special handling for character traits focus
+    const isCharacterTraitsFocus = customInstructions?.toLowerCase().includes('character trait') || 
+                                 focus.includes('characters');
 
     let prompt = `Generate a ${difficulty}-level ${genre} reading comprehension worksheet with the following specifications:
 
 1. Create a ${wordCount}-word passage for grade ${grade} students${topic ? ` about ${topic}` : ''}
-2. Return the response in the following JSON format:
+2. ${isCharacterTraitsFocus ? `The passage should focus on character development and clearly demonstrate various character traits through actions, dialogue, and descriptions.
+   Include characters that show distinct personality traits that students can identify and analyze.
+   Generate EXACTLY ${numberOfQuestions} questions that focus on character analysis, including:
+   - Questions about identifying specific character traits
+   - Questions about how characters demonstrate these traits through actions
+   - Questions about how characters change or react to situations` : ''}
+3. Return the response in the following JSON format:
 {
   "title": "An engaging title for the worksheet",
   "instructions": "Clear instructions for students",
@@ -216,9 +229,13 @@ export class ReadingContentGenerator extends BaseAIContentGenerator {
 }
 
 Requirements:
-- Make content engaging and grade-appropriate
+- Make content engaging and grade-appropriate for ${grade}th grade
 - Use clear, age-appropriate language
 - Include varied question types
+${isCharacterTraitsFocus ? `- Focus questions on identifying and analyzing character traits
+- Include questions about character actions, feelings, and motivations
+- Ask students to provide text evidence supporting character traits
+- Include questions about how characters change or react to situations` : ''}
 ${includeVocabulary ? '- Include vocabulary in context' : ''}
 ${includeComprehension ? '- Include text-based comprehension questions' : ''}
 ${includeAnalysis ? '- Include analysis and critical thinking questions' : ''}
@@ -227,7 +244,9 @@ Focus areas:
 ${focus.map(f => this.focusPrompts[f] || `Focus on ${f}`).join('\n')}
 
 Genre-specific guidelines:
-${this.genrePrompts[genre] || 'Create grade-appropriate reading content'}`;
+${this.genrePrompts[genre] || 'Create grade-appropriate reading content'}
+
+${customInstructions ? `Additional requirements:\n${customInstructions}` : ''}`;
 
     return prompt;
   }

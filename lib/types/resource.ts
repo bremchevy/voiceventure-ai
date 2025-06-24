@@ -57,7 +57,7 @@ export interface Resource {
 export interface ResourceGenerationOptions {
   gradeLevel: string;
   subject: string;
-  resourceType: string;
+  resourceType: ResourceType;
   theme?: string;
   difficulty?: 'easy' | 'medium' | 'hard';
   problemCount?: number;
@@ -77,6 +77,7 @@ export interface ResourceGenerationOptions {
   genre?: string;
   wordCount?: number;
   focus?: string[];
+  questionCount?: number;
 }
 
 export interface ResourceGenerationResult {
