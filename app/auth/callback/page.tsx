@@ -20,8 +20,8 @@ export default function AuthCallbackPage() {
       }, 1000)
     } else {
       // If no code, redirect to home
-      router.push('/')
-    }
+        router.push('/')
+      }
   }, [router, searchParams])
 
   return (

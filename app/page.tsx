@@ -1146,7 +1146,6 @@ What subject and grade level would you like this for?`
       recognitionRef.current.onstart = () => {
         console.log("🎤 Speech recognition started successfully")
         setIsListening(true)
-        setIsPaused(false)
         setContextHint("Listening... speak naturally")
         lastSpeechTime = Date.now()
       }
@@ -1195,10 +1194,8 @@ What subject and grade level would you like this for?`
           clearInterval(silenceTimer)
           silenceTimer = null
         }
-        if (!isPaused) {
-          setIsListening(false)
-          setContextHint("Try: 'Create a math worksheet for 3rd grade about dinosaurs'")
-        }
+        setIsListening(false)
+        setContextHint("Try: 'Create a math worksheet for 3rd grade about dinosaurs'")
       }
 
       recognitionRef.current.onerror = (event) => {
@@ -1208,10 +1205,8 @@ What subject and grade level would you like this for?`
           type: event.type,
         })
         
-        if (!isPaused) {
-          setIsListening(false)
-          setContextHint("Try: 'Create a math worksheet for 3rd grade about dinosaurs'")
-        }
+        setIsListening(false)
+        setContextHint("Try: 'Create a math worksheet for 3rd grade about dinosaurs'")
 
         switch (event.error) {
           case "not-allowed":
@@ -1226,10 +1221,8 @@ To fix this:
 Alternative: Use the example prompts below`)
             break
           case "no-speech":
-            if (!isPaused) {
-              console.log("🔇 No speech detected")
-              setContextHint("No speech detected. Try speaking louder or closer to the microphone.")
-            }
+            console.log("🔇 No speech detected")
+            setContextHint("No speech detected. Try speaking louder or closer to the microphone.")
             break
           case "audio-capture":
             console.log("🎤 Audio capture failed")
@@ -1254,12 +1247,10 @@ Alternative: Use the example prompts below`)
         console.log("🚀 Starting speech recognition...")
         recognitionRef.current.start()
         setIsListening(true)
-        setIsPaused(false)
         console.log("✅ Speech recognition started successfully")
       } catch (startError) {
         console.error("❌ Failed to start recognition:", startError)
         setIsListening(false)
-        setIsPaused(false)
         setContextHint("Try: 'Create a math worksheet for 3rd grade about dinosaurs'")
         alert("❌ Failed to start voice recognition. Please refresh the page and try again.")
       }
@@ -1267,96 +1258,7 @@ Alternative: Use the example prompts below`)
     } catch (error) {
       console.error("❌ Microphone access error:", error)
       setIsListening(false)
-      setIsPaused(false)
       handleMicrophoneError(error)
-    }
-  }
-
-  const pauseListening = () => {
-    console.log("⏸️ Pausing speech recognition")
-    if (recognitionRef.current) {
-      try {
-        // Store the current transcript before stopping
-        const currentTranscript = transcript
-        console.log("📝 Storing current transcript:", currentTranscript)
-        
-        recognitionRef.current.stop()
-        setIsPaused(true)
-        setContextHint("Recording paused. Click to resume.")
-      } catch (error) {
-        console.error("❌ Error pausing speech recognition:", error)
-        setIsListening(false)
-        setIsPaused(false)
-        setContextHint("Error occurred. Please try again.")
-      }
-    }
-  }
-
-  const resumeListening = async () => {
-    console.log("▶️ Resuming speech recognition")
-    try {
-      // Create a new recognition instance
-      const SpeechRecognition = (window.SpeechRecognition || window.webkitSpeechRecognition) as typeof window.SpeechRecognition
-      recognitionRef.current = new SpeechRecognition()
-      
-      // Set up recognition properties
-      recognitionRef.current.continuous = true
-      recognitionRef.current.interimResults = true
-      recognitionRef.current.lang = "en-US"
-
-      // Store the existing transcript to preserve it
-      const existingTranscript = transcript
-      console.log("📝 Resuming with existing transcript:", existingTranscript)
-
-      // Set up event handlers
-      recognitionRef.current.onstart = () => {
-        console.log("🎤 Speech recognition resumed")
-        setIsListening(true)
-        setIsPaused(false)
-        setContextHint("Listening... speak naturally")
-      }
-
-      recognitionRef.current.onresult = (event: SpeechRecognitionEvent) => {
-        let interimTranscript = ""
-        let finalTranscript = existingTranscript // Start with existing transcript
-
-        for (let i = 0; i < event.results.length; i++) {
-          const result = event.results[i][0].transcript
-          if (event.results[i].isFinal) {
-            finalTranscript += " " + result
-          } else {
-            interimTranscript += result
-          }
-        }
-
-        // Ensure proper spacing between segments
-        const completeTranscript = (finalTranscript + " " + interimTranscript).trim()
-        console.log("📋 Updated transcript:", completeTranscript)
-        setTranscript(completeTranscript)
-
-        if (finalTranscript.trim() !== existingTranscript.trim()) {
-          analyzeTranscript(completeTranscript)
-        }
-      }
-
-      recognitionRef.current.onend = () => {
-        console.log("🛑 Speech recognition ended")
-        if (!isPaused) {
-          setIsListening(false)
-          setContextHint("Try: 'Create a math worksheet for 3rd grade about dinosaurs'")
-        }
-      }
-
-      // Start recognition
-      await recognitionRef.current.start()
-      setIsListening(true)
-      setIsPaused(false)
-      console.log("✅ Speech recognition resumed successfully")
-    } catch (error) {
-      console.error("❌ Error resuming speech recognition:", error)
-      setIsListening(false)
-      setIsPaused(false)
-      setContextHint("Error occurred. Please try again.")
     }
   }
 
@@ -1901,478 +1803,384 @@ ${solution}`)
     )
   } else {
     return (
-      <div className="min-h-screen bg-white flex justify-center items-center p-4">
-        {/* Phone Frame */}
-        <div className="w-[375px] h-[812px] bg-black rounded-[40px] p-2 shadow-2xl relative phone-frame">
-          <div className="w-full h-full bg-white rounded-[32px] overflow-hidden relative">
-            {/* Status Bar */}
-            <div className="flex justify-between items-center px-6 py-2 text-black text-sm font-medium">
-              <span>9:41</span>
-              <div className="flex items-center gap-1">
-                <div className="w-4 h-2 border border-black rounded-sm">
-                  <div className="w-3 h-1 bg-black rounded-sm m-0.5"></div>
-                </div>
-              </div>
-            </div>
+      <div className="min-h-screen bg-white">
+        {/* Main Content Area */}
+        <div className="container mx-auto px-4 pb-20">
+          {currentView === "main" ? (
+            <>
+              {/* HOME PAGE */}
+              {activeTab === "home" && (
+                <div className="max-w-2xl mx-auto space-y-6 pt-6">
+                  {/* Voice Input Section */}
+                  <div className="bg-white rounded-2xl p-8 flex flex-col items-center shadow-sm border border-gray-100">
+                    <div className="mb-6">
+                      <Button
+                        onClick={isListening ? stopListening : startListening}
+                        size="lg"
+                        className={cn(
+                          "w-24 h-24 rounded-full shadow-lg",
+                          isListening ? "bg-red-500 hover:bg-red-600 animate-pulse" : "bg-purple-600 hover:bg-purple-700"
+                        )}
+                      >
+                        {isListening ? (
+                          <MicOff className="w-6 h-6 text-white" />
+                        ) : (
+                          <Mic className="w-6 h-6 text-white" />
+                        )}
+                      </Button>
+                    </div>
 
-            {/* Header */}
-            <div className="bg-gradient-to-r from-purple-600 to-blue-600 text-white p-6 pb-8">
-              <div className="flex items-center justify-center mb-2">
-                <div className="flex items-center gap-2">
-                  <Sparkles className="w-6 h-6" />
-                  <h1 className="text-xl font-bold">VoiceVenture AI</h1>
-                </div>
-              </div>
-              <p className="text-purple-100 text-sm text-center">
-                {activeTab === "home" && "Ask It. Get It. ®"}
-                {activeTab === "marketplace" && "Discover amazing educational content"}
-                {activeTab === "profile" && "Manage your teaching business"}
-              </p>
-            </div>
-
-            {/* Main Content Area */}
-            <div className="flex-1 overflow-y-auto scrollable-content" style={{ height: "calc(100% - 180px)" }}>
-              <div className="bg-white min-h-full p-4">
-                {currentView === "main" ? (
-                  <>
-                    {/* HOME PAGE */}
-                    {activeTab === "home" && (
-                      <div className="space-y-6">
-                        {/* Voice Input Section */}
-                        <div className="bg-white rounded-2xl p-8 flex flex-col items-center shadow-sm border border-gray-100">
-                          <div className="mb-6">
-                            <Button
-                              onClick={isListening ? (isPaused ? resumeListening : pauseListening) : startListening}
-                              size="lg"
-                              className={cn(
-                                "w-24 h-24 rounded-full shadow-lg",
-                                isListening && !isPaused && "bg-red-500 hover:bg-red-600 animate-pulse",
-                                isPaused && "bg-yellow-500 hover:bg-yellow-600",
-                                !isListening && "bg-purple-600 hover:bg-purple-700"
-                              )}
-                            >
-                              {isListening ? (
-                                isPaused ? (
-                                  <Play className="w-6 h-6 text-white" />
-                                ) : (
-                                  <Pause className="w-6 h-6 text-white" />
-                                )
-                              ) : (
-                                <Mic className="w-6 h-6 text-white" />
-                              )}
-                            </Button>
+                    {/* Status Display */}
+                    <div className="w-full mb-4">
+                      {isListening ? (
+                        <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                          <div className="flex items-center justify-center gap-2 mb-2">
+                            <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse"></div>
+                            <span className="text-sm font-medium text-red-800">
+                              Listening...
+                            </span>
                           </div>
-
-                          {/* Status Display */}
-                          <div className="w-full mb-4">
-                            {isListening ? (
-                              <div className={cn(
-                                "border rounded-lg p-3",
-                                isPaused ? "bg-yellow-50 border-yellow-200" : "bg-red-50 border-red-200"
-                              )}>
-                                <div className="flex items-center justify-center gap-2 mb-2">
-                                  <div className={cn(
-                                    "w-2 h-2 rounded-full",
-                                    isPaused ? "bg-yellow-500" : "bg-red-500 animate-pulse"
-                                  )}></div>
-                                  <span className={cn(
-                                    "text-sm font-medium",
-                                    isPaused ? "text-yellow-800" : "text-red-800"
-                                  )}>
-                                    {isPaused ? "Recording Paused" : "Listening..."}
-                                  </span>
-                                </div>
-                                <p className={cn(
-                                  "text-xs text-center",
-                                  isPaused ? "text-yellow-600" : "text-red-600"
-                                )}>
-                                  {isPaused ? "Click the play button to continue recording" : "Speak clearly into your microphone"}
-                                </p>
-                              </div>
-                            ) : (
-                              <div className="bg-white bg-opacity-80 rounded-lg p-3 border border-gray-100">
-                                <p className="text-sm text-gray-700 text-center mb-1">Ready to listen</p>
-                                <p className="text-xs text-gray-500 text-center">{contextHint}</p>
-                              </div>
-                            )}
-                          </div>
-
-                          {/* Test Microphone and Start Over Buttons */}
-                          <div className="flex gap-3 mb-4">
-                            <Button onClick={testMicrophone} size="sm" variant="outline" className="text-xs">
-                              🧪 Test Microphone
-                            </Button>
-                            <Button onClick={handleStartOver} size="sm" variant="outline" className="text-xs">
-                              🔄 Start Over
-                            </Button>
-                          </div>
-
-                          {/* Transcript Display */}
-                          {transcript && (
-                            <div className="w-full bg-white rounded-lg p-4 shadow-sm mb-4 border border-gray-100">
-                              <p className="text-sm font-medium text-gray-700 mb-1">You said:</p>
-                              <p className="text-sm text-gray-900">"{transcript}"</p>
-                            </div>
-                          )}
-
-                          {/* Voice Response */}
-                          {voiceResponse?.text && (
-                            <div className="w-full bg-white rounded-lg p-4 shadow-sm border border-gray-100">
-                              <div className="flex items-start mb-4">
-                                <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center mr-3">
-                                  <Sparkles className="w-4 h-4 text-purple-600" />
-                                </div>
-                                <div className="flex-1">
-                                  <p className="text-sm text-gray-800 whitespace-pre-line">{voiceResponse.text}</p>
-                                </div>
-                              </div>
-
-                              {voiceResponse.actions?.length > 0 && (
-                                <div className="flex flex-col gap-2 mt-4">
-                                  {voiceResponse.actions.map((action, index) => {
-                                    // Determine which icon to show based on the button index
-                                    let icon = "⚡"
-                                    if (index === 1) {
-                                      icon = "✏️"
-                                    } else if (index === 2) {
-                                      icon = "💾"
-                                    }
-
-                                    return (
-                                      <Button
-                                        key={index}
-                                        onClick={action.onClick}
-                                        className="bg-purple-600 hover:bg-purple-700 text-white w-full flex items-center justify-center py-3 px-4 text-sm font-medium"
-                                        size="sm"
-                                      >
-                                        <span className="mr-2">{icon}</span>
-                                        <span>{action.label}</span>
-                                      </Button>
-                                    )
-                                  })}
-                                </div>
-                              )}
-                            </div>
-                          )}
+                          <p className="text-xs text-center text-red-600">
+                            Speak clearly into your microphone
+                          </p>
                         </div>
-
-                        {/* NEW: Enhanced Try These Examples with rotating content */}
-                        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-                          <div className="flex items-center justify-between mb-4">
-                            <h2 className="text-gray-800 text-lg font-medium">Try These Examples</h2>
-                            <div className="flex items-center gap-2 text-xs text-gray-500">
-                              <div className="w-2 h-2 bg-purple-400 rounded-full animate-pulse"></div>
-                              <span>Auto-rotating</span>
-                            </div>
-                          </div>
-                          <div className="space-y-3">
-                            {/* Show current set of 4 examples */}
-                            {examplePrompts.slice(currentExampleIndex, currentExampleIndex + 4).map((prompt, index) => (
-                              <ExamplePromptButton
-                                key={currentExampleIndex + index}
-                                prompt={prompt}
-                                index={currentExampleIndex + index}
-                              />
-                            ))}
-                          </div>
-                          <div className="mt-3 text-center">
-                            <div className="text-xs text-gray-500">
-                              Showing {Math.min(4, examplePrompts.length - currentExampleIndex)} of{" "}
-                              {examplePrompts.length} examples
-                            </div>
-                            <div className="flex justify-center gap-1 mt-2">
-                              {Array.from({ length: Math.ceil(examplePrompts.length / 4) }).map((_, i) => (
-                                <div
-                                  key={i}
-                                  className={`w-2 h-2 rounded-full ${
-                                    Math.floor(currentExampleIndex / 4) === i ? "bg-purple-500" : "bg-gray-300"
-                                  }`}
-                                />
-                              ))}
-                            </div>
-                          </div>
+                      ) : (
+                        <div className="bg-white bg-opacity-80 rounded-lg p-3 border border-gray-100">
+                          <p className="text-sm text-gray-700 text-center mb-1">Ready to listen</p>
+                          <p className="text-xs text-gray-500 text-center">{contextHint}</p>
                         </div>
+                      )}
+                    </div>
 
-                        {/* Smart Suggestions Grid - MOVED DOWN TO SECOND POSITION */}
-                        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-                          <h2 className="text-gray-800 text-lg font-medium mb-4">Smart Suggestions</h2>
-                          <div className="grid grid-cols-2 gap-4">
-                            <SmartSuggestionButton
-                              icon={<FileText className="w-5 h-5" />}
-                              label="Create & Sell"
-                              onClick={() => handleSmartSuggestionFromAssistant("create_sell")}
-                            />
-                            <SmartSuggestionButton
-                              icon={<ShoppingCart className="w-5 h-5" />}
-                              label="Find Resources"
-                              onClick={() => handleSmartSuggestionFromAssistant("find_resources")}
-                            />
-                            <SmartSuggestionButton
-                              icon={<Users className="w-5 h-5" />}
-                              label="Find Substitute"
-                              onClick={() => setCurrentView("substitute")}
-                            />
-                            <SmartSuggestionButton
-                              icon={<ClipboardList className="w-5 h-5" />}
-                              label="Create IEP"
-                              onClick={() => handleSmartSuggestionFromAssistant("create_iep")}
-                            />
-                          </div>
-                        </div>
+                    {/* Test Microphone and Start Over Buttons */}
+                    <div className="flex gap-3 mb-4">
+                      <Button onClick={testMicrophone} size="sm" variant="outline" className="text-xs">
+                        🧪 Test Microphone
+                      </Button>
+                      <Button onClick={handleStartOver} size="sm" variant="outline" className="text-xs">
+                        🔄 Start Over
+                      </Button>
+                    </div>
+
+                    {/* Transcript Display */}
+                    {transcript && (
+                      <div className="w-full bg-white rounded-lg p-4 shadow-sm mb-4 border border-gray-100">
+                        <p className="text-sm font-medium text-gray-700 mb-1">You said:</p>
+                        <p className="text-sm text-gray-900">"{transcript}"</p>
                       </div>
                     )}
 
-                    {/* MARKETPLACE PAGE */}
-                    {activeTab === "marketplace" && (
-                      <div className="space-y-6">
-                        {/* Search Bar */}
-                        <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
-                          <div className="flex items-center bg-gray-50 rounded-lg p-3">
-                            <ShoppingCart className="w-4 h-4 text-gray-500 mr-2" />
-                            <input
-                              type="text"
-                              placeholder="Search educational resources..."
-                              className="w-full bg-transparent text-sm outline-none"
-                            />
+                    {/* Voice Response */}
+                    {voiceResponse?.text && (
+                      <div className="w-full bg-white rounded-lg p-4 shadow-sm border border-gray-100">
+                        <div className="flex items-start mb-4">
+                          <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center mr-3">
+                            <Sparkles className="w-4 h-4 text-purple-600" />
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-sm text-gray-800 whitespace-pre-line">{voiceResponse.text}</p>
                           </div>
                         </div>
 
-                        {/* Categories */}
-                        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-                          <h2 className="text-gray-800 text-lg font-medium mb-4">Categories</h2>
-                          <div className="grid grid-cols-2 gap-3">
-                            <button className="bg-gray-50 rounded-lg p-3 text-left hover:shadow-md transition-shadow border border-gray-100">
-                              <div className="text-purple-600 mb-1">📝</div>
-                              <span className="text-sm font-medium">Worksheets</span>
-                            </button>
-                            <button className="bg-gray-50 rounded-lg p-3 text-left hover:shadow-md transition-shadow border border-gray-100">
-                              <div className="text-purple-600 mb-1">📚</div>
-                              <span className="text-sm font-medium">Lesson Plans</span>
-                            </button>
-                            <button className="bg-gray-50 rounded-lg p-3 text-left hover:shadow-md transition-shadow border border-gray-100">
-                              <div className="text-purple-600 mb-1">🎯</div>
-                              <span className="text-sm font-medium">Activities</span>
-                            </button>
-                            <button className="bg-gray-50 rounded-lg p-3 text-left hover:shadow-md transition-shadow border border-gray-100">
-                              <div className="text-purple-600 mb-1">📊</div>
-                              <span className="text-sm font-medium">Assessments</span>
-                            </button>
+                        {voiceResponse.actions?.length > 0 && (
+                          <div className="flex flex-col gap-2 mt-4">
+                            {voiceResponse.actions.map((action, index) => {
+                              let icon = "⚡"
+                              if (index === 1) {
+                                icon = "✏️"
+                              } else if (index === 2) {
+                                icon = "💾"
+                              }
+
+                              return (
+                                <Button
+                                  key={index}
+                                  onClick={action.onClick}
+                                  className="bg-purple-600 hover:bg-purple-700 text-white w-full flex items-center justify-center py-3 px-4 text-sm font-medium"
+                                  size="sm"
+                                >
+                                  <span className="mr-2">{icon}</span>
+                                  <span>{action.label}</span>
+                                </Button>
+                              )
+                            })}
                           </div>
-                        </div>
-
-                        {/* Featured Resources */}
-                        <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-                          <h2 className="text-gray-800 text-lg font-medium mb-4">Featured Resources</h2>
-                          <div className="space-y-4">
-                            <div className="bg-gray-50 rounded-lg p-4 border border-gray-100">
-                              <div className="flex justify-between items-start mb-2">
-                                <div>
-                                  <h3 className="font-medium text-sm">Ocean Adventures: Marine Biology</h3>
-                                  <p className="text-xs text-gray-500">4th Grade • Science</p>
-                                  <p className="text-xs text-gray-500">by Ms. Johnson</p>
-                                </div>
-                                <div className="text-right">
-                                  <p className="text-lg font-bold text-green-600">$3.99</p>
-                                  <div className="flex items-center gap-1 text-xs text-gray-500">
-                                    <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />
-                                    <span>4.9</span>
-                                  </div>
-                                </div>
-                              </div>
-                              <Button className="w-full bg-purple-600 hover:bg-purple-700 text-white" size="sm">
-                                Purchase & Download
-                              </Button>
-                            </div>
-
-                            <div className="bg-gray-50 rounded-lg p-4 border border-gray-100">
-                              <div className="flex justify-between items-start mb-2">
-                                <div>
-                                  <h3 className="font-medium text-sm">Space Explorers: Solar System</h3>
-                                  <p className="text-xs text-gray-500">5th Grade • Science</p>
-                                  <p className="text-xs text-gray-500">by Mr. Chen</p>
-                                </div>
-                                <div className="text-right">
-                                  <p className="text-lg font-bold text-green-600">$4.49</p>
-                                  <div className="flex items-center gap-1 text-xs text-gray-500">
-                                    <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />
-                                    <span>4.8</span>
-                                  </div>
-                                </div>
-                              </div>
-                              <Button className="w-full bg-purple-600 hover:bg-purple-700 text-white" size="sm">
-                                Purchase & Download
-                              </Button>
-                            </div>
-
-                            <div className="bg-gray-50 rounded-lg p-4 border border-gray-100">
-                              <div className="flex justify-between items-start mb-2">
-                                <div>
-                                  <h3 className="font-medium text-sm">Dinosaur Math Adventures</h3>
-                                  <p className="text-xs text-gray-500">3rd Grade • Math</p>
-                                  <p className="text-xs text-gray-500">by Mrs. Smith</p>
-                                </div>
-                                <div className="text-right">
-                                  <p className="text-lg font-bold text-green-600">$2.99</p>
-                                  <div className="flex items-center gap-1 text-xs text-gray-500">
-                                    <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />
-                                    <span>4.7</span>
-                                  </div>
-                                </div>
-                              </div>
-                              <Button className="w-full bg-purple-600 hover:bg-purple-700 text-white" size="sm">
-                                Purchase & Download
-                              </Button>
-                            </div>
-                          </div>
-                        </div>
+                        )}
                       </div>
                     )}
+                  </div>
 
-                    {/* PROFILE PAGE */}
-                    {activeTab === "profile" && (
-                      <ProfileView />
-                    )}
-                  </>
-                ) : currentView === "substitute" ? (
-                  <SubstituteBookingSystem onBack={() => setCurrentView("main")} />
-                ) : null}
-              </div>
+                  {/* Try These Examples */}
+                  <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+                    <div className="flex items-center justify-between mb-4">
+                      <h2 className="text-gray-800 text-lg font-medium">Try These Examples</h2>
+                      <div className="flex items-center gap-2 text-xs text-gray-500">
+                        <div className="w-2 h-2 bg-purple-400 rounded-full animate-pulse"></div>
+                        <span>Auto-rotating</span>
+                      </div>
+                    </div>
+                    <div className="space-y-3">
+                      {examplePrompts.slice(currentExampleIndex, currentExampleIndex + 4).map((prompt, index) => (
+                        <ExamplePromptButton
+                          key={currentExampleIndex + index}
+                          prompt={prompt}
+                          index={currentExampleIndex + index}
+                        />
+                      ))}
+                    </div>
+                    <div className="mt-3 text-center">
+                      <div className="text-xs text-gray-500">
+                        Showing {Math.min(4, examplePrompts.length - currentExampleIndex)} of{" "}
+                        {examplePrompts.length} examples
+                      </div>
+                      <div className="flex justify-center gap-1 mt-2">
+                        {Array.from({ length: Math.ceil(examplePrompts.length / 4) }).map((_, i) => (
+                          <div
+                            key={i}
+                            className={`w-2 h-2 rounded-full ${
+                              Math.floor(currentExampleIndex / 4) === i ? "bg-purple-500" : "bg-gray-300"
+                            }`}
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Smart Suggestions Grid */}
+                  <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+                    <h2 className="text-gray-800 text-lg font-medium mb-4">Smart Suggestions</h2>
+                    <div className="grid grid-cols-2 gap-4">
+                      <SmartSuggestionButton
+                        icon={<FileText className="w-5 h-5" />}
+                        label="Create & Sell"
+                        onClick={() => handleSmartSuggestionFromAssistant("create_sell")}
+                      />
+                      <SmartSuggestionButton
+                        icon={<ShoppingCart className="w-5 h-5" />}
+                        label="Find Resources"
+                        onClick={() => handleSmartSuggestionFromAssistant("find_resources")}
+                      />
+                      <SmartSuggestionButton
+                        icon={<Users className="w-5 h-5" />}
+                        label="Find Substitute"
+                        onClick={() => setCurrentView("substitute")}
+                      />
+                      <SmartSuggestionButton
+                        icon={<ClipboardList className="w-5 h-5" />}
+                        label="Create IEP"
+                        onClick={() => handleSmartSuggestionFromAssistant("create_iep")}
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* MARKETPLACE PAGE */}
+              {activeTab === "marketplace" && (
+                <div className="max-w-2xl mx-auto space-y-6 pt-6">
+                  {/* Search Bar */}
+                  <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+                    <div className="flex items-center bg-gray-50 rounded-lg p-3">
+                      <ShoppingCart className="w-4 h-4 text-gray-500 mr-2" />
+                      <input
+                        type="text"
+                        placeholder="Search educational resources..."
+                        className="w-full bg-transparent text-sm outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Categories */}
+                  <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+                    <h2 className="text-gray-800 text-lg font-medium mb-4">Categories</h2>
+                    <div className="grid grid-cols-2 gap-3">
+                      <button className="bg-gray-50 rounded-lg p-3 text-left hover:shadow-md transition-shadow border border-gray-100">
+                        <div className="text-purple-600 mb-1">📝</div>
+                        <span className="text-sm font-medium">Worksheets</span>
+                      </button>
+                      <button className="bg-gray-50 rounded-lg p-3 text-left hover:shadow-md transition-shadow border border-gray-100">
+                        <div className="text-purple-600 mb-1">📚</div>
+                        <span className="text-sm font-medium">Lesson Plans</span>
+                      </button>
+                      <button className="bg-gray-50 rounded-lg p-3 text-left hover:shadow-md transition-shadow border border-gray-100">
+                        <div className="text-purple-600 mb-1">🎯</div>
+                        <span className="text-sm font-medium">Activities</span>
+                      </button>
+                      <button className="bg-gray-50 rounded-lg p-3 text-left hover:shadow-md transition-shadow border border-gray-100">
+                        <div className="text-purple-600 mb-1">📊</div>
+                        <span className="text-sm font-medium">Assessments</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Featured Resources */}
+                  <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+                    <h2 className="text-gray-800 text-lg font-medium mb-4">Featured Resources</h2>
+                    <div className="space-y-4">
+                      <div className="bg-gray-50 rounded-lg p-4 border border-gray-100">
+                        <div className="flex justify-between items-start mb-2">
+                          <div>
+                            <h3 className="font-medium text-sm">Ocean Adventures: Marine Biology</h3>
+                            <p className="text-xs text-gray-500">4th Grade • Science</p>
+                            <p className="text-xs text-gray-500">by Ms. Johnson</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-lg font-bold text-green-600">$3.99</p>
+                            <div className="flex items-center gap-1 text-xs text-gray-500">
+                              <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />
+                              <span>4.9</span>
+                            </div>
+                          </div>
+                        </div>
+                        <Button className="w-full bg-purple-600 hover:bg-purple-700 text-white" size="sm">
+                          Purchase & Download
+                        </Button>
+                      </div>
+
+                      <div className="bg-gray-50 rounded-lg p-4 border border-gray-100">
+                        <div className="flex justify-between items-start mb-2">
+                          <div>
+                            <h3 className="font-medium text-sm">Space Explorers: Solar System</h3>
+                            <p className="text-xs text-gray-500">5th Grade • Science</p>
+                            <p className="text-xs text-gray-500">by Mr. Chen</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-lg font-bold text-green-600">$4.49</p>
+                            <div className="flex items-center gap-1 text-xs text-gray-500">
+                              <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />
+                              <span>4.8</span>
+                            </div>
+                          </div>
+                        </div>
+                        <Button className="w-full bg-purple-600 hover:bg-purple-700 text-white" size="sm">
+                          Purchase & Download
+                        </Button>
+                      </div>
+
+                      <div className="bg-gray-50 rounded-lg p-4 border border-gray-100">
+                        <div className="flex justify-between items-start mb-2">
+                          <div>
+                            <h3 className="font-medium text-sm">Dinosaur Math Adventures</h3>
+                            <p className="text-xs text-gray-500">3rd Grade • Math</p>
+                            <p className="text-xs text-gray-500">by Mrs. Smith</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-lg font-bold text-green-600">$2.99</p>
+                            <div className="flex items-center gap-1 text-xs text-gray-500">
+                              <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />
+                              <span>4.7</span>
+                            </div>
+                          </div>
+                        </div>
+                        <Button className="w-full bg-purple-600 hover:bg-purple-700 text-white" size="sm">
+                          Purchase & Download
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* PROFILE PAGE */}
+              {activeTab === "profile" && (
+                <div className="max-w-2xl mx-auto pt-6">
+                  <ProfileView />
+                </div>
+              )}
+            </>
+          ) : currentView === "substitute" ? (
+            <div className="max-w-2xl mx-auto pt-6">
+              <SubstituteBookingSystem onBack={() => setCurrentView("main")} />
             </div>
+          ) : null}
+        </div>
 
-            {/* Bottom Navigation */}
-            <div className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-200">
-              <div className="flex">
-                <button
-                  onClick={() => setActiveTab("home")}
-                  className={`flex-1 flex flex-col items-center py-3 px-2 ${
-                    activeTab === "home" ? "text-purple-600" : "text-gray-500"
-                  }`}
-                >
-                  <Home className="w-5 h-5 mb-1" />
-                  <span className="text-xs">Home</span>
-                </button>
-                <button
-                  onClick={() => setActiveTab("marketplace")}
-                  className={`flex-1 flex flex-col items-center py-3 px-2 ${
-                    activeTab === "marketplace" ? "text-purple-600" : "text-gray-500"
-                  }`}
-                >
-                  <Store className="w-5 h-5 mb-1" />
-                  <span className="text-xs">Marketplace</span>
-                </button>
-                <button
-                  onClick={() => setActiveTab("profile")}
-                  className={`flex-1 flex flex-col items-center py-3 px-2 ${
-                    activeTab === "profile" ? "text-purple-600" : "text-gray-500"
-                  }`}
-                >
-                  <User className="w-5 h-5 mb-1" />
-                  <span className="text-xs">Profile</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Success Notification */}
-            {successNotification && (
-              <div className="absolute top-20 left-4 right-4 bg-green-500 text-white p-3 rounded-lg z-50 shadow-lg">
-                <div className="flex items-center gap-2">
-                  <CheckCircle className="w-4 h-4" />
-                  {successNotification}
-                </div>
-              </div>
-            )}
-
-            {/* Offline Indicator */}
-            {!isOnline && (
-              <div
-                style={{
-                  position: "fixed",
-                  top: "70px",
-                  left: "50%",
-                  transform: "translateX(-50%)",
-                  background: "#f59e0b",
-                  color: "white",
-                  padding: "8px 16px",
-                  borderRadius: "20px",
-                  fontSize: "12px",
-                  zIndex: 2000,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "6px",
-                }}
-              >
-                📱 Working offline
-              </div>
-            )}
-
-            {/* AI Assistant panel - Always show */}
-            {showAssistant && (
-              <AIAssistant
-                onClose={() => setShowAssistant(false)}
-                voiceResponse={assistantMessage}
-                onSendMessage={handleSendMessage}
-                onSmartSuggestion={handleSmartSuggestionFromAssistant}
-              />
-            )}
-
-            {/* PWA Install Prompt */}
-            {showInstallPrompt && (
-              <div
-                style={{
-                  position: "fixed",
-                  bottom: "100px",
-                  left: "20px",
-                  right: "20px",
-                  background: "linear-gradient(135deg, #8B5CF6, #3B82F6)",
-                  color: "white",
-                  padding: "16px",
-                  borderRadius: "12px",
-                  boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
-                  zIndex: 2000,
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                }}
-              >
-                <div>
-                  <div style={{ fontWeight: "bold", fontSize: "14px" }}>📱 Install VoiceVenture AI</div>
-                  <div style={{ fontSize: "12px", opacity: 0.9 }}>Add to home screen for quick access</div>
-                </div>
-                <div style={{ display: "flex", gap: "8px" }}>
-                  <button
-                    onClick={() => setShowInstallPrompt(false)}
-                    style={{
-                      background: "rgba(255,255,255,0.2)",
-                      border: "none",
-                      color: "white",
-                      padding: "6px 12px",
-                      borderRadius: "6px",
-                      fontSize: "12px",
-                      cursor: "pointer",
-                    }}
-                  >
-                    Later
-                  </button>
-                  <button
-                    onClick={handleInstallClick}
-                    style={{
-                      background: "white",
-                      border: "none",
-                      color: "#8B5CF6",
-                      padding: "6px 12px",
-                      borderRadius: "6px",
-                      fontSize: "12px",
-                      fontWeight: "bold",
-                      cursor: "pointer",
-                    }}
-                  >
-                    Install
-                  </button>
-                </div>
-              </div>
-            )}
+        {/* Bottom Navigation */}
+        <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 z-50">
+          <div className="flex justify-around items-center h-16 max-w-2xl mx-auto">
+            <button
+              onClick={() => setActiveTab("home")}
+              className={`flex flex-col items-center justify-center w-full h-full ${
+                activeTab === "home" ? "text-purple-600" : "text-gray-500"
+              }`}
+            >
+              <Home className="w-6 h-6 mb-1" />
+              <span className="text-xs font-medium">Home</span>
+            </button>
+            <button
+              onClick={() => setActiveTab("marketplace")}
+              className={`flex flex-col items-center justify-center w-full h-full ${
+                activeTab === "marketplace" ? "text-purple-600" : "text-gray-500"
+              }`}
+            >
+              <Store className="w-6 h-6 mb-1" />
+              <span className="text-xs font-medium">Marketplace</span>
+            </button>
+            <button
+              onClick={() => setActiveTab("profile")}
+              className={`flex flex-col items-center justify-center w-full h-full ${
+                activeTab === "profile" ? "text-purple-600" : "text-gray-500"
+              }`}
+            >
+              <User className="w-6 h-6 mb-1" />
+              <span className="text-xs font-medium">Profile</span>
+            </button>
           </div>
         </div>
+
+        {/* Success Notification */}
+        {successNotification && (
+          <div className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-green-500 text-white p-3 rounded-lg z-[60] shadow-lg">
+            <div className="flex items-center gap-2">
+              <CheckCircle className="w-4 h-4" />
+              {successNotification}
+            </div>
+          </div>
+        )}
+
+        {/* Offline Indicator */}
+        {!isOnline && (
+          <div className="fixed top-4 left-1/2 transform -translate-x-1/2 bg-amber-500 text-white px-4 py-2 rounded-full text-sm z-[60] flex items-center gap-2">
+            📱 Working offline
+          </div>
+        )}
+
+        {/* AI Assistant panel */}
+        {showAssistant && (
+          <AIAssistant
+            onClose={() => setShowAssistant(false)}
+            voiceResponse={assistantMessage}
+            onSendMessage={handleSendMessage}
+            onSmartSuggestion={handleSmartSuggestionFromAssistant}
+          />
+        )}
+
+        {/* PWA Install Prompt */}
+        {showInstallPrompt && (
+          <div className="fixed bottom-20 left-4 right-4 bg-gradient-to-r from-purple-600 to-blue-600 text-white p-4 rounded-xl shadow-lg z-[60]">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="font-bold text-lg">📱 Install VoiceVenture AI</div>
+                <div className="text-sm opacity-90">Add to home screen for quick access</div>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  onClick={() => setShowInstallPrompt(false)}
+                  variant="ghost"
+                  className="text-white hover:bg-white/20"
+                >
+                  Later
+                </Button>
+                <Button
+                  onClick={handleInstallClick}
+                  className="bg-white text-purple-600 hover:bg-white/90"
+                >
+                  Install
+                </Button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     )
   }

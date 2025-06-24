@@ -6,8 +6,8 @@ const openai = new OpenAI()
 
 export async function POST(request: Request) {
   try {
-    // Validate API key
-    if (!process.env.OPENAI_API_KEY) {
+  // Validate API key
+  if (!process.env.OPENAI_API_KEY) {
       return NextResponse.json({ 
         error: "OpenAI API key not configured" 
       }, { status: 500 })
@@ -51,7 +51,7 @@ export async function POST(request: Request) {
     }
 
     // Handle other errors
-    return NextResponse.json({ 
+    return NextResponse.json({
       error: "An unexpected error occurred",
       details: error.message
     }, { 

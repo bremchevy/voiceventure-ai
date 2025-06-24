@@ -65,7 +65,7 @@ export default function AIAssistant({ onClose, voiceResponse, onSendMessage, onS
     animation: bounce 0.8s infinite;
     animation-delay: 0.4s;
   }
-  `
+`
 
   // Handle smart suggestion clicks
   const handleSmartSuggestion = (category: string) => {
@@ -2696,7 +2696,7 @@ export default function AIAssistant({ onClose, voiceResponse, onSendMessage, onS
               </div>
             </div>
 
-            {/* CHAT SECTION - NEW */}
+                      {/* CHAT SECTION - NEW */}
             <div
               className="ai-assistant-scroll"
               style={{
@@ -2708,34 +2708,34 @@ export default function AIAssistant({ onClose, voiceResponse, onSendMessage, onS
                 gap: "16px",
               }}
             >
-              {messages.map((msg, idx) => (
-                <div
-                  key={idx}
+                {messages.map((msg, idx) => (
+                  <div
+                    key={idx}
                   style={{
                     display: "flex",
                     justifyContent: msg.sender === "user" ? "flex-end" : "flex-start",
                     marginBottom: "8px",
                   }}
-                >
-                  <div
-                    style={{
+                  >
+                    <div
+                      style={{
                       maxWidth: "80%",
-                      padding: "8px 12px",
+                        padding: "8px 12px",
                       borderRadius: msg.sender === "user" ? "12px 12px 0 12px" : "12px 12px 12px 0",
                       background: msg.sender === "user" ? "#8B5CF6" : "#F3F4F6",
                       color: msg.sender === "user" ? "white" : "#374151",
-                      fontSize: "12px",
+                        fontSize: "12px",
                       lineHeight: "1.5",
-                    }}
-                  >
-                    {msg.content}
+                      }}
+                    >
+                      {msg.content}
+                    </div>
                   </div>
-                </div>
-              ))}
-              {isTyping && (
+                ))}
+                {isTyping && (
                 <div style={{ 
-                  display: "flex", 
-                  alignItems: "center",
+                        display: "flex",
+                        alignItems: "center",
                   padding: "8px 12px",
                   maxWidth: "60px",
                   background: "#F3F4F6",
@@ -2745,9 +2745,9 @@ export default function AIAssistant({ onClose, voiceResponse, onSendMessage, onS
                   <div className="typing-dot" />
                   <div className="typing-dot" />
                   <div className="typing-dot" />
-                </div>
-              )}
-            </div>
+                  </div>
+                )}
+              </div>
             <div style={{ padding: "16px", borderTop: "1px solid #E5E7EB" }}>
               <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                 <input

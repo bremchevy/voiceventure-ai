@@ -1,8 +1,9 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
-import { ChevronLeft, Download, Edit, Store, CheckCircle, Sparkles } from "lucide-react"
+import { ChevronLeft, Download, Edit, Store, CheckCircle, Sparkles, ArrowLeft, Check } from "lucide-react"
+import { generatePDF } from "@/lib/utils/pdf"
 
 // BackArrow component for consistent navigation
 const BackArrow = ({
@@ -34,11 +35,21 @@ interface ResourceType {
   detectedName?: string
 }
 
+interface DetectedSubject {
+  subject: string
+  type: string
+  focus?: string[]
+  patterns?: RegExp[]
+  subTypes?: {
+    [key: string]: RegExp[] | undefined
+  }
+}
+
 // NEW: Add additional settings for different resource types
 interface WorksheetSettings {
   grade: string
   subject: string
-  theme: string
+  theme: keyof typeof themeEmojis
   problemType: string
   problemCount: number
   resourceType: "worksheet" | "quiz" | "rubric" | "lesson_plan" | "exit_slip"
@@ -51,7 +62,27 @@ interface WorksheetSettings {
   lessonObjectives?: string[]
   lessonType?: string
   customInstructions?: string
+  // Additional settings for resource generation
+  difficulty?: 'easy' | 'medium' | 'hard'
+  topicArea?: string
+  includeQuestions?: boolean
+  includeVisuals?: boolean
+  includeExperiments?: boolean
+  includeDiagrams?: boolean
+  includeVocabulary?: boolean
+  readingLevel?: string
+  genre?: string
+  wordCount?: number
+  focus?: string[]
 }
+
+// Theme decorations
+const themeEmojis = {
+  Halloween: ["🎃", "👻", "🦇", "🕷️", "🍭"],
+  Winter: ["❄️", "⛄", "🎿", "🧊", "🎄"],
+  Spring: ["🌸", "🌷", "🦋", "🌱", "🐝"],
+  General: ["⭐", "🌟", "✨", "🎯", "🎈"],
+} as const;
 
 interface MathProblem {
   question: string
@@ -79,37 +110,82 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
   const detectResourceType = (request: string): ResourceType => {
     const lowerRequest = request.toLowerCase()
 
-    // Bell ringer detection
-    if (lowerRequest.includes("bell ringer") || lowerRequest.includes("bell-ringer")) {
-      return { type: "exit_slip", icon: "🔔", title: "Bell Ringer Generator", detectedName: "bell ringer" }
+    // More precise resource type detection with context
+    const resourcePatterns = [
+      {
+        type: "quiz",
+        patterns: [
+          /\b(?:vocabulary|spelling|reading)\s+quiz\b/i,
+          /\b(?:math|science)\s+test\b/i,
+          /\bassessment\s+(?:for|on)\s+[^.]+/i,
+          /\bmake\s+(?:a|an)\s+quiz\b/i,
+          /\bcreate\s+(?:a|an)\s+quiz\b/i
+        ],
+        icon: "🧠",
+        title: "Quiz Generator"
+      },
+      {
+        type: "worksheet",
+        patterns: [
+          /\b(?:practice|review)\s+(?:worksheet|sheet|problems)\b/i,
+          /\b(?:math|reading|writing|science)\s+worksheet\b/i,
+          /\bworksheet\s+(?:for|on)\s+[^.]+/i,
+          /\bmake\s+(?:a|an)\s+worksheet\b/i,
+          /\bcreate\s+(?:a|an)\s+worksheet\b/i
+        ],
+        icon: "📝",
+        title: "Worksheet Generator"
+      },
+      {
+        type: "rubric",
+        patterns: [
+          /\b(?:grading|scoring)\s+rubric\b/i,
+          /\brubric\s+(?:for|on)\s+[^.]+/i,
+          /\bmake\s+(?:a|an)\s+rubric\b/i,
+          /\bcreate\s+(?:a|an)\s+rubric\b/i
+        ],
+        icon: "📋",
+        title: "Rubric Generator"
+      },
+      {
+        type: "lesson_plan",
+        patterns: [
+          /\blesson\s+plan\s+(?:for|on)\s+[^.]+/i,
+          /\b(?:daily|weekly)\s+lesson\s+plan\b/i,
+          /\bmake\s+(?:a|an)\s+lesson\s+plan\b/i,
+          /\bcreate\s+(?:a|an)\s+lesson\s+plan\b/i
+        ],
+        icon: "📚",
+        title: "Lesson Plan Generator"
+      },
+      {
+        type: "exit_slip",
+        patterns: [
+          /\bexit\s+(?:slip|ticket)\b/i,
+          /\bbell\s*-?\s*ringer\b/i,
+          /\bend\s+of\s+(?:class|lesson)\s+assessment\b/i,
+          /\bmake\s+(?:a|an)\s+exit\s+slip\b/i,
+          /\bcreate\s+(?:a|an)\s+exit\s+slip\b/i
+        ],
+        icon: "🚪",
+        title: "Exit Slip Generator"
+      }
+    ];
+
+    // Check each resource type pattern
+    for (const resource of resourcePatterns) {
+      if (resource.patterns.some(pattern => pattern.test(lowerRequest))) {
+        return {
+          type: resource.type as "worksheet" | "quiz" | "rubric" | "lesson_plan" | "exit_slip",
+          icon: resource.icon,
+          title: resource.title,
+          detectedName: resource.type.replace('_', ' ')
+        };
+      }
     }
 
-    // Exit slip detection
-    if (
-      lowerRequest.includes("exit slip") ||
-      lowerRequest.includes("exit ticket") ||
-      lowerRequest.includes("exit-slip")
-    ) {
-      return { type: "exit_slip", icon: "🚪", title: "Exit Slip Generator", detectedName: "exit slip" }
-    }
-
-    // Quiz detection
-    if (lowerRequest.includes("quiz") || lowerRequest.includes("test") || lowerRequest.includes("assessment")) {
-      return { type: "quiz", icon: "🧠", title: "Quiz Generator", detectedName: "quiz" }
-    }
-
-    // Rubric detection
-    if (lowerRequest.includes("rubric") || lowerRequest.includes("grading") || lowerRequest.includes("scoring")) {
-      return { type: "rubric", icon: "📋", title: "Rubric Generator", detectedName: "rubric" }
-    }
-
-    // Lesson plan detection
-    if (lowerRequest.includes("lesson plan") || lowerRequest.includes("lesson")) {
-      return { type: "lesson_plan", icon: "📚", title: "Lesson Plan Generator", detectedName: "lesson plan" }
-    }
-
-    // Default to worksheet
-    return { type: "worksheet", icon: "📝", title: "Worksheet Generator", detectedName: "worksheet" }
+    // Default to worksheet if no specific type is detected
+    return { type: "worksheet", icon: "📝", title: "Worksheet Generator", detectedName: "worksheet" };
   }
 
   const [settings, setSettings] = useState<WorksheetSettings>({
@@ -141,6 +217,7 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
   const [generationProgress, setGenerationProgress] = useState(0)
   const [currentGenerationStep, setCurrentGenerationStep] = useState(0)
   const [currentStep, setCurrentStep] = useState("settings")
+  const worksheetRef = useRef<HTMLDivElement>(null);
 
   const generationSteps = [
     { icon: "🔍", text: "Analyzing your request", completed: false },
@@ -152,152 +229,365 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
   // Parse initial request if provided
   useEffect(() => {
     if (request) {
-      // NEW: Detect resource type first and auto-select it
-      const resourceType = detectResourceType(request)
-      setDetectedResourceType(resourceType)
-      setSettings((prev) => ({ ...prev, resourceType: resourceType.type }))
+      const lowerRequest = request.toLowerCase();
 
-      const lowerRequest = request.toLowerCase()
+      // First, check for math-specific content
+      const mathMatch = lowerRequest.match(/\b(?:math|mathematics|fractions|algebra|geometry)\b/i);
+      
+      // Literature-specific detection with more strict pattern
+      const literatureMatch = mathMatch ? null : (
+        request.match(/(?:for|about|on|from)\s+"([^"]+)"(?:\s+by\s+([^"]+))?/i) || 
+        request.match(/(?:reading|book|story|novel|literature)\s+(?:for|about|on|from)\s+([^,]+?)(?:\s+by\s+([^,]+))?(?=\s*$|\s*,|\s+with|\s+including)/i)
+      );
 
-      // Enhanced Grade Detection with comprehensive patterns - IMPROVED
-      const gradePatterns = [
-        // Kindergarten variations
-        { pattern: /\b(kindergarten|kinder|k)\b/i, grade: "Kindergarten" },
+      let detectedSubject: DetectedSubject | null = null;
+      let detectedSubType: string | null = null;
 
-        // 1st Grade variations - ENHANCED
-        { pattern: /\b(1st\s+grade|first\s+grade|grade\s+1|grade\s+one|1st|first)\b/i, grade: "1st Grade" },
+      // If it's a math request, set math subject directly
+      if (mathMatch) {
+        detectedSubject = {
+          subject: "Math",
+          type: "math",
+          focus: ["Fractions & Decimals"]
+        };
+        
+        setSettings(prev => ({
+          ...prev,
+          subject: "Math",
+          problemType: "math",
+          focus: ["Fractions & Decimals"]
+        }));
+      }
+      // If literature-specific content and no math terms
+      else if (literatureMatch) {
+        const [_, title, author] = literatureMatch;
+        detectedSubject = {
+          subject: "Reading",
+          type: "language",
+          focus: ["Reading Comprehension"]
+        };
+        
+        // If vocabulary is mentioned, override the focus
+        if (lowerRequest.includes('vocabulary') || lowerRequest.includes('vocab')) {
+          detectedSubject.focus = ["Spelling, Vocabulary"];
+        }
+        
+        setSettings(prev => ({
+          ...prev,
+          subject: "Reading",
+          problemType: "language",
+          topicArea: title,
+          customInstructions: detectedSubject?.focus?.[0] ? 
+            `Focus on ${detectedSubject.focus[0].toLowerCase()} from "${title}"${author ? ` by ${author}` : ''}` :
+            `Focus on reading comprehension from "${title}"${author ? ` by ${author}` : ''}`,
+          includeVocabulary: detectedSubject?.focus?.[0]?.includes("Vocabulary") ?? false
+        }));
+      } else {
+        // Check each subject pattern
+        const subjectPatterns = [
+          {
+            subject: "Math",
+            type: "math",
+            patterns: [
+              // Core math concepts
+              /\b(?:math|mathematics|arithmetic)\b/i,
+              // Operations
+              /\b(?:addition|subtraction|multiplication|division)\b/i,
+              // Advanced topics
+              /\b(?:algebra|geometry|calculus|trigonometry)\b/i,
+              // Number concepts
+              /\b(?:fractions|decimals|percentages|integers)\b/i,
+              // Problem types
+              /\b(?:word problems|equations|inequalities)\b/i
+            ],
+            subTypes: {
+              "Addition, Subtraction, Mixed Operations": [
+                /\b(?:addition|subtraction|mixed operations)\b/i,
+                /\b(?:adding|subtracting)\b/i,
+                /\b(?:plus|minus|sums|differences)\b/i
+              ],
+              "Multiplication & Division": [
+                /\b(?:multiplication|division)\b/i,
+                /\b(?:multiplying|dividing)\b/i,
+                /\b(?:times|divided by|products|quotients)\b/i
+              ],
+              "Fractions & Decimals": [
+                /\b(?:fractions|decimals)\b/i,
+                /\b(?:fractional|decimal)\b/i
+              ],
+              "Word Problems": [
+                /\b(?:word problems|story problems)\b/i,
+                /\b(?:real-world|application)\b/i
+              ]
+            }
+          },
+          {
+            subject: "Reading",
+            type: "language",
+            patterns: [
+              // Language arts
+              /\b(?:reading|language arts|english|ela)\b/i,
+              // Specific skills
+              /\b(?:vocabulary|comprehension|grammar)\b/i,
+              // Literature
+              /\b(?:literature|story|novel|book)\b/i,
+              // Writing
+              /\b(?:writing|composition|essay)\b/i
+            ],
+            subTypes: {
+              "Spelling, Vocabulary": [
+                /\b(?:spelling|vocabulary|vocab|words)\b/i,
+                /\b(?:definitions|word meanings)\b/i
+              ],
+              "Reading Comprehension": [
+                /\b(?:comprehension|understanding|analysis)\b/i,
+                /\b(?:main idea|details|inference)\b/i
+              ],
+              "Grammar & Writing": [
+                /\b(?:grammar|writing|sentences)\b/i,
+                /\b(?:punctuation|parts of speech)\b/i
+              ]
+            }
+          },
+          {
+            subject: "Science",
+            type: "science",
+            patterns: [
+              // General science
+              /\b(?:science|scientific method)\b/i,
+              // Specific branches
+              /\b(?:biology|chemistry|physics)\b/i,
+              // Topics
+              /\b(?:earth science|life science|physical science)\b/i,
+              // Activities
+              /\b(?:experiment|observation|hypothesis)\b/i
+            ],
+            subTypes: {
+              "Labeling, Matching": [
+                /\b(?:labeling|matching|diagrams)\b/i,
+                /\b(?:parts|structures|systems)\b/i
+              ],
+              "Observation": [
+                /\b(?:observation|experiment|data)\b/i,
+                /\b(?:scientific method|hypothesis)\b/i
+              ],
+              "Concepts": [
+                /\b(?:concepts|principles|theories)\b/i,
+                /\b(?:laws|rules|formulas)\b/i
+              ]
+            }
+          },
+          {
+            subject: "Social Studies",
+            type: "social",
+            patterns: [
+              // General social studies
+              /\b(?:social studies|history|geography)\b/i,
+              // Specific areas
+              /\b(?:civics|government|economics)\b/i,
+              // Topics
+              /\b(?:culture|society|civilization)\b/i,
+              // Skills
+              /\b(?:maps|timelines|primary sources)\b/i
+            ],
+            subTypes: {
+              "Geography": [
+                /\b(?:geography|maps|locations)\b/i,
+                /\b(?:countries|continents|regions)\b/i
+              ],
+              "History": [
+                /\b(?:history|historical|timeline)\b/i,
+                /\b(?:events|periods|eras)\b/i
+              ],
+              "Civics": [
+                /\b(?:civics|government|citizenship)\b/i,
+                /\b(?:rights|responsibilities|democracy)\b/i
+              ]
+            }
+          }
+        ];
 
-        // 2nd Grade variations - ENHANCED
-        { pattern: /\b(2nd\s+grade|second\s+grade|grade\s+2|grade\s+two|2nd|second)\b/i, grade: "2nd Grade" },
+        // Check each subject pattern
+        for (const subjectPattern of subjectPatterns) {
+          if (subjectPattern.patterns.some(pattern => pattern.test(lowerRequest))) {
+            detectedSubject = {
+              subject: subjectPattern.subject,
+              type: subjectPattern.type,
+              patterns: subjectPattern.patterns,
+              subTypes: Object.fromEntries(
+                Object.entries(subjectPattern.subTypes).map(([key, value]) => [key, value || undefined])
+              )
+            };
+            
+            // Check for specific sub-types
+            for (const [subType, patterns] of Object.entries(subjectPattern.subTypes)) {
+              if (patterns.some((pattern: RegExp) => pattern.test(lowerRequest))) {
+                detectedSubType = subType;
+                break;
+              }
+            }
 
-        // 3rd Grade variations - ENHANCED
-        { pattern: /\b(3rd\s+grade|third\s+grade|grade\s+3|grade\s+three|3rd|third)\b/i, grade: "3rd Grade" },
+            if (detectedSubject) {
+              setSettings(prev => ({
+                ...prev,
+                subject: detectedSubject?.subject ?? prev.subject,
+                problemType: detectedSubject?.type ?? prev.problemType,
+                focus: detectedSubType ? [detectedSubType] : undefined,
+                customInstructions: detectedSubType ? 
+                  `Focus on ${detectedSubType.toLowerCase()}` : 
+                  detectedSubject?.subject ? `Focus on ${detectedSubject.subject.toLowerCase()} concepts` : prev.customInstructions
+              }));
+            }
+            break;
+          }
+        }
 
-        // 4th Grade variations - ENHANCED
-        { pattern: /\b(4th\s+grade|fourth\s+grade|grade\s+4|grade\s+four|4th|fourth)\b/i, grade: "4th Grade" },
-
-        // 5th Grade variations - ENHANCED
-        { pattern: /\b(5th\s+grade|fifth\s+grade|grade\s+5|grade\s+five|5th|fifth)\b/i, grade: "5th Grade" },
-
-        // Additional common patterns
-        { pattern: /\bfor\s+(kindergarten|kinder)\b/i, grade: "Kindergarten" },
-        { pattern: /\bfor\s+(first|1st)\s+grad/i, grade: "1st Grade" },
-        { pattern: /\bfor\s+(second|2nd)\s+grad/i, grade: "2nd Grade" },
-        { pattern: /\bfor\s+(third|3rd)\s+grad/i, grade: "3rd Grade" },
-        { pattern: /\bfor\s+(fourth|4th)\s+grad/i, grade: "4th Grade" },
-        { pattern: /\bfor\s+(fifth|5th)\s+grad/i, grade: "5th Grade" },
-      ]
-
-      // Test each pattern
-      for (const { pattern, grade } of gradePatterns) {
-        if (pattern.test(request)) {
-          setSettings((prev) => ({ ...prev, grade }))
-          console.log(`🎯 Grade detected: "${grade}" from pattern: ${pattern}`)
-          break // Use first match
+        if (detectedSubject) {
+          setSettings(prev => ({
+            ...prev,
+            subject: detectedSubject?.subject ?? prev.subject,
+            problemType: detectedSubject?.type ?? prev.problemType,
+            focus: detectedSubType ? [detectedSubType] : undefined,
+            customInstructions: detectedSubType ? 
+              `Focus on ${detectedSubType.toLowerCase()}` : 
+              detectedSubject?.subject ? `Focus on ${detectedSubject.subject.toLowerCase()} concepts` : prev.customInstructions
+          }));
         }
       }
 
-      // Extract theme - only change from default if explicitly mentioned
-      if (
-        lowerRequest.includes("halloween") ||
-        lowerRequest.includes("spooky") ||
-        lowerRequest.includes("pumpkin") ||
-        lowerRequest.includes("ghost")
-      ) {
-        setSettings((prev) => ({ ...prev, theme: "Halloween" }))
-      } else if (
-        lowerRequest.includes("winter") ||
-        lowerRequest.includes("snow") ||
-        lowerRequest.includes("christmas") ||
-        lowerRequest.includes("holiday")
-      ) {
-        setSettings((prev) => ({ ...prev, theme: "Winter" }))
-      } else if (
-        lowerRequest.includes("spring") ||
-        lowerRequest.includes("flower") ||
-        lowerRequest.includes("garden") ||
-        lowerRequest.includes("bloom")
-      ) {
-        setSettings((prev) => ({ ...prev, theme: "Spring" }))
-      }
-      // If no theme is mentioned, keep the default "General" theme
+      // Detect resource type
+      const resourceType = detectResourceType(request);
+      setDetectedResourceType(resourceType);
+      setSettings(prev => ({ ...prev, resourceType: resourceType.type as "worksheet" | "quiz" | "rubric" | "lesson_plan" | "exit_slip" }));
 
-      // Enhanced problem type detection (only for worksheets)
-      if (resourceType.type === "worksheet") {
-        if (
-          lowerRequest.includes("addition only") ||
-          (lowerRequest.includes("addition") &&
-            !lowerRequest.includes("subtraction") &&
-            !lowerRequest.includes("multiplication"))
-        ) {
-          setSettings((prev) => ({ ...prev, problemType: "Addition Only" }))
-        } else if (
-          lowerRequest.includes("subtraction only") ||
-          (lowerRequest.includes("subtraction") &&
-            !lowerRequest.includes("addition") &&
-            !lowerRequest.includes("multiplication"))
-        ) {
-          setSettings((prev) => ({ ...prev, problemType: "Subtraction Only" }))
-        } else if (
-          lowerRequest.includes("multiplication") ||
-          lowerRequest.includes("times") ||
-          lowerRequest.includes("multiply")
-        ) {
-          setSettings((prev) => ({ ...prev, problemType: "Multiplication" }))
-        } else if (
-          (lowerRequest.includes("addition") && lowerRequest.includes("subtraction")) ||
-          lowerRequest.includes("mixed operations")
-        ) {
-          setSettings((prev) => ({ ...prev, problemType: "Addition & Subtraction" }))
-        }
+      // Detect grade level
+      const gradeMatch = request.match(/\b(\d+)(?:st|nd|rd|th)?\s*grade\b/i);
+      if (gradeMatch) {
+        const grade = `${gradeMatch[1]}${
+          gradeMatch[1] === "1" ? "st" :
+          gradeMatch[1] === "2" ? "nd" :
+          gradeMatch[1] === "3" ? "rd" : "th"
+        } Grade`;
+        setSettings(prev => ({ ...prev, grade }));
+      }
+
+      const difficultyMatch = request.match(/\b(easy|medium|hard|basic|intermediate|advanced)\b/i);
+      if (difficultyMatch) {
+        setSettings(prev => ({ 
+          ...prev, 
+          difficulty: difficultyMatch[1].toLowerCase() as "easy" | "medium" | "hard" 
+        }));
+      }
+
+      const countMatch = request.match(/\b(\d+)\s*(?:questions|problems|items)\b/i);
+      if (countMatch) {
+        const count = parseInt(countMatch[1]);
+        setSettings(prev => ({ 
+          ...prev, 
+          problemCount: count,
+          quizQuestionCount: count 
+        }));
       }
     }
-  }, [request])
+  }, [request]);
 
   const generateMathProblems = (settings: WorksheetSettings): MathProblem[] => {
     const problems: MathProblem[] = []
-    const { problemType, problemCount, theme } = settings
+    const { problemType, problemCount, theme, subject } = settings
 
-    // Theme decorations
-    const themeEmojis = {
-      Halloween: ["🎃", "👻", "🦇", "🕷️", "🍭"],
-      Winter: ["❄️", "⛄", "🎿", "🧊", "🎄"],
-      Spring: ["🌸", "🌷", "🦋", "🌱", "🐝"],
-      General: ["⭐", "🌟", "✨", "🎯", "🎈"],
-    }
-
+    // Use the existing themeEmojis constant
     const emojis = themeEmojis[theme] || themeEmojis.General
 
     for (let i = 0; i < problemCount; i++) {
       const emoji = emojis[i % emojis.length]
 
-      if (problemType === "Addition Only" || (problemType === "Addition & Subtraction" && i < problemCount / 2)) {
-        // Addition problems
-        const num1 = Math.floor(Math.random() * 50) + 10 // 10-60
-        const num2 = Math.floor(Math.random() * 30) + 5 // 5-35
-        problems.push({
-          question: `${num1} + ${num2} = ____`,
-          answer: num1 + num2,
-          visual: `${emoji} ${emoji} + ${emoji} = ____`,
-        })
-      } else if (problemType === "Subtraction Only" || problemType === "Addition & Subtraction") {
-        // Subtraction problems
-        const num1 = Math.floor(Math.random() * 50) + 30 // 30-80
-        const num2 = Math.floor(Math.random() * 20) + 5 // 5-25
-        problems.push({
-          question: `${num1} - ${num2} = ____`,
-          answer: num1 - num2,
-          visual: `${emoji} ${emoji} ${emoji} - ${emoji} = ____`,
-        })
-      } else if (problemType === "Multiplication") {
-        // Multiplication problems
-        const num1 = Math.floor(Math.random() * 9) + 2 // 2-10
-        const num2 = Math.floor(Math.random() * 9) + 2 // 2-10
-        problems.push({
-          question: `${num1} × ${num2} = ____`,
-          answer: num1 * num2,
-          visual: `${emoji.repeat(num1)} × ${num2} = ____`,
-        })
+      switch (problemType) {
+        case "math":
+          // Randomly choose between addition, subtraction, and mixed operations
+          const operation = Math.floor(Math.random() * 3)
+          if (operation === 0) {
+            // Addition
+            const num1 = Math.floor(Math.random() * 50) + 10
+            const num2 = Math.floor(Math.random() * 30) + 5
+            problems.push({
+              question: `${num1} + ${num2} = ____`,
+              answer: num1 + num2,
+              visual: `${emoji} ${emoji} + ${emoji} = ____`,
+            })
+          } else if (operation === 1) {
+            // Subtraction
+            const num1 = Math.floor(Math.random() * 50) + 30
+            const num2 = Math.floor(Math.random() * 20) + 5
+            problems.push({
+              question: `${num1} - ${num2} = ____`,
+              answer: num1 - num2,
+              visual: `${emoji} ${emoji} ${emoji} - ${emoji} = ____`,
+            })
+          } else {
+            // Mixed Operation (multiplication)
+            const num1 = Math.floor(Math.random() * 9) + 2
+            const num2 = Math.floor(Math.random() * 9) + 2
+            problems.push({
+              question: `${num1} × ${num2} = ____`,
+              answer: num1 * num2,
+              visual: `${emoji.repeat(num1)} × ${num2} = ____`,
+            })
+          }
+          break;
+
+        case "language":
+          // Language Arts problems
+          const languageTypes = ["Spelling", "Vocabulary", "Reading"]
+          const languageType = languageTypes[i % languageTypes.length]
+          problems.push({
+            question: `${emoji} ${languageType} Question ${i + 1}`,
+            answer: 0, // Placeholder for non-numeric answers
+            visual: `Write your answer here: _________________`,
+          })
+          break;
+
+        case "writing":
+          // Writing exercises
+          const writingTypes = ["Sentence Writing", "Handwriting Practice"]
+          const writingType = writingTypes[i % writingTypes.length]
+          problems.push({
+            question: `${emoji} ${writingType} Exercise ${i + 1}`,
+            answer: 0, // Placeholder for non-numeric answers
+            visual: `Write here: _____________________________`,
+          })
+          break;
+
+        case "science":
+          // Science activities
+          const scienceTypes = ["Labeling", "Matching", "Observation"]
+          const scienceType = scienceTypes[i % scienceTypes.length]
+          problems.push({
+            question: `${emoji} ${scienceType} Activity ${i + 1}`,
+            answer: 0, // Placeholder for non-numeric answers
+            visual: `Complete the ${scienceType.toLowerCase()} exercise`,
+          })
+          break;
+
+        case "social":
+          // Social Studies activities
+          const socialTypes = ["Geography", "History", "Civics"]
+          const socialType = socialTypes[i % socialTypes.length]
+          problems.push({
+            question: `${emoji} ${socialType} Question ${i + 1}`,
+            answer: 0, // Placeholder for non-numeric answers
+            visual: `Answer the ${socialType.toLowerCase()} question`,
+          })
+          break;
+
+        default:
+          // Default to math problems if type is not recognized
+          const num1 = Math.floor(Math.random() * 50) + 10
+          const num2 = Math.floor(Math.random() * 30) + 5
+          problems.push({
+            question: `${num1} + ${num2} = ____`,
+            answer: num1 + num2,
+            visual: `${emoji} ${emoji} + ${emoji} = ____`,
+          })
       }
     }
 
@@ -310,13 +600,6 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
     const { subject, grade, theme, exitSlipFormat } = settings
 
     // Theme decorations for visual appeal
-    const themeEmojis = {
-      Halloween: ["🎃", "👻", "🦇", "🕷️", "🍭"],
-      Winter: ["❄️", "⛄", "🎿", "🧊", "🎄"],
-      Spring: ["🌸", "🌷", "🦋", "🌱", "🐝"],
-      General: ["⭐", "🌟", "✨", "🎯", "🎈"],
-    }
-
     const emojis = themeEmojis[theme] || themeEmojis.General
 
     for (let i = 0; i < questionCount; i++) {
@@ -441,113 +724,88 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
   }
 
   const generateWorksheet = async () => {
-    setCurrentStep("generating")
-    setGenerationProgress(0)
-    setCurrentGenerationStep(0)
+    try {
+      setCurrentStep("generating");
+      
+      const response = await fetch('/api/generate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          subject: settings.subject,
+          gradeLevel: settings.grade,
+          resourceType: settings.resourceType,
+          theme: settings.theme,
+          difficulty: settings.difficulty,
+          topicArea: settings.topicArea,
+          includeVisuals: settings.includeVisuals,
+          includeExperiments: settings.includeExperiments,
+          includeDiagrams: settings.includeDiagrams,
+          includeVocabulary: settings.includeVocabulary,
+        }),
+      });
 
-    // Simulate generation process with realistic timing
-    const steps = generationSteps.length
-    for (let i = 0; i < steps; i++) {
-      await new Promise((resolve) => setTimeout(resolve, 800 + Math.random() * 400))
-      setCurrentGenerationStep(i + 1)
-      setGenerationProgress(((i + 1) / steps) * 100)
-    }
-
-    // Generate content based on resource type
-    let generatedContent
-
-    if (settings.resourceType === "worksheet") {
-      // Keep existing worksheet generation unchanged
-      const problems = generateMathProblems(settings)
-      const themeTitle = {
-        Halloween: "Spooky Math Adventures",
-        Winter: "Winter Wonderland Math",
-        Spring: "Spring Garden Math",
-        General: "Math Practice Worksheet",
+      if (!response.ok) {
+        console.error('Server error:', response.status, response.statusText);
+        const errorText = await response.text();
+        console.error('Error response body:', errorText);
+        throw new Error(`Server error: ${response.status} ${response.statusText}`);
       }
 
-      generatedContent = {
-        title: `${themeTitle[settings.theme]} - ${settings.grade}`,
-        problems,
-        theme: settings.theme,
-        grade: settings.grade,
-        decorations:
-          settings.theme === "Halloween"
-            ? ["🎃", "👻", "🦇"]
-            : settings.theme === "Winter"
-              ? ["❄️", "⛄", "🎄"]
-              : settings.theme === "Spring"
-                ? ["🌸", "🌷", "🦋"]
-                : ["⭐", "✨", "🌟"],
-        resourceType: "worksheet",
+      // Log the response headers
+      console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+
+      const content = await response.text();
+      console.log('Raw response content:', content);
+
+      try {
+        // Try to parse the content and log its structure
+        const parsedContent = JSON.parse(content);
+        console.log('Parsed content structure:', {
+          hasTitle: !!parsedContent.title,
+          hasProblems: Array.isArray(parsedContent.problems),
+          problemCount: parsedContent.problems?.length,
+          hasGrade: !!parsedContent.grade,
+          hasSubject: !!parsedContent.subject,
+          hasResourceType: !!parsedContent.resourceType,
+          rawContent: parsedContent
+        });
+
+        const formattedWorksheet = {
+          title: parsedContent.title,
+          problems: parsedContent.problems || [],
+          grade: parsedContent.grade,
+          theme: parsedContent.theme,
+          subject: parsedContent.subject,
+          resourceType: parsedContent.resourceType,
+          decorations: parsedContent.decorations || []
+        };
+
+        setGeneratedWorksheet(formattedWorksheet);
+        console.log('Generated worksheet:', formattedWorksheet);
+
+        // Short delay before showing preview
+        await new Promise((resolve) => setTimeout(resolve, 500));
+        setCurrentStep("preview");
+      } catch (parseError) {
+        console.error('Error parsing generated content:', parseError);
+        console.error('Raw content that failed to parse:', content);
+        console.error('First 500 characters of content:', content.substring(0, 500));
+        throw new Error('Invalid response format from server');
       }
-    } else if (settings.resourceType === "exit_slip") {
-      // NEW: Phase 1 - Generate exit slip content (3-5 questions with answers)
-      const exitSlipQuestions = generateExitSlipQuestions(settings)
-      generatedContent = {
-        title: `${settings.subject} ${detectedResourceType.detectedName === "bell ringer" ? "Bell Ringer" : "Exit Slip"} - ${settings.grade}`,
-        problems: exitSlipQuestions, // Use same 'problems' structure as worksheets for compatibility
-        theme: settings.theme,
-        grade: settings.grade,
-        decorations:
-          settings.theme === "Halloween"
-            ? ["🎃", "👻", "🦇"]
-            : settings.theme === "Winter"
-              ? ["❄️", "⛄", "🎄"]
-              : settings.theme === "Spring"
-                ? ["🌸", "🌷", "🦋"]
-                : ["⭐", "✨", "🌟"],
-        resourceType: "exit_slip",
-        subject: settings.subject,
-      }
-    } else if (settings.resourceType === "quiz") {
-      // NEW: Generate quiz content
-      const questions = generateQuizQuestions(settings)
-      generatedContent = {
-        title: `${settings.subject} Quiz - ${settings.grade}`,
-        questions,
-        grade: settings.grade,
-        subject: settings.subject,
-        resourceType: "quiz",
-      }
-    } else if (settings.resourceType === "rubric") {
-      // NEW: Generate rubric content
-      const criteria = generateRubricCriteria(settings)
-      generatedContent = {
-        title: `${settings.subject} Assessment Rubric - ${settings.grade}`,
-        criteria,
-        grade: settings.grade,
-        subject: settings.subject,
-        resourceType: "rubric",
-      }
-    } else if (settings.resourceType === "lesson_plan") {
-      // NEW: Generate lesson plan content
-      const lessonSections = generateLessonPlanSections(settings)
-      generatedContent = {
-        title: `${settings.subject} Lesson Plan - ${settings.grade}`,
-        ...lessonSections,
-        grade: settings.grade,
-        subject: settings.subject,
-        resourceType: "lesson_plan",
-      }
-    } else if (settings.resourceType === "exit_slip") {
-      // NEW: Generate exit slip content
-      const questions = generateQuizQuestions(settings)
-      generatedContent = {
-        title: `${settings.subject} ${detectedResourceType.detectedName === "bell ringer" ? "Bell Ringer" : "Exit Slip"} - ${settings.grade}`,
-        questions,
-        grade: settings.grade,
-        subject: settings.subject,
-        resourceType: "exit_slip",
+    } catch (error) {
+      console.error('Error generating worksheet:', error);
+      // Handle error state
+      setCurrentStep("settings");
+      // Show error to user
+      if (error instanceof Error) {
+        alert(`Error: ${error.message}`);
+      } else {
+        alert('Failed to generate worksheet. Please try again.');
       }
     }
-
-    setGeneratedWorksheet(generatedContent)
-
-    // Short delay before showing preview
-    await new Promise((resolve) => setTimeout(resolve, 500))
-    setCurrentStep("preview")
-  }
+  };
 
   const handleQualityCheck = () => {
     setCurrentStep("quality")
@@ -586,6 +844,17 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
     const resourceName = getResourceDisplayName()
     return `✨ Generate ${resourceName.charAt(0).toUpperCase() + resourceName.slice(1)}`
   }
+
+  const handleDownloadPDF = async () => {
+    if (!worksheetRef.current || !generatedWorksheet) return;
+
+    const fileName = `${generatedWorksheet.title.toLowerCase().replace(/\s+/g, '-')}.pdf`;
+    const success = await generatePDF(worksheetRef.current, fileName);
+
+    if (!success) {
+      alert('Failed to generate PDF. Please try again.');
+    }
+  };
 
   const renderSettings = () => (
     <div className="space-y-6 relative">
@@ -668,7 +937,7 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
           ].map((theme) => (
             <button
               key={theme.name}
-              onClick={() => setSettings((prev) => ({ ...prev, theme: theme.name }))}
+              onClick={() => setSettings((prev) => ({ ...prev, theme: theme.name as "Halloween" | "Winter" | "Spring" | "General" }))}
               className={`p-3 rounded-lg border-2 text-sm font-medium transition-all flex items-center gap-2 ${
                 settings.theme === theme.name
                   ? "border-purple-500 bg-purple-50 text-purple-700"
@@ -723,7 +992,7 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
           ].map((resourceType) => (
             <button
               key={resourceType.type}
-              onClick={() => setSettings((prev) => ({ ...prev, resourceType: resourceType.type }))}
+              onClick={() => setSettings((prev) => ({ ...prev, resourceType: resourceType.type as "worksheet" | "quiz" | "rubric" | "lesson_plan" | "exit_slip" }))}
               className={`w-full p-3 rounded-lg border-2 text-sm font-medium transition-all text-left flex items-center gap-3 ${
                 settings.resourceType === resourceType.type
                   ? "border-purple-500 bg-purple-50 text-purple-700"
@@ -743,19 +1012,26 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
       {/* Dynamic Sub-Options based on Resource Type - Problem Type ONLY for worksheets */}
       {settings.resourceType === "worksheet" && (
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-3">Problem Type</label>
+          <label className="block text-sm font-medium text-gray-700 mb-3">Focus Area</label>
           <div className="space-y-2">
-            {["Addition Only", "Subtraction Only", "Addition & Subtraction", "Multiplication"].map((type) => (
+            {[
+              { type: "math", label: "Math", desc: "Addition, Subtraction, Mixed Operations" },
+              { type: "language", label: "Language Arts", desc: "Spelling, Vocabulary, Reading Comprehension" },
+              { type: "writing", label: "Writing", desc: "Sentence Writing, Handwriting Practice" },
+              { type: "science", label: "Science", desc: "Labeling, Matching, Observation" },
+              { type: "social", label: "Social Studies", desc: "Geography, History, Civics" }
+            ].map((category) => (
               <button
-                key={type}
-                onClick={() => setSettings((prev) => ({ ...prev, problemType: type }))}
+                key={category.type}
+                onClick={() => setSettings((prev) => ({ ...prev, problemType: category.type }))}
                 className={`w-full p-3 rounded-lg border-2 text-sm font-medium transition-all text-left ${
-                  settings.problemType === type
+                  settings.problemType === category.type
                     ? "border-purple-500 bg-purple-50 text-purple-700"
                     : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
                 }`}
               >
-                {type}
+                <div className="font-medium">{category.label}</div>
+                <div className="text-xs text-gray-500">{category.desc}</div>
               </button>
             ))}
           </div>
@@ -784,15 +1060,15 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
                   }
                 }}
                 className={`w-full p-3 rounded-lg border-2 text-sm font-medium transition-all text-left ${
-                  (format === "Mixed Format" && settings.quizQuestionTypes?.length >= 2) ||
-                  settings.quizQuestionTypes?.includes(format)
+                  (format === "Mixed Format" && (settings.quizQuestionTypes?.length ?? 0) >= 2) ||
+                  (settings.quizQuestionTypes?.includes(format) ?? false)
                     ? "border-purple-500 bg-purple-50 text-purple-700"
                     : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
                 }`}
               >
                 {format}{" "}
-                {(format === "Mixed Format" && settings.quizQuestionTypes?.length >= 2) ||
-                settings.quizQuestionTypes?.includes(format)
+                {(format === "Mixed Format" && (settings.quizQuestionTypes?.length ?? 0) >= 2) ||
+                (settings.quizQuestionTypes?.includes(format) ?? false)
                   ? "✓"
                   : ""}
               </button>
@@ -1003,240 +1279,90 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
     </div>
   )
 
-  const renderPreview = () => (
-    <div className="space-y-6 relative">
-      {/* Header with Back Button */}
-      <div className="flex items-start justify-between mb-6 pt-2">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="sm" onClick={() => setCurrentStep("settings")} className="p-0 h-auto">
-            <ChevronLeft className="w-4 h-4" />
-          </Button>
-          <div>
-            <h1 className="text-xl font-bold text-gray-900">📄 Resource Preview</h1>
-            <p className="text-sm text-gray-600">Review your generated {getResourceDisplayName()}</p>
-          </div>
-        </div>
-        <Button variant="outline" size="sm" onClick={() => setCurrentStep("settings")}>
-          <Edit className="w-4 h-4 mr-2" />
-          Edit
-        </Button>
-      </div>
+  const renderPreview = () => {
+    if (!generatedWorksheet) return null;
 
-      {/* Request Summary in Preview - Moved below header */}
-      {request && (
-        <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 mb-4">
-          <div className="flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-purple-600" />
-            <span className="text-xs font-medium text-purple-800">Based on your request: "{request}"</span>
-          </div>
-        </div>
-      )}
+    const { title, problems } = generatedWorksheet;
 
-      {/* Resource Preview */}
-      {generatedWorksheet && (
-        <div className="bg-white border-2 border-gray-200 rounded-lg p-6 shadow-sm">
-          {/* Resource Header */}
-          <div className="text-center mb-6 border-b border-gray-200 pb-4">
-            <div className="flex justify-center gap-2 mb-2">
-              {generatedWorksheet.decorations?.map((emoji, i) => (
-                <span key={i} className="text-2xl">
-                  {emoji}
-                </span>
-              )) || <span className="text-2xl">{detectedResourceType.icon}</span>}
+    return (
+      <div className="space-y-6 relative">
+        {/* Header with Back Button */}
+        <div className="flex items-start justify-between mb-6 pt-2">
+          <div className="flex items-center gap-3">
+            <Button variant="ghost" size="sm" onClick={() => setCurrentStep("settings")} className="p-0 h-auto">
+              <ChevronLeft className="w-4 h-4" />
+            </Button>
+            <div>
+              <h1 className="text-xl font-bold text-gray-900">📄 Resource Preview</h1>
+              <p className="text-sm text-gray-600">Review your generated {getResourceDisplayName()}</p>
             </div>
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">{generatedWorksheet.title}</h2>
-            <div className="flex justify-between text-sm text-gray-600">
+          </div>
+          <Button variant="outline" size="sm" onClick={() => setCurrentStep("settings")}>
+            <Edit className="w-4 h-4 mr-2" />
+            Edit
+          </Button>
+        </div>
+
+        {/* Request Summary in Preview */}
+        {request && (
+          <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 mb-4">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-purple-600" />
+              <span className="text-xs font-medium text-purple-800">Based on your request: "{request}"</span>
+            </div>
+          </div>
+        )}
+
+        {/* Resource Preview */}
+        <div className="bg-white p-8 rounded-lg shadow-lg max-w-4xl mx-auto">
+          <div className="text-center mb-8">
+            <h1 className="text-2xl font-bold mb-2">{title}</h1>
+            <div className="mb-4">
               <div>Name: ________________</div>
               <div>Date: ________________</div>
             </div>
           </div>
 
-          {/* Content Section - Different for each resource type */}
-          <div className="space-y-4">
-            {generatedWorksheet.resourceType === "worksheet" && (
-              <>
-                <h3 className="text-lg font-semibold text-gray-800 mb-4">
-                  {settings.theme === "Halloween"
-                    ? "🎃 Spooky Math Problems"
-                    : settings.theme === "Winter"
-                      ? "❄️ Winter Math Fun"
-                      : settings.theme === "Spring"
-                        ? "🌸 Spring Math Garden"
-                        : "⭐ Math Practice"}
-                </h3>
-                <div className="grid grid-cols-1 gap-4">
-                  {generatedWorksheet.problems?.map((problem, index) => (
-                    <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <span className="w-6 h-6 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center text-sm font-bold">
-                          {index + 1}
-                        </span>
-                        <div>
-                          <div className="font-mono text-lg font-semibold text-gray-900">{problem.question}</div>
-                          {problem.visual && <div className="text-sm text-gray-600 mt-1">{problem.visual}</div>}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-
-            {generatedWorksheet.resourceType === "exit_slip" && (
-              <>
-                <h3 className="text-lg font-semibold text-gray-800 mb-4">
-                  {detectedResourceType.detectedName === "bell ringer"
-                    ? "🔔 Bell Ringer Questions"
-                    : "🚪 Exit Slip Questions"}
-                </h3>
-                <div className="grid grid-cols-1 gap-4">
-                  {generatedWorksheet.problems?.map((problem, index) => (
-                    <div key={index} className="flex items-start justify-between p-3 bg-gray-50 rounded-lg">
-                      <div className="flex items-start gap-3 w-full">
-                        <span className="w-6 h-6 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center text-sm font-bold mt-1">
-                          {index + 1}
-                        </span>
-                        <div className="flex-1">
-                          <div className="font-medium text-gray-900 mb-2">{problem.question}</div>
-                          {problem.visual && (
-                            <div className="text-sm text-gray-600 bg-white p-2 rounded border">{problem.visual}</div>
-                          )}
-                          <div className="text-xs text-green-700 mt-2 font-medium">Answer: {problem.answer}</div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-
-            {(generatedWorksheet.resourceType === "quiz" || generatedWorksheet.resourceType === "exit_slip") && (
-              <>
-                <h3 className="text-lg font-semibold text-gray-800 mb-4">
-                  {generatedWorksheet.resourceType === "exit_slip"
-                    ? detectedResourceType.detectedName === "bell ringer"
-                      ? "🔔 Bell Ringer Questions"
-                      : "🚪 Exit Slip Questions"
-                    : "📋 Quiz Questions"}
-                </h3>
-                <div className="space-y-4">
-                  {generatedWorksheet.questions?.map((question, index) => (
-                    <div key={index} className="p-4 bg-gray-50 rounded-lg">
-                      <div className="font-semibold text-gray-900 mb-2">{question.question}</div>
-                      {question.options && (
-                        <div className="space-y-1 ml-4">
-                          {question.options.map((option, i) => (
-                            <div key={i} className="text-sm text-gray-700">
-                              {option}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-                      {question.points && <div className="text-sm text-gray-500 mt-2">Points: {question.points}</div>}
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-
-            {generatedWorksheet.resourceType === "rubric" && (
-              <>
-                <h3 className="text-lg font-semibold text-gray-800 mb-4">📊 Assessment Rubric</h3>
-                <div className="space-y-4">
-                  {generatedWorksheet.criteria?.map((criterion, index) => (
-                    <div key={index} className="border border-gray-200 rounded-lg overflow-hidden">
-                      <div className="bg-purple-50 p-3 font-semibold text-purple-800">{criterion.name}</div>
-                      <div className="grid grid-cols-2 gap-2 p-3">
-                        {criterion.levels.map((level, i) => (
-                          <div key={i} className="p-2 bg-gray-50 rounded text-sm">
-                            <div className="font-medium text-gray-800">{level.level}</div>
-                            <div className="text-gray-600">{level.description}</div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
-
-            {generatedWorksheet.resourceType === "lesson_plan" && (
-              <>
-                <h3 className="text-lg font-semibold text-gray-800 mb-4">📚 Lesson Plan</h3>
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="p-3 bg-blue-50 rounded-lg">
-                      <div className="font-semibold text-blue-800">Duration</div>
-                      <div className="text-blue-700">{generatedWorksheet.duration}</div>
-                    </div>
-                    <div className="p-3 bg-green-50 rounded-lg">
-                      <div className="font-semibold text-green-800">Subject</div>
-                      <div className="text-green-700">{generatedWorksheet.subject}</div>
-                    </div>
+          {/* Problems/Questions Section */}
+          <div className="space-y-6">
+            {problems?.map((problem: any, index: number) => (
+              <div key={index} className="border-b pb-4">
+                <p className="font-medium">{index + 1}. {problem.question}</p>
+                {problem.options && (
+                  <div className="ml-4 mt-2">
+                    {problem.options.map((option: string, optIndex: number) => (
+                      <div key={optIndex}>{option}</div>
+                    ))}
                   </div>
-
-                  <div className="p-3 bg-purple-50 rounded-lg">
-                    <div className="font-semibold text-purple-800 mb-2">Learning Objectives</div>
-                    <ul className="list-disc list-inside text-purple-700 space-y-1">
-                      {generatedWorksheet.objectives?.map((objective, i) => (
-                        <li key={i}>{objective}</li>
-                      ))}
-                    </ul>
-                  </div>
-
-                  <div className="p-3 bg-yellow-50 rounded-lg">
-                    <div className="font-semibold text-yellow-800 mb-2">Lesson Activities</div>
-                    <div className="space-y-2">
-                      {generatedWorksheet.activities?.map((activity, i) => (
-                        <div key={i} className="flex justify-between items-start">
-                          <div>
-                            <div className="font-medium text-yellow-700">{activity.name}</div>
-                            <div className="text-sm text-yellow-600">{activity.description}</div>
-                          </div>
-                          <div className="text-sm text-yellow-600">{activity.duration}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </>
-            )}
-          </div>
-
-          {/* Instructions */}
-          <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-            <h4 className="font-semibold text-blue-800 mb-2">📝 Instructions:</h4>
-            <p className="text-sm text-blue-700">
-              {generatedWorksheet.resourceType === "worksheet" &&
-                "Solve each problem and write your answer in the blank space."}
-              {generatedWorksheet.resourceType === "quiz" &&
-                "Answer all questions to the best of your ability. Read each question carefully."}
-              {generatedWorksheet.resourceType === "exit_slip" &&
-                (detectedResourceType.detectedName === "bell ringer"
-                  ? "Complete this bell ringer activity to start class."
-                  : "Complete this exit slip before leaving class.")}
-              {generatedWorksheet.resourceType === "rubric" &&
-                "Use this rubric to assess student work. Rate each criterion from 1-4 points."}
-              {generatedWorksheet.resourceType === "lesson_plan" &&
-                "Follow this lesson plan structure. Adjust timing as needed for your class."}
-            </p>
+                )}
+                {problem.answer && (
+                  <div className="ml-4 mt-2 text-gray-500">Answer: {problem.answer}</div>
+                )}
+              </div>
+            ))}
           </div>
         </div>
-      )}
 
-      {/* Action Buttons */}
-      <div className="flex gap-3">
-        <Button onClick={handleQualityCheck} className="flex-1 bg-purple-600 hover:bg-purple-700 text-white">
-          <CheckCircle className="w-4 h-4 mr-2" />
-          Quality Check
-        </Button>
-        <Button variant="outline" className="flex-1">
-          <Download className="w-4 h-4 mr-2" />
-          Download PDF
-        </Button>
+        {/* Action Buttons */}
+        <div className="flex justify-between items-center mt-6">
+          <Button variant="outline" onClick={() => setCurrentStep("settings")}>
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Back to Settings
+          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={handleDownloadPDF}>
+              <Download className="w-4 h-4 mr-2" />
+              Download PDF
+            </Button>
+            <Button onClick={handleComplete}>
+              <Check className="w-4 h-4 mr-2" />
+              Use Resource
+            </Button>
+          </div>
+        </div>
       </div>
-    </div>
-  )
+    );
+  };
 
   const renderQualityCheck = () => (
     <div className="space-y-6 relative">
