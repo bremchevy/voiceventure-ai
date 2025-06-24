@@ -3,6 +3,13 @@ import { ReadingContentGenerator, ReadingContentOptions } from './AIContentGener
 import { ScienceContentGenerator, ScienceContentOptions } from './AIContentGenerator/science';
 import { TemplateManager } from './TemplateManager/base';
 import type { ResourceGenerationOptions, GeneratedResource, ResourceType } from '@/lib/types/resource';
+import OpenAI from 'openai';
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+  maxRetries: 3,
+  timeout: 30000
+});
 
 export class AIResourceGenerator {
   private mathGenerator: MathContentGenerator;
@@ -22,6 +29,47 @@ export class AIResourceGenerator {
     console.log('🎯 Generating resource with options:', options);
 
     try {
+      // Special handling for exit slips and bell ringers
+      if (options.resourceType.toLowerCase() === 'exit_slip') {
+        const exitSlipPrompt = `Generate a ${options.subject} ${options.topicArea ? `about ${options.topicArea}` : ''} ${options.resourceType === 'exit_slip' ? 'exit slip' : 'bell ringer'} for ${options.gradeLevel} with the following specifications:
+
+1. Create engaging questions that assess student understanding of ${options.topicArea || options.subject} concepts
+2. Include a mix of question types (multiple choice, open-ended, reflection)
+3. Focus on ${options.focus ? options.focus.join(', ') : 'key concepts'}
+4. Return the response in the following JSON format:
+{
+  "title": "An appropriate title for the exit slip",
+  "instructions": "Clear instructions for students",
+  "questions": [
+    {
+      "type": "multiple_choice",
+      "question": "The question text",
+      "options": ["Option A", "Option B", "Option C", "Option D"],
+      "correctAnswer": "The correct option",
+      "explanation": "Why this is the correct answer"
+    },
+    {
+      "type": "open_ended",
+      "question": "A reflective or conceptual question",
+      "expectedResponse": "What you expect students to write about",
+      "criteria": "What to look for in the response"
+    }
+  ]
+}
+
+Requirements:
+- Questions should be grade-appropriate
+- Include at least one question about the main concept
+- Include at least one reflective question
+- Keep questions concise and clear
+- Use appropriate mathematical notation for math concepts
+
+${options.customInstructions ? `Additional requirements:\n${options.customInstructions}` : ''}`;
+
+        const result = await this.generateContent(exitSlipPrompt, options);
+        return this.formatContentForTemplate(JSON.parse(result), options);
+      }
+
       // Special handling for rubrics
       if (options.resourceType.toLowerCase() === 'rubric') {
         const rubricPrompt = `Generate a detailed rubric with the following specifications:
@@ -70,8 +118,8 @@ Requirements for writing rubrics:
 
 ${options.customInstructions ? `Additional requirements:\n${options.customInstructions}` : ''}`;
 
-        const result = await this.generateContent(rubricPrompt);
-        return this.formatContentForTemplate(JSON.parse(result.content), options);
+        const result = await this.generateContent(rubricPrompt, options);
+        return this.formatContentForTemplate(JSON.parse(result), options);
       }
 
       // Handle other resource types
@@ -107,6 +155,35 @@ ${options.customInstructions ? `Additional requirements:\n${options.customInstru
       science: ['🔬', '🧪', '🌍', '⚡'],
       reading: ['📚', '✍️', '📝', '📖']
     };
+
+    // Handle exit slips
+    if (options.resourceType.toLowerCase() === 'exit_slip' && content.questions) {
+      const formattedContent: GeneratedResource = {
+        title: content.title || `${options.subject} ${options.resourceType === 'exit_slip' ? 'Exit Slip' : 'Bell Ringer'}`,
+        content: content.instructions || 'Answer each question thoughtfully. Your responses help us understand your learning.',
+        sections: [{
+          type: 'questions',
+          title: 'Questions',
+          content: JSON.stringify(content.questions.map((q: any) => ({
+            question: q.question,
+            type: q.type,
+            options: q.options,
+            visual: q.visual || null,
+            explanation: q.explanation || null
+          })))
+        }],
+        metadata: {
+          gradeLevel: options.gradeLevel,
+          subject: options.subject,
+          resourceType: options.resourceType.toLowerCase() as ResourceType,
+          generatedAt: new Date().toISOString(),
+          theme: options.theme,
+          difficulty: options.difficulty
+        },
+        decorations: content.decorations || subjectDecorations[options.subject.toLowerCase()] || ['📝', '✨', '🎯', '🌟']
+      };
+      return formattedContent;
+    }
 
     // Handle reading content with passages
     if (options.subject.toLowerCase() === 'reading' && content.passage) {
@@ -335,29 +412,115 @@ ${options.customInstructions ? `Additional requirements:\n${options.customInstru
     return await this.scienceGenerator.generateScienceContent(scienceOptions);
   }
 
-  private async generateContent(prompt: string) {
+  private async generateContent(prompt: string, options: ResourceGenerationOptions) {
     try {
-      const response = await fetch(`${typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000'}/api/generate`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          prompt,
-          max_tokens: 1000,
-          temperature: 0.7,
-        }),
+      // Add grade-specific context to the prompt
+      const gradeContext = this.getGradeContext(options.gradeLevel);
+      const visualContext = this.getVisualContext(options);
+      
+      const enhancedPrompt = `
+Generate a ${options.difficulty} ${options.subject} ${options.resourceType} for ${options.gradeLevel} about ${options.topicArea}.
+
+Grade-Level Context:
+${gradeContext}
+
+Visual Requirements:
+${visualContext}
+
+Additional Instructions:
+${options.customInstructions || 'No additional instructions provided.'}
+
+Please generate content that is:
+1. Age-appropriate for ${options.gradeLevel}
+2. Aligned with ${options.gradeLevel} learning standards
+3. Using ${options.visualComplexity} visual elements as appropriate
+4. Formatted in clear, structured JSON
+
+The content should include:
+- A clear title
+- Grade-appropriate instructions
+- Content sections with questions/problems
+- Visual aids where appropriate
+`;
+
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4",
+        messages: [
+          {
+            role: "system",
+            content: "You are an expert educational content creator, specializing in creating engaging, grade-appropriate learning materials. IMPORTANT: Always format your entire response as a valid JSON object with the following structure:\n{\n  \"title\": string,\n  \"content\": string,\n  \"sections\": Array<{\n    \"type\": string,\n    \"title\"?: string,\n    \"content\": string\n  }>\n}"
+          },
+          {
+            role: "user",
+            content: enhancedPrompt
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: 2000
       });
 
-      if (!response.ok) {
-        throw new Error(`Failed to generate content: ${response.statusText}`);
+      const content = completion.choices[0]?.message?.content;
+      if (!content) {
+        throw new Error('No content generated');
       }
 
-      const data = await response.json();
-      return { content: data.content };
+      try {
+        // Validate JSON format
+        const parsedContent = JSON.parse(content);
+        return content;
+      } catch (error) {
+        console.error('Error parsing OpenAI response as JSON:', error);
+        throw new Error('Invalid JSON format in response');
+      }
     } catch (error) {
       console.error('Error generating content:', error);
       throw error;
     }
+  }
+
+  private getGradeContext(gradeLevel: string): string {
+    const grade = parseInt(gradeLevel);
+    if (grade <= 2) {
+      return `
+- Use simple, clear language
+- Keep instructions brief and direct
+- Include more visual aids and examples
+- Focus on concrete concepts
+- Use larger fonts and spacing`;
+    } else if (grade <= 4) {
+      return `
+- Use grade-appropriate vocabulary
+- Include step-by-step instructions
+- Balance visual and text content
+- Introduce abstract concepts gradually
+- Include some critical thinking elements`;
+    } else {
+      return `
+- Use more complex vocabulary
+- Include detailed instructions
+- Focus on abstract concepts
+- Encourage critical thinking
+- Include challenging problem-solving tasks`;
+    }
+  }
+
+  private getVisualContext(options: ResourceGenerationOptions): string {
+    const visualRequirements = [];
+    
+    if (options.includeVisuals) {
+      visualRequirements.push(`- Include ${options.visualComplexity} visual aids to support learning`);
+    }
+    
+    if (options.includeDiagrams) {
+      visualRequirements.push('- Add relevant diagrams to explain concepts');
+    }
+    
+    if (options.includeExperiments) {
+      visualRequirements.push('- Include hands-on experiments or activities');
+    }
+
+    return visualRequirements.length > 0 
+      ? visualRequirements.join('\n')
+      : '- Minimal visual aids, focus on text-based content';
   }
 } 

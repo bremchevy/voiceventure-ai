@@ -12,25 +12,21 @@ export interface ScienceContentOptions {
   customInstructions?: string;
 }
 
-export interface ScienceQuestion {
+interface ScienceQuestion {
   question: string;
-  type: 'multiple_choice' | 'short_answer' | 'diagram' | 'experiment';
-  answer: string;
+  answer?: string;
   explanation?: string;
+  type: 'multiple_choice' | 'short_answer' | 'true_false';
   options?: string[];
-  diagram?: string;
-  experimentSteps?: string[];
-  materials?: string[];
-  safetyNotes?: string[];
 }
 
-export interface ScienceGenerationResult extends GenerationResult {
+interface ScienceGenerationResult extends GenerationResult {
   title: string;
   introduction: string;
   learningObjectives: string[];
   questions: ScienceQuestion[];
-  keyTerms?: { term: string; definition: string }[];
-  additionalResources?: string[];
+  keyTerms: Array<{ term: string; definition: string }>;
+  additionalResources: string[];
 }
 
 export class ScienceContentGenerator extends BaseAIContentGenerator {
@@ -53,6 +49,57 @@ export class ScienceContentGenerator extends BaseAIContentGenerator {
     space: 'Explore astronomy and space science concepts',
   };
 
+  private async buildSciencePrompt(options: ScienceContentOptions): Promise<string> {
+    const {
+      grade = 5,
+      subject = 'general',
+      difficulty = 'intermediate',
+      topic,
+      includeExperiments = false,
+      includeDiagrams = false,
+      includeQuestions = true,
+      numberOfQuestions = 5,
+      customInstructions = ''
+    } = options;
+
+    const prompt = `Generate a science ${topic ? `worksheet about ${topic}` : 'worksheet'} for grade ${grade} students.
+
+Please provide the response in the following JSON format:
+{
+  "title": "A clear title for the worksheet",
+  "introduction": "A brief introduction to the topic",
+  "learningObjectives": ["objective 1", "objective 2", "objective 3"],
+  "questions": [
+    {
+      "question": "The actual question text",
+      "type": "multiple_choice",
+      "options": ["option A", "option B", "option C", "option D"],
+      "answer": "The correct answer",
+      "explanation": "Why this is the correct answer"
+    }
+  ],
+  "keyTerms": [
+    {
+      "term": "Scientific term",
+      "definition": "Definition of the term"
+    }
+  ],
+  "additionalResources": ["Resource 1", "Resource 2"]
+}
+
+Requirements:
+- Make it ${difficulty} difficulty for grade ${grade}
+- Focus on ${subject} concepts
+${includeExperiments ? '- Include hands-on experiments\n' : ''}
+${includeDiagrams ? '- Include diagrams or visual aids\n' : ''}
+${includeQuestions ? `- Include ${numberOfQuestions} questions\n` : ''}
+${customInstructions ? `Additional requirements:\n${customInstructions}` : ''}
+
+Ensure all content is scientifically accurate and grade-appropriate.`;
+
+    return prompt;
+  }
+
   async generateScienceContent(
     options: ScienceContentOptions,
     genOptions?: GenerationOptions
@@ -60,10 +107,11 @@ export class ScienceContentGenerator extends BaseAIContentGenerator {
     const prompt = await this.buildSciencePrompt(options);
     await this.validatePrompt(prompt);
 
-    // Pass custom instructions to the base generator
     const generationOptions: GenerationOptions = {
       ...genOptions,
       customInstructions: options.customInstructions,
+      temperature: 0.7, // Slightly higher for more creative responses
+      maxTokens: 2500 // Increased for more detailed content
     };
 
     const result = await this.generateContent(prompt, generationOptions);
@@ -77,10 +125,11 @@ export class ScienceContentGenerator extends BaseAIContentGenerator {
         learningObjectives: parsedContent.learningObjectives || this.generateDefaultObjectives(options),
         questions: parsedContent.questions.map(this.formatQuestion),
         keyTerms: parsedContent.keyTerms || [],
-        additionalResources: parsedContent.additionalResources || [],
+        additionalResources: parsedContent.additionalResources || []
       };
     } catch (error) {
       console.error('Error parsing AI response:', error);
+      // Provide structured fallback content
       return {
         ...result,
         title: this.generateDefaultTitle(options),
@@ -88,159 +137,51 @@ export class ScienceContentGenerator extends BaseAIContentGenerator {
         learningObjectives: this.generateDefaultObjectives(options),
         questions: this.generateDefaultQuestions(options),
         keyTerms: [],
-        additionalResources: [],
+        additionalResources: []
       };
     }
   }
 
-  private formatQuestion(q: any): ScienceQuestion {
+  private formatQuestion(question: any): ScienceQuestion {
     return {
-      question: q.question,
-      type: q.type,
-      answer: q.answer,
-      explanation: q.explanation,
-      options: q.options,
-      diagram: q.diagram,
-      experimentSteps: q.experimentSteps,
-      materials: q.materials,
-      safetyNotes: q.safetyNotes,
+      question: question.question,
+      type: question.type || 'multiple_choice',
+      options: question.options || [],
+      answer: question.answer,
+      explanation: question.explanation
     };
   }
 
   private generateDefaultTitle(options: ScienceContentOptions): string {
     const grade = options.grade || 5;
-    const subject = options.subject || 'Science';
+    const topic = options.topic ? `: ${options.topic}` : '';
     const difficulty = options.difficulty || 'intermediate';
-    return `Grade ${grade} ${subject} Worksheet (${difficulty} level)`;
+    return `Grade ${grade} Science Worksheet${topic} (${difficulty} level)`;
   }
 
   private generateDefaultIntroduction(options: ScienceContentOptions): string {
-    return `Welcome to your ${options.subject || 'science'} exploration! This worksheet will help you understand key concepts through ${options.includeExperiments ? 'hands-on experiments and ' : ''}interactive questions.`;
+    return `Welcome to your science exploration! This worksheet will help you understand key concepts through ${
+      options.includeExperiments ? 'hands-on experiments and ' : ''
+    }interactive questions.`;
   }
 
   private generateDefaultObjectives(options: ScienceContentOptions): string[] {
     return [
-      'Understand key scientific concepts',
-      'Apply scientific method to solve problems',
-      'Develop critical thinking skills',
+      'Understand basic scientific concepts',
+      'Apply scientific thinking to real-world problems',
+      'Develop observation and analysis skills'
     ];
   }
 
   private generateDefaultQuestions(options: ScienceContentOptions): ScienceQuestion[] {
-    return [{
-      question: 'What is the scientific method?',
-      type: 'multiple_choice',
-      answer: 'A systematic approach to solving problems through observation and experimentation',
-      options: [
-        'A systematic approach to solving problems through observation and experimentation',
-        'A random collection of facts',
-        'A type of laboratory equipment',
-        'A scientific theory',
-      ],
-      explanation: 'The scientific method is a structured approach to understanding the natural world.',
-    }];
-  }
-
-  private async buildSciencePrompt(options: ScienceContentOptions): Promise<string> {
-    const {
-      grade = 5,
-      subject = 'biology',
-      difficulty = 'intermediate',
-      topic,
-      includeExperiments = true,
-      includeDiagrams = true,
-      includeQuestions = true,
-      numberOfQuestions = 5,
-    } = options;
-
-    // Special handling for rubrics
-    if (options.customInstructions?.toLowerCase().includes('rubric')) {
-      return `Generate a science rubric with the following specifications:
-
-1. Create a comprehensive rubric for grade ${grade} science${topic ? ` (${topic})` : ''} evaluation
-2. Return the response in the following JSON format:
-{
-  "title": "An appropriate title for the rubric",
-  "introduction": "Brief description of what this rubric evaluates",
-  "criteria": [
-    {
-      "criterion": "Name of the criterion",
-      "description": "What this criterion evaluates",
-      "levels": [
-        {
-          "score": "4",
-          "label": "Excellent",
-          "description": "Detailed description of excellent performance"
-        },
-        {
-          "score": "3",
-          "label": "Good",
-          "description": "Detailed description of good performance"
-        },
-        {
-          "score": "2",
-          "label": "Fair",
-          "description": "Detailed description of fair performance"
-        },
-        {
-          "score": "1",
-          "label": "Needs Improvement",
-          "description": "Detailed description of performance needing improvement"
-        }
-      ]
-    }
-  ]
-}
-
-Requirements:
-- Include clear and measurable criteria
-- Use grade-appropriate language
-- Focus on scientific concepts and skills
-- Include both content and process evaluation
-- Provide detailed descriptions for each performance level`;
-    }
-
-    // Original worksheet/quiz prompt
-    let prompt = `Generate a ${difficulty}-level science worksheet with the following specifications:
-
-1. Create ${numberOfQuestions} questions/activities for grade ${grade} students focusing on ${subject}${topic ? ` (${topic})` : ''}
-2. Return the response in the following JSON format:
-{
-  "title": "An engaging title for the worksheet",
-  "introduction": "Brief introduction to the topic",
-  "learningObjectives": ["Objective 1", "Objective 2", ...],
-  "questions": [
-    {
-      "question": "The question text",
-      "type": "multiple_choice/short_answer/diagram/experiment",
-      "answer": "The correct answer",
-      "explanation": "Why this is correct",
-      "options": ["A", "B", "C", "D"] (for multiple choice),
-      "diagram": "ASCII/text diagram if applicable",
-      "experimentSteps": ["Step 1", "Step 2", ...] (for experiments),
-      "materials": ["Material 1", "Material 2", ...] (for experiments),
-      "safetyNotes": ["Safety note 1", "Safety note 2", ...] (for experiments)
-    }
-  ],
-  "keyTerms": [
-    { "term": "Term 1", "definition": "Definition 1" }
-  ],
-  "additionalResources": ["Resource 1", "Resource 2"]
-}
-
-Requirements:
-- Make content engaging and grade-appropriate
-- Use clear scientific terminology
-- Include real-world applications
-${includeExperiments ? '- Include at least one hands-on experiment' : ''}
-${includeDiagrams ? '- Include at least one diagram-based question' : ''}
-${includeQuestions ? '- Include multiple types of questions' : ''}
-
-Subject-specific guidelines:
-${this.subjectPrompts[subject] || 'Create grade-appropriate science content'}
-${topic && this.topicPrompts[topic] ? this.topicPrompts[topic] : ''}`;
-
-    return prompt;
+    const count = options.numberOfQuestions || 5;
+    return Array(count).fill(null).map((_, index) => ({
+      question: `What is the scientific method?`,
+      type: 'short_answer',
+      answer: 'The scientific method is a systematic approach to investigating phenomena and acquiring new knowledge.',
+      explanation: 'This is a fundamental concept in science.',
+      options: []
+    }));
   }
 
   protected async enhancePrompt(prompt: string, context: any = {}): Promise<string> {

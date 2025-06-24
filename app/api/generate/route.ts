@@ -1,50 +1,37 @@
 import { NextResponse } from 'next/server';
-import OpenAI from 'openai';
 import { AIResourceGenerator } from '@/lib/services/AIResourceGenerator';
 import type { ResourceGenerationOptions } from '@/lib/types/resource';
+import { validateEnvironment } from '@/lib/services/AIContentGenerator/config';
 
 export const runtime = 'edge';
 
-// Initialize OpenAI
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+// Helper function to determine difficulty based on grade level
+function determineDifficulty(gradeLevel: string): 'easy' | 'medium' | 'hard' {
+  const grade = parseInt(gradeLevel);
+  if (grade <= 2) return 'easy';
+  if (grade <= 4) return 'medium';
+  return 'hard';
+}
+
+// Helper function to determine visual aids based on grade level
+function determineVisualAids(gradeLevel: string) {
+  const grade = parseInt(gradeLevel);
+  return {
+    includeVisuals: grade <= 3, // More visuals for lower grades
+    includeDiagrams: grade >= 3, // Diagrams for higher grades
+    includeExperiments: grade >= 4, // Experiments for higher grades
+    visualComplexity: grade <= 2 ? 'simple' : grade <= 4 ? 'moderate' : 'complex'
+  };
+}
 
 export async function POST(request: Request) {
-  console.log('🚀 Starting resource generation request');
-  const generator = new AIResourceGenerator();
-
   try {
-    const body = await request.json();
+    // Validate environment first
+    validateEnvironment();
+    
+    const options = await request.json();
+    console.log('📝 Received generation request:', options);
 
-    // If it's a direct OpenAI prompt
-    if (body.prompt) {
-      const completion = await openai.chat.completions.create({
-        model: "gpt-4",
-        messages: [
-          {
-            role: "system",
-            content: "You are a helpful assistant that generates educational content. You should follow the format specified in the user's prompt exactly."
-          },
-          {
-            role: "user",
-            content: body.prompt
-          }
-        ],
-        max_tokens: body.max_tokens || 1000,
-        temperature: body.temperature || 0.7,
-      });
-
-      return NextResponse.json({
-        content: completion.choices[0].message.content || ''
-      });
-    }
-
-    // Otherwise, treat it as a resource generation request
-    const options: ResourceGenerationOptions = body;
-    console.log('📝 Received generation options:', JSON.stringify(options, null, 2));
-
-    // Validate required fields
     if (!options.subject || !options.gradeLevel || !options.resourceType) {
       console.error('❌ Missing required fields:', { 
         subject: options.subject, 
@@ -57,90 +44,40 @@ export async function POST(request: Request) {
       );
     }
 
-    // Handle specific math topics
-    if (options.subject.toLowerCase() === 'math') {
-      const customInstructions = options.customInstructions?.toLowerCase() || '';
-      const focus = options.focus?.map(f => f.toLowerCase()) || [];
-      
-      // Check if this is about fractions
-      if (customInstructions.includes('fraction') || focus.some(f => f.includes('fraction'))) {
-        options.topicArea = 'fractions';
-        if (!options.customInstructions) {
-          options.customInstructions = 'Focus on fraction operations and concepts';
-        }
-      }
-    }
+    // Extract grade number from grade level string
+    const gradeNumber = parseInt(options.gradeLevel.match(/\d+/)?.[0] || '0');
+    
+    // Determine difficulty and visual aids based on grade level
+    const difficulty = determineDifficulty(gradeNumber.toString());
+    const visualAids = determineVisualAids(gradeNumber.toString());
 
-    console.log('✅ Validation passed, creating stream');
-    // Create a new TransformStream for streaming
-    const stream = new TransformStream();
-    const writer = stream.writable.getWriter();
-    const encoder = new TextEncoder();
+    // Merge the determined settings with the original options
+    const enhancedOptions = {
+      ...options,
+      difficulty,
+      ...visualAids,
+    };
 
-    // Start the generation process
-    console.log('🎯 Starting resource generation with options:', {
-      subject: options.subject,
-      gradeLevel: options.gradeLevel,
-      resourceType: options.resourceType
+    console.log('🎯 Enhanced generation options:', enhancedOptions);
+
+    const generator = new AIResourceGenerator();
+    const result = await generator.generateResource(enhancedOptions);
+
+    // Log success and return result
+    console.log('✅ Content generated successfully');
+    console.log('✨ Resource generated successfully, preparing to stream');
+    console.log('📦 Resource structure:', { 
+      hasContent: !!result.content, 
+      hasMetadata: !!result.metadata, 
+      contentLength: result.content?.length || 0,
+      sections: result.sections?.length || 0
     });
 
-    generator.generateResource(options)
-      .then(async (resource) => {
-        try {
-          console.log('✨ Resource generated successfully, preparing to stream');
-          // Convert the resource to JSON string
-          const jsonString = JSON.stringify(resource);
-          console.log('📦 Resource structure:', {
-            hasContent: !!resource.content,
-            hasMetadata: !!resource.metadata,
-            contentLength: resource.content?.length || 0,
-            sections: resource.sections?.length || 0
-          });
-          
-          // Stream the content in chunks
-          const chunks = jsonString.match(/.{1,1000}/g) || [];
-          console.log(`📤 Streaming response in ${chunks.length} chunks`);
-          
-          for (const chunk of chunks) {
-            await writer.write(encoder.encode(chunk));
-          }
-          console.log('✅ Stream completed successfully');
-          await writer.close();
-        } catch (error) {
-          console.error('❌ Error streaming response:', error);
-          console.error('Failed resource:', resource);
-          await writer.write(encoder.encode(JSON.stringify({ 
-            error: 'Failed to stream response',
-            details: error instanceof Error ? error.message : 'Unknown error'
-          })));
-          await writer.close();
-        }
-      })
-      .catch(async (error) => {
-        console.error('❌ Error generating resource:', error);
-        console.error('Generation options that caused error:', options);
-        await writer.write(encoder.encode(JSON.stringify({ 
-          error: 'Failed to generate resource',
-          details: error instanceof Error ? error.message : 'Unknown error'
-        })));
-        await writer.close();
-      });
-
-    console.log('📡 Returning stream response');
-    // Return the stream with JSON content type
-    return new Response(stream.readable, {
-      headers: {
-        'Content-Type': 'application/json',
-        'Transfer-Encoding': 'chunked',
-      },
-    });
+    return NextResponse.json(result);
   } catch (error) {
-    console.error('❌ Error processing request:', error);
+    console.error('❌ Error generating resource:', error);
     return NextResponse.json(
-      { 
-        error: 'Failed to process request',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
+      { error: error instanceof Error ? error.message : 'Failed to generate resource' },
       { status: 500 }
     );
   }

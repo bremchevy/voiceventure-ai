@@ -78,6 +78,7 @@ export interface ResourceGenerationOptions {
   wordCount?: number;
   focus?: string[];
   questionCount?: number;
+  visualComplexity?: 'simple' | 'moderate' | 'complex';
 }
 
 export interface ResourceGenerationResult {

@@ -62,10 +62,8 @@ interface WorksheetSettings {
   lessonObjectives?: string[]
   lessonType?: string
   customInstructions?: string
-  // Additional settings for resource generation
+  topicArea: string
   difficulty?: 'easy' | 'medium' | 'hard'
-  topicArea?: string
-  includeQuestions?: boolean
   includeVisuals?: boolean
   includeExperiments?: boolean
   includeDiagrams?: boolean
@@ -210,6 +208,7 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
     lessonObjectives: ["Students will understand", "Students will be able to"],
     lessonType: "full-lesson",
     customInstructions: "",
+    topicArea: "",
   })
 
   // NEW: Add resource type state
@@ -1173,6 +1172,21 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
         </div>
       )}
 
+      {/* Topic Area Field */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-3">
+          Topic Area
+          <span className="text-xs text-gray-500 ml-2">(What specific topic would you like to cover?)</span>
+        </label>
+        <input
+          type="text"
+          value={settings.topicArea}
+          onChange={(e) => setSettings((prev) => ({ ...prev, topicArea: e.target.value }))}
+          placeholder="e.g., Water Cycle, Fractions, Character Traits..."
+          className="w-full p-3 rounded-lg border-2 border-gray-200 text-sm focus:border-purple-500 focus:outline-none"
+        />
+      </div>
+
       {/* Custom Instructions Field */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-3">
@@ -1357,7 +1371,13 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
               }
 
               if (section.type === 'vocabulary') {
-                const vocabulary = JSON.parse(section.content);
+                let vocabulary;
+                try {
+                  vocabulary = typeof section.content === 'string' ? JSON.parse(section.content) : section.content;
+                } catch (error) {
+                  console.error('Error parsing vocabulary content:', error);
+                  vocabulary = [];
+                }
                 return (
                   <div key={sectionIndex} className="mb-8">
                     <h2 className="text-xl font-semibold mb-4">Vocabulary</h2>
@@ -1379,7 +1399,13 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
               }
 
               if (section.type === 'rubric') {
-                const sectionContent = JSON.parse(section.content);
+                let sectionContent;
+                try {
+                  sectionContent = typeof section.content === 'string' ? JSON.parse(section.content) : section.content;
+                } catch (error) {
+                  console.error('Error parsing rubric content:', error);
+                  sectionContent = [];
+                }
                 return (
                   <div key={sectionIndex} className="space-y-6">
                     {section.title && <h2 className="text-xl font-semibold mb-4">{section.title}</h2>}
@@ -1401,7 +1427,18 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
                 );
               }
 
-              const sectionContent = JSON.parse(section.content);
+              let sectionContent;
+              try {
+                sectionContent = typeof section.content === 'string' ? JSON.parse(section.content) : section.content;
+              } catch (error) {
+                console.error('Error parsing section content:', error);
+                // If parsing fails, treat content as plain text
+                sectionContent = [{
+                  question: section.content,
+                  type: 'text'
+                }];
+              }
+
               return (
                 <div key={sectionIndex} className="space-y-4">
                   {section.title && <h2 className="text-xl font-semibold mb-4">{section.title}</h2>}
@@ -1419,7 +1456,6 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
                         </div>
                       ) : (
                         <div className="ml-6 mt-3">
-                          {/* Simplified answer space with just two lines */}
                           <div className="space-y-4">
                             <div className="border-b-2 border-gray-300 h-6"></div>
                             <div className="border-b-2 border-gray-300 h-6"></div>
