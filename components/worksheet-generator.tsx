@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
-import { ChevronLeft, Download, Edit, Store, CheckCircle, Sparkles, ArrowLeft, Check } from "lucide-react"
+import { ChevronLeft, Download, Edit, Store, CheckCircle, Sparkles, ArrowLeft, Check, Loader2 } from "lucide-react"
 import { generatePDF } from "@/lib/utils/pdf"
+import { toast } from "@/components/ui/use-toast"
 
 // BackArrow component for consistent navigation
 const BackArrow = ({
@@ -223,6 +224,7 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
   const [currentGenerationStep, setCurrentGenerationStep] = useState(0)
   const [currentStep, setCurrentStep] = useState("settings")
   const worksheetRef = useRef<HTMLDivElement>(null);
+  const [isLoading, setIsLoading] = useState(false);
 
   const generationSteps = [
     { icon: "🔍", text: "Analyzing your request", completed: false },
@@ -862,11 +864,33 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
   const handleDownloadPDF = async () => {
     if (!worksheetRef.current || !generatedWorksheet) return;
 
-    const fileName = `${generatedWorksheet.title.toLowerCase().replace(/\s+/g, '-')}.pdf`;
-    const success = await generatePDF(worksheetRef.current, fileName);
+    try {
+      setIsLoading(true);
+      const fileName = `${generatedWorksheet.title.toLowerCase().replace(/\s+/g, '-')}.pdf`;
+      const success = await generatePDF(worksheetRef.current, fileName);
 
-    if (!success) {
-      alert('Failed to generate PDF. Please try again.');
+      if (!success) {
+        toast({
+          title: "Error",
+          description: "Failed to generate PDF. Please try again.",
+          variant: "destructive"
+        });
+      } else {
+        toast({
+          title: "Success",
+          description: "PDF downloaded successfully!",
+          variant: "default"
+        });
+      }
+    } catch (error) {
+      console.error('Error in PDF generation:', error);
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -1481,16 +1505,22 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back to Settings
           </Button>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={handleDownloadPDF}>
-              <Download className="w-4 h-4 mr-2" />
-              Download PDF
-            </Button>
-            <Button onClick={handleComplete}>
-              <Check className="w-4 h-4 mr-2" />
-              Use Resource
-            </Button>
-          </div>
+          <Button 
+            onClick={handleDownloadPDF} 
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Generating PDF...
+              </>
+            ) : (
+              <>
+                <Download className="mr-2 h-4 w-4" />
+                Download PDF
+              </>
+            )}
+          </Button>
         </div>
       </div>
     );
