@@ -2,93 +2,101 @@ import OpenAI from 'openai';
 import { createAIClient, validateEnvironment, AIServiceError, getErrorDetails } from './config';
 
 export interface GenerationOptions {
-  temperature?: number;
-  maxTokens?: number;
+  prompt: string | Record<string, any>;
   model?: string;
-  stream?: boolean;
+  maxTokens?: number;
+  temperature?: number;
   timeout?: number;
-  customInstructions?: string;
+  hasCustomInstructions?: boolean;
 }
 
 export interface GenerationResult {
-  content: string;
-  usage?: {
-    promptTokens: number;
-    completionTokens: number;
-    totalTokens: number;
-  };
+  title?: string;
+  instructions?: string;
+  content?: string;
+  problems?: any[];
+  [key: string]: any;
 }
 
 export class BaseAIContentGenerator {
   protected client: OpenAI;
-  protected defaultOptions: GenerationOptions = {
-    temperature: 0.7,
-    maxTokens: 2000,
-    model: 'gpt-3.5-turbo',
-    stream: false,
-    timeout: 30000,
-  };
 
   constructor() {
-    validateEnvironment();
-    this.client = createAIClient({ 
-      apiKey: process.env.OPENAI_API_KEY!,
-      timeout: this.defaultOptions.timeout,
-      maxRetries: 2
+    if (!process.env.OPENAI_API_KEY) {
+      throw new Error('OPENAI_API_KEY is not set in environment variables');
+    }
+
+    this.client = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY,
+      maxRetries: 3,
+      timeout: 60000 // Increased timeout for larger responses
     });
   }
 
-  protected async generateContent(
-    prompt: string,
-    options: GenerationOptions = {}
-  ): Promise<GenerationResult> {
+  protected async generateContent(options: GenerationOptions): Promise<string> {
     try {
-      const mergedOptions = { ...this.defaultOptions, ...options };
+      const mergedOptions = {
+        model: 'gpt-4-turbo-preview',
+        maxTokens: 4000, // Increased for larger content
+        temperature: 0.7,
+        timeout: 60000,
+        hasCustomInstructions: false,
+        ...options
+      };
+
+      const enhancedPrompt = typeof options.prompt === 'string' 
+        ? options.prompt 
+        : JSON.stringify(options.prompt);
+
+      console.log('🔄 Making API request with model:', mergedOptions.model);
       
-      console.log('🤖 Generating content with options:', {
-        model: mergedOptions.model,
-        maxTokens: mergedOptions.maxTokens,
-        temperature: mergedOptions.temperature,
-        timeout: mergedOptions.timeout,
-        hasCustomInstructions: !!mergedOptions.customInstructions
-      });
-
-      // Add custom instructions to the prompt if provided
-      const enhancedPrompt = mergedOptions.customInstructions 
-        ? `${prompt}\n\nCustom Requirements:\n${mergedOptions.customInstructions}`
-        : prompt;
-
       const response = await this.client.chat.completions.create({
-        model: mergedOptions.model!,
-        messages: [{ role: 'user', content: enhancedPrompt }],
+        model: mergedOptions.model,
+        messages: [
+          {
+            role: "system",
+            content: "You are an expert educational content creator. Always return valid JSON responses that exactly match the requested format and number of items. Never return partial or incomplete responses."
+          },
+          {
+            role: "user",
+            content: enhancedPrompt
+          }
+        ],
         temperature: mergedOptions.temperature,
         max_tokens: mergedOptions.maxTokens,
-        stream: mergedOptions.stream,
+        response_format: { type: "json_object" } // Enforce JSON response
       });
 
-      if (mergedOptions.stream) {
-        throw new AIServiceError('Streaming not implemented in base generator');
+      if (!response.choices?.[0]?.message?.content) {
+        throw new Error('No content generated from OpenAI API');
       }
 
-      console.log('✅ Content generated successfully');
-
-      return {
-        content: response.choices[0].message.content || '',
-        usage: {
-          promptTokens: response.usage?.prompt_tokens || 0,
-          completionTokens: response.usage?.completion_tokens || 0,
-          totalTokens: response.usage?.total_tokens || 0,
-        },
-      };
-    } catch (error) {
-      console.error('❌ Error generating content:', error);
+      return response.choices[0].message.content;
+    } catch (error: any) {
+      console.error('Error generating content:', error);
       
-      if (error instanceof AIServiceError) {
-        throw error;
+      // Handle specific OpenAI API errors
+      if (error?.status === 429) {
+        throw new AIServiceError('Rate limit exceeded. Please try again later.', 'rate_limit_error');
+      }
+      
+      if (error?.status === 401) {
+        throw new AIServiceError('Invalid API key. Please check your OpenAI API key.', 'auth_error');
       }
 
-      const errorDetails = getErrorDetails(error);
-      throw new AIServiceError(errorDetails.message, errorDetails.code);
+      if (error?.status === 400) {
+        throw new AIServiceError('Invalid request to OpenAI API. Please check your inputs.', 'invalid_request');
+      }
+
+      // Handle network/connection errors
+      if (error?.code === 'ECONNREFUSED' || error?.code === 'ECONNRESET' || error?.code === 'ETIMEDOUT') {
+        throw new AIServiceError('Connection error. Please check your internet connection.', 'connection_error');
+      }
+
+      // Generic error handling
+      const message = error?.message || 'An unexpected error occurred';
+      const code = error?.code || 'unknown_error';
+      throw new AIServiceError(message, code);
     }
   }
 
@@ -99,7 +107,6 @@ export class BaseAIContentGenerator {
   }
 
   protected async enhancePrompt(prompt: string, context: any = {}): Promise<string> {
-    // Base implementation - can be overridden by subject-specific generators
     return prompt;
   }
 } 

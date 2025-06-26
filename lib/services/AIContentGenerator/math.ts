@@ -41,70 +41,117 @@ Make sure ALL problems involve fractions, not just whole numbers.`,
     percentages: 'Create percentage problems including conversions and applications',
   };
 
-  async generateMathContent(
-    options: MathProblemOptions,
-    genOptions?: GenerationOptions
-  ): Promise<MathGenerationResult> {
-    const prompt = await this.buildMathPrompt(options);
-    await this.validatePrompt(prompt);
-
-    // Pass custom instructions to the base generator
-    const generationOptions: GenerationOptions = {
-      ...genOptions,
-      customInstructions: options.customInstructions,
-      temperature: 0.2, // Lower temperature for more consistent JSON output
-    };
-
-    let attempts = 0;
-    const maxAttempts = 2;
-
-    while (attempts < maxAttempts) {
-      try {
-    const result = await this.generateContent(prompt, generationOptions);
-        const content = result.content.trim();
-
-        // Validate the response
-        if (await this.validateResponse(content)) {
-          const parsedContent = JSON.parse(content);
-      return {
-        ...result,
-        title: parsedContent.title || this.generateDefaultTitle(options),
-        instructions: parsedContent.instructions || this.generateDefaultInstructions(options),
-        problems: parsedContent.problems.map((p: any) => ({
-          question: p.question,
-          answer: p.answer,
-          visual: p.visual,
-          steps: p.steps,
-        })),
-        decorations: this.getThemeDecorations(options),
-      };
-        }
-        
-        // If validation fails, increment attempts and try again
-        attempts++;
-        if (attempts < maxAttempts) {
-          console.log(`Retrying content generation (attempt ${attempts + 1}/${maxAttempts})`);
-          continue;
-        }
-    } catch (error) {
-        console.error('Error in content generation:', error);
-        attempts++;
-        if (attempts < maxAttempts) {
-          console.log(`Retrying after error (attempt ${attempts + 1}/${maxAttempts})`);
-          continue;
-        }
-      }
+  private validateResponse(parsedResult: any, numberOfProblems: number): boolean {
+    if (!parsedResult || typeof parsedResult !== 'object') {
+      console.error('❌ Invalid response format: not an object');
+      return false;
     }
 
-    // If all attempts fail, return default content
-    console.log('Falling back to default content after failed attempts');
+    if (!Array.isArray(parsedResult.problems)) {
+      console.error('❌ Invalid response format: problems is not an array');
+      return false;
+    }
+
+    if (parsedResult.problems.length !== numberOfProblems) {
+      console.error(`❌ Wrong number of problems: got ${parsedResult.problems.length}, expected ${numberOfProblems}`);
+      return false;
+    }
+
+    return true;
+  }
+
+  async generateMathContent(options: MathProblemOptions, retryCount = 0): Promise<GenerationResult> {
+    const MAX_RETRIES = 3;
+    try {
+      const {
+        grade = 5,
+        difficulty = 'medium',
+        topic = 'general',
+        includeSteps = false,
+        includeVisuals = false,
+        numberOfProblems = 10,
+        customInstructions = ''
+      } = options;
+
+      console.log(`🎲 Attempting to generate ${numberOfProblems} math problems (attempt ${retryCount + 1}/${MAX_RETRIES + 1})...`);
+
+      const result = await this.generateContent({
+        prompt: `Generate EXACTLY ${numberOfProblems} math problems for grade ${grade} students.
+
+Topic: ${topic}
+Difficulty: ${difficulty}
+
+CRITICAL: You MUST generate EXACTLY ${numberOfProblems} problems in your response.
+
+Return your response in this JSON format:
+{
+  "title": "Grade ${grade} ${topic} Practice",
+  "instructions": "Clear instructions for students",
+  "problems": [
+    {
+      "question": "The actual problem text",
+      "answer": "The correct answer",
+      ${includeVisuals ? `"visual": "A text description of a visual aid",` : ''}
+      ${includeSteps ? `"steps": ["Step 1", "Step 2", "Step 3"],` : ''}
+      "difficulty": "${difficulty}"
+    }
+  ]
+}
+
+Requirements:
+- Generate EXACTLY ${numberOfProblems} problems
+- Make all problems ${difficulty} difficulty
+- Focus on ${topic} concepts
+${includeVisuals ? '- Include visual aids\n' : ''}
+${includeSteps ? '- Include step-by-step solutions\n' : ''}
+${customInstructions ? `${customInstructions}\n` : ''}`,
+        maxTokens: Math.max(2500, numberOfProblems * 150),
+        temperature: 0.2
+      });
+
+      let parsedResult: GenerationResult;
+      try {
+        parsedResult = JSON.parse(result);
+      } catch (parseError) {
+        console.error('❌ Failed to parse response:', parseError);
+        if (retryCount < MAX_RETRIES) {
+          return this.generateMathContent(options, retryCount + 1);
+        }
+        throw new Error('Failed to parse response');
+      }
+
+      if (!this.validateResponse(parsedResult, numberOfProblems)) {
+        if (retryCount < MAX_RETRIES) {
+          await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
+          return this.generateMathContent(options, retryCount + 1);
+        }
       return {
-      content: '',
-        title: this.generateDefaultTitle(options),
-        instructions: this.generateDefaultInstructions(options),
+          title: `Grade ${options.grade} ${options.topic} Practice`,
+          instructions: 'Solve the following problems. Show your work where necessary.',
+          problems: this.generateDefaultProblems(options),
+          warning: `Could not generate ${numberOfProblems} problems after ${MAX_RETRIES} attempts.`
+        };
+      }
+
+      console.log(`✅ Successfully generated ${numberOfProblems} math problems!`);
+      return parsedResult;
+    } catch (error: any) {
+      console.error('❌ Error:', error);
+      if (retryCount < MAX_RETRIES && (
+        error?.status === 500 || 
+        error?.code === 'connection_error' ||
+        error?.message?.includes('Internal server error')
+      )) {
+        await new Promise(resolve => setTimeout(resolve, Math.pow(2, retryCount) * 1000));
+        return this.generateMathContent(options, retryCount + 1);
+      }
+      return {
+        title: `Grade ${options.grade} ${options.topic} Practice`,
+        instructions: 'Solve the following problems. Show your work where necessary.',
         problems: this.generateDefaultProblems(options),
-        decorations: this.getThemeDecorations(options),
+        error: error?.message || 'Failed to generate content'
       };
+    }
   }
 
   private generateDefaultTitle(options: MathProblemOptions): string {
@@ -120,12 +167,13 @@ Make sure ALL problems involve fractions, not just whole numbers.`,
     }`;
   }
 
-  private generateDefaultProblems(options: MathProblemOptions): MathProblem[] {
-    return [{
-      question: 'Example: 2 + 2 = ?',
-      answer: 4,
-      visual: '⭐⭐ + ⭐⭐ = ____',
-    }];
+  private generateDefaultProblems(options: MathProblemOptions): any[] {
+    const { numberOfProblems = 10, grade = 5, topic = 'general' } = options;
+    return Array(numberOfProblems).fill(null).map((_, index) => ({
+      question: `Problem ${index + 1}: Basic ${topic} problem for grade ${grade}`,
+      answer: 'Please try generating the worksheet again',
+      difficulty: 'medium'
+    }));
   }
 
   private getThemeDecorations(options: MathProblemOptions): string[] {
@@ -196,19 +244,5 @@ ${customInstructions ? `\nAdditional Requirements:\n${customInstructions}` : ''}
 
   protected async enhancePrompt(prompt: string, context: any = {}): Promise<string> {
     return `${prompt}\n\nIMPORTANT: Return ONLY a valid JSON object. Do not include any additional text, comments, or explanations.`;
-  }
-
-  private async validateResponse(content: string): Promise<boolean> {
-    try {
-      const parsed = JSON.parse(content.trim());
-      if (!parsed.title || !parsed.instructions || !Array.isArray(parsed.problems)) {
-        console.error('Invalid response structure:', parsed);
-        return false;
-      }
-      return true;
-    } catch (error) {
-      console.error('Invalid JSON in response:', error);
-      return false;
-    }
   }
 } 

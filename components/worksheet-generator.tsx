@@ -1362,6 +1362,51 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
         </div>
       </div>
 
+      {/* Number of Questions Selection */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-3">
+          Number of Questions
+          <span className="text-xs text-gray-500 ml-2">(How many questions would you like?)</span>
+        </label>
+        <div className="grid grid-cols-4 gap-3">
+          {[5, 10, 15, 20].map((number) => (
+            <button
+              key={number}
+              onClick={() => setSettings((prev) => ({ 
+                ...prev, 
+                problemCount: number,
+                quizQuestionCount: number 
+              }))}
+              className={`p-3 rounded-lg border-2 text-sm font-medium transition-all ${
+                (settings.problemCount === number || settings.quizQuestionCount === number)
+                  ? "border-purple-500 bg-purple-50 text-purple-700"
+                  : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
+              }`}
+            >
+              {number}
+            </button>
+          ))}
+        </div>
+        <div className="mt-3">
+          <input
+            type="number"
+            min="1"
+            max="50"
+            value={settings.resourceType === "worksheet" ? settings.problemCount : settings.quizQuestionCount}
+            onChange={(e) => {
+              const value = Math.min(50, Math.max(1, parseInt(e.target.value) || 1));
+              setSettings((prev) => ({ 
+                ...prev, 
+                problemCount: value,
+                quizQuestionCount: value 
+              }));
+            }}
+            placeholder="Custom number (1-50)"
+            className="w-full p-3 rounded-lg border-2 border-gray-200 text-sm focus:border-purple-500 focus:outline-none"
+          />
+        </div>
+      </div>
+
       {/* Custom Instructions Field */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-3">

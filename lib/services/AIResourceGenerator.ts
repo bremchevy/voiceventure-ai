@@ -368,13 +368,17 @@ ${options.customInstructions ? `Additional requirements:\n${options.customInstru
   }
 
   private async generateMathContent(options: ResourceGenerationOptions) {
+    const numberOfProblems = options.questionCount || options.problemCount || 10;
+    console.log(`📊 Generating ${numberOfProblems} math problems...`);
+    
     return this.mathGenerator.generateMathContent({
       grade: parseInt(options.gradeLevel),
       difficulty: options.difficulty || 'medium',
       topic: options.topicArea,
       includeSteps: options.includeQuestions,
       includeVisuals: options.includeVisuals,
-      numberOfProblems: options.problemCount || 10,
+      numberOfProblems,
+      customInstructions: options.customInstructions
     });
   }
 
@@ -421,6 +425,8 @@ ${options.customInstructions ? `Additional requirements:\n${options.customInstru
       const enhancedPrompt = `
 Generate a ${options.difficulty} ${options.subject} ${options.resourceType} for ${options.gradeLevel} about ${options.topicArea}.
 
+Number of Questions: ${options.questionCount || options.problemCount || 10}
+
 Grade-Level Context:
 ${gradeContext}
 
@@ -435,6 +441,7 @@ Please generate content that is:
 2. Aligned with ${options.gradeLevel} learning standards
 3. Using ${options.visualComplexity} visual elements as appropriate
 4. Formatted in clear, structured JSON
+5. IMPORTANT: Generate EXACTLY ${options.questionCount || options.problemCount || 10} questions/problems, no more and no less
 
 The content should include:
 - A clear title
