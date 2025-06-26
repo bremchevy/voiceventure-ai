@@ -149,115 +149,149 @@ ${options.customInstructions ? `Additional requirements:\n${options.customInstru
   }
 
   private formatContentForTemplate(content: any, options: ResourceGenerationOptions): GeneratedResource {
-    // Default decorations based on subject
-    const subjectDecorations: Record<string, string[]> = {
-      math: ['🔢', '✏️', '📐', '➗'],
-      science: ['🔬', '🧪', '🌍', '⚡'],
-      reading: ['📚', '✍️', '📝', '📖']
-    };
-
-    // Handle exit slips
-    if (options.resourceType.toLowerCase() === 'exit_slip' && content.questions) {
-      const formattedContent: GeneratedResource = {
-        title: content.title || `${options.subject} ${options.resourceType === 'exit_slip' ? 'Exit Slip' : 'Bell Ringer'}`,
-        content: content.instructions || 'Answer each question thoughtfully. Your responses help us understand your learning.',
-        sections: [{
-          type: 'questions',
-          title: 'Questions',
-          content: JSON.stringify(content.questions.map((q: any) => ({
-            question: q.question,
-            type: q.type,
-            options: q.options,
-            visual: q.visual || null,
-            explanation: q.explanation || null
-          })))
-        }],
-        metadata: {
-          gradeLevel: options.gradeLevel,
-          subject: options.subject,
-          resourceType: options.resourceType.toLowerCase() as ResourceType,
-          generatedAt: new Date().toISOString(),
-          theme: options.theme,
-          difficulty: options.difficulty
-        },
-        decorations: content.decorations || subjectDecorations[options.subject.toLowerCase()] || ['📝', '✨', '🎯', '🌟']
-      };
-      return formattedContent;
-    }
-
-    // Handle reading content with passages
-    if (options.subject.toLowerCase() === 'reading' && content.passage) {
-      const formattedContent: GeneratedResource = {
-        title: content.title || `${options.subject} ${options.resourceType}`,
-        content: content.instructions || this.generateDefaultInstructions(options),
-        sections: [
-          {
+    try {
+      const parsedContent = typeof content === 'string' ? JSON.parse(content) : content;
+      const subject = this.normalizeSubject(options.subject);
+      
+      // Handle reading content differently
+      if (subject === 'reading') {
+        const sections = [];
+        
+        // Add passage section if it exists
+        if (parsedContent.passage) {
+          sections.push({
             type: 'passage',
-            title: content.passage.title || 'Reading Passage',
-            content: content.passage.text
-          },
-          {
-            type: 'problems',
-            title: 'Questions',
-            content: JSON.stringify(content.questions || [])
-          }
-        ],
-        metadata: {
-          gradeLevel: options.gradeLevel,
-          subject: options.subject,
-          resourceType: options.resourceType.toLowerCase() as ResourceType,
-          generatedAt: new Date().toISOString(),
-          theme: options.theme,
-          difficulty: options.difficulty
-        },
-        decorations: content.decorations || subjectDecorations[options.subject.toLowerCase()] || ['📝', '✨', '🎯', '🌟']
-      };
+            title: 'Reading Passage',
+            content: parsedContent.passage
+          });
+        }
 
-      // Add vocabulary section if present
-      if (content.passage.vocabulary && content.passage.vocabulary.length > 0) {
-        formattedContent.sections.push({
-          type: 'vocabulary',
-          title: 'Vocabulary',
-          content: JSON.stringify(content.passage.vocabulary)
-        });
+        // Add vocabulary section if it exists
+        if (parsedContent.vocabulary && parsedContent.vocabulary.length > 0) {
+          sections.push({
+            type: 'vocabulary',
+            title: 'Vocabulary',
+            content: JSON.stringify(parsedContent.vocabulary)
+          });
+        }
+
+        // Add questions section
+        if (parsedContent.questions && parsedContent.questions.length > 0) {
+          sections.push({
+            type: 'questions',
+            title: 'Questions',
+            content: JSON.stringify(parsedContent.questions)
+          });
+        }
+
+        return {
+          title: parsedContent.title || `${options.gradeLevel} Reading Worksheet`,
+          content: '', // Remove the duplicate passage content
+          sections,
+          metadata: {
+            gradeLevel: options.gradeLevel,
+            subject: options.subject,
+            resourceType: options.resourceType,
+            generatedAt: new Date().toISOString(),
+            theme: options.theme,
+            difficulty: options.difficulty
+          }
+        };
       }
 
-      return formattedContent;
-    }
-
-    // Handle rubrics
-    if (options.resourceType.toLowerCase() === 'rubric' && content.criteria) {
-      const formattedContent: GeneratedResource = {
-        title: content.title || `${options.subject} Evaluation Rubric`,
-        content: content.introduction || this.generateDefaultInstructions(options),
-        metadata: {
-          gradeLevel: options.gradeLevel,
-          subject: options.subject,
-          resourceType: 'rubric',
-          generatedAt: new Date().toISOString(),
-          theme: options.theme,
-          difficulty: options.difficulty
-        },
-        sections: [{
-          type: 'rubric',
-          title: 'Evaluation Criteria',
-          content: JSON.stringify(content.criteria)
-        }],
-        decorations: content.decorations || subjectDecorations[options.subject.toLowerCase()] || ['📝', '✨', '🎯', '🌟']
+      // Default decorations based on subject
+      const subjectDecorations: Record<string, string[]> = {
+        math: ['🔢', '✏️', '📐', '➗'],
+        science: ['🔬', '🧪', '🌍', '⚡'],
+        reading: ['📚', '✍️', '📝', '📖']
       };
-      return formattedContent;
-    }
 
-    // Handle structured content (like quizzes with sections)
-    if (content.sections) {
+      // Handle exit slips
+      if (options.resourceType.toLowerCase() === 'exit_slip' && parsedContent.questions) {
+        const formattedContent: GeneratedResource = {
+          title: parsedContent.title || `${options.subject} ${options.resourceType === 'exit_slip' ? 'Exit Slip' : 'Bell Ringer'}`,
+          content: parsedContent.instructions || 'Answer each question thoughtfully. Your responses help us understand your learning.',
+          sections: [{
+            type: 'questions',
+            title: 'Questions',
+            content: JSON.stringify(parsedContent.questions.map((q: any) => ({
+              question: q.question,
+              type: q.type,
+              options: q.options,
+              visual: q.visual || null,
+              explanation: q.explanation || null
+            })))
+          }],
+          metadata: {
+            gradeLevel: options.gradeLevel,
+            subject: options.subject,
+            resourceType: options.resourceType.toLowerCase() as ResourceType,
+            generatedAt: new Date().toISOString(),
+            theme: options.theme,
+            difficulty: options.difficulty
+          },
+          decorations: parsedContent.decorations || subjectDecorations[options.subject.toLowerCase()] || ['📝', '✨', '🎯', '🌟']
+        };
+        return formattedContent;
+      }
+
+      // Handle rubrics
+      if (options.resourceType.toLowerCase() === 'rubric' && parsedContent.criteria) {
+        const formattedContent: GeneratedResource = {
+          title: parsedContent.title || `${options.subject} Evaluation Rubric`,
+          content: parsedContent.introduction || this.generateDefaultInstructions(options),
+          metadata: {
+            gradeLevel: options.gradeLevel,
+            subject: options.subject,
+            resourceType: 'rubric',
+            generatedAt: new Date().toISOString(),
+            theme: options.theme,
+            difficulty: options.difficulty
+          },
+          sections: [{
+            type: 'rubric',
+            title: 'Evaluation Criteria',
+            content: JSON.stringify(parsedContent.criteria)
+          }],
+          decorations: parsedContent.decorations || subjectDecorations[options.subject.toLowerCase()] || ['📝', '✨', '🎯', '🌟']
+        };
+        return formattedContent;
+      }
+
+      // Handle structured content (like quizzes with sections)
+      if (parsedContent.sections) {
+        const formattedContent: GeneratedResource = {
+          title: parsedContent.title || `${options.subject} ${options.resourceType}`,
+          content: parsedContent.instructions || this.generateDefaultInstructions(options),
+          sections: parsedContent.sections.map((section: any) => ({
+            type: 'section',
+            title: section.title,
+            content: JSON.stringify(section.problems)
+          })),
+          metadata: {
+            gradeLevel: options.gradeLevel,
+            subject: options.subject,
+            resourceType: options.resourceType.toLowerCase() as ResourceType,
+            generatedAt: new Date().toISOString(),
+            theme: options.theme,
+            difficulty: options.difficulty
+          },
+          decorations: parsedContent.decorations || subjectDecorations[options.subject.toLowerCase()] || ['📝', '✨', '🎯', '🌟']
+        };
+        return formattedContent;
+      }
+
+      // Convert questions/experiments to problems format for non-sectioned content
+      const problems = this.convertToProblems(parsedContent, options.subject);
+
       const formattedContent: GeneratedResource = {
-        title: content.title || `${options.subject} ${options.resourceType}`,
-        content: content.instructions || this.generateDefaultInstructions(options),
-        sections: content.sections.map((section: any) => ({
-          type: 'section',
-          title: section.title,
-          content: JSON.stringify(section.problems)
-        })),
+        title: parsedContent.title || `${options.subject} ${options.resourceType}`,
+        content: parsedContent.instructions || this.generateDefaultInstructions(options),
+        sections: [{
+          type: 'problems',
+          title: 'Problems',
+          content: JSON.stringify(problems)
+        }],
         metadata: {
           gradeLevel: options.gradeLevel,
           subject: options.subject,
@@ -266,33 +300,13 @@ ${options.customInstructions ? `Additional requirements:\n${options.customInstru
           theme: options.theme,
           difficulty: options.difficulty
         },
-        decorations: content.decorations || subjectDecorations[options.subject.toLowerCase()] || ['📝', '✨', '🎯', '🌟']
+        decorations: parsedContent.decorations || subjectDecorations[options.subject.toLowerCase()] || ['📝', '✨', '🎯', '🌟']
       };
       return formattedContent;
+    } catch (error) {
+      console.error('Error formatting content:', error);
+      throw error;
     }
-
-    // Convert questions/experiments to problems format for non-sectioned content
-    const problems = this.convertToProblems(content, options.subject);
-
-    const formattedContent: GeneratedResource = {
-      title: content.title || `${options.subject} ${options.resourceType}`,
-      content: content.instructions || this.generateDefaultInstructions(options),
-      sections: [{
-        type: 'problems',
-        title: 'Problems',
-        content: JSON.stringify(problems)
-      }],
-      metadata: {
-        gradeLevel: options.gradeLevel,
-        subject: options.subject,
-        resourceType: options.resourceType.toLowerCase() as ResourceType,
-        generatedAt: new Date().toISOString(),
-        theme: options.theme,
-        difficulty: options.difficulty
-      },
-      decorations: content.decorations || subjectDecorations[options.subject.toLowerCase()] || ['📝', '✨', '🎯', '🌟']
-    };
-    return formattedContent;
   }
 
   private convertToProblems(content: any, subject: string) {
@@ -383,18 +397,20 @@ ${options.customInstructions ? `Additional requirements:\n${options.customInstru
   }
 
   private async generateReadingContent(options: ResourceGenerationOptions) {
+    const numberOfQuestions = options.questionCount || 10;
+    console.log(`📚 Generating ${numberOfQuestions} reading questions...`);
+
     const readingOptions: ReadingContentOptions = {
       grade: parseInt(options.gradeLevel) || 5,
-      genre: options.genre as 'fiction' | 'non-fiction' | 'poetry' | 'biography',
-      difficulty: options.difficulty as 'beginner' | 'intermediate' | 'advanced',
+      difficulty: options.difficulty as 'basic' | 'intermediate' | 'advanced',
       topic: options.topicArea,
-      includeVocabulary: options.includeVocabulary,
+      includeVocabulary: options.includeVocabulary || true,
       includeComprehension: true,
-      includeAnalysis: true,
-      wordCount: options.wordCount,
-      focus: options.focus as Array<'main_idea' | 'characters' | 'plot' | 'theme' | 'vocabulary' | 'inference'>,
+      numberOfQuestions,
       customInstructions: options.customInstructions,
-      numberOfQuestions: options.questionCount || 3
+      readingLevel: options.gradeLevel,
+      genre: options.genre,
+      focus: options.focus as string[]
     };
 
     return await this.readingGenerator.generateReadingContent(readingOptions);

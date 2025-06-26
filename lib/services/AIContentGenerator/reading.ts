@@ -2,256 +2,280 @@ import { BaseAIContentGenerator, GenerationOptions, GenerationResult } from './b
 
 export interface ReadingContentOptions {
   grade?: number;
-  genre?: 'fiction' | 'non-fiction' | 'poetry' | 'biography';
-  difficulty?: 'beginner' | 'intermediate' | 'advanced';
+  difficulty?: 'basic' | 'intermediate' | 'advanced';
   topic?: string;
   includeVocabulary?: boolean;
   includeComprehension?: boolean;
-  includeAnalysis?: boolean;
-  wordCount?: number;
-  focus?: Array<'main_idea' | 'characters' | 'plot' | 'theme' | 'vocabulary' | 'inference'>;
-  customInstructions?: string;
   numberOfQuestions?: number;
+  customInstructions?: string;
+  readingLevel?: string;
+  genre?: string;
+  focus?: string[];
 }
 
-export interface ReadingQuestion {
-  type: 'vocabulary' | 'comprehension' | 'analysis' | 'main_idea' | 'inference';
+interface ReadingQuestion {
   question: string;
-  answer: string;
+  answer?: string;
   explanation?: string;
+  type: 'multiple_choice' | 'short_answer' | 'true_false';
   options?: string[];
-  textEvidence?: string;
-  vocabularyContext?: string;
-  literaryDevice?: string;
 }
 
-export interface ReadingPassage {
+interface ReadingGenerationResult extends GenerationResult {
   title: string;
-  author?: string;
-  genre: string;
-  text: string;
-  wordCount: number;
-  readingLevel: string;
-  themes?: string[];
-  vocabulary?: Array<{ word: string; definition: string; context: string }>;
-}
-
-export interface ReadingGenerationResult extends GenerationResult {
-  title: string;
-  instructions: string;
-  passage: ReadingPassage;
+  passage: string;
   questions: ReadingQuestion[];
-  literaryElements?: Array<{ element: string; explanation: string }>;
-  discussionPrompts?: string[];
-  extendedActivities?: string[];
+  vocabulary?: Array<{ word: string; definition: string; context?: string }>;
+  learningObjectives: string[];
 }
 
 export class ReadingContentGenerator extends BaseAIContentGenerator {
-  private readonly genrePrompts: Record<string, string> = {
-    fiction: 'Create an engaging fictional story with character development and plot',
-    'non-fiction': 'Generate an informative non-fiction text about a relevant topic',
-    poetry: 'Compose age-appropriate poetry with literary devices',
-    biography: 'Write a biographical text about a significant historical figure',
+  private readonly MAX_QUESTIONS = 20; // Maximum number of questions allowed
+
+  private readonly topicPrompts: Record<string, string> = {
+    'character traits': 'Create content focusing on character analysis, personality traits, and character development',
+    'main idea': 'Generate content about identifying main ideas and supporting details',
+    'comprehension': 'Create reading comprehension exercises with questions about the text',
+    'vocabulary': 'Focus on vocabulary development and word meaning in context',
+    'story elements': 'Explore plot, setting, characters, and other story elements',
   };
 
-  private readonly focusPrompts: Record<string, string> = {
-    main_idea: 'Identify and analyze the main idea and supporting details',
-    characters: 'Analyze character development, motivations, and relationships',
-    plot: 'Examine plot structure, conflict, and resolution',
-    theme: 'Identify and analyze themes and their development',
-    vocabulary: 'Focus on vocabulary in context and word meaning',
-    inference: 'Make inferences and draw conclusions from the text',
-  };
-
-  async generateReadingContent(
-    options: ReadingContentOptions,
-    genOptions?: GenerationOptions
-  ): Promise<ReadingGenerationResult> {
-    const prompt = await this.buildReadingPrompt(options);
-    await this.validatePrompt(prompt);
-
-    // Pass custom instructions to the base generator
-    const generationOptions: GenerationOptions = {
-      ...genOptions,
-      customInstructions: options.customInstructions,
-    };
-
-    const result = await this.generateContent(prompt, generationOptions);
-
-    try {
-      const parsedContent = JSON.parse(result.content);
-      return {
-        ...result,
-        title: parsedContent.title || this.generateDefaultTitle(options),
-        instructions: parsedContent.instructions || this.generateDefaultInstructions(options),
-        passage: parsedContent.passage || this.generateDefaultPassage(options),
-        questions: parsedContent.questions.map(this.formatQuestion),
-        literaryElements: parsedContent.literaryElements || [],
-        discussionPrompts: parsedContent.discussionPrompts || [],
-        extendedActivities: parsedContent.extendedActivities || [],
-      };
-    } catch (error) {
-      console.error('Error parsing AI response:', error);
-      return {
-        ...result,
-        title: this.generateDefaultTitle(options),
-        instructions: this.generateDefaultInstructions(options),
-        passage: this.generateDefaultPassage(options),
-        questions: this.generateDefaultQuestions(options),
-        literaryElements: [],
-        discussionPrompts: [],
-        extendedActivities: [],
-      };
+  private validateResponse(parsedResult: any, numberOfQuestions: number): boolean {
+    if (!parsedResult || typeof parsedResult !== 'object') {
+      console.error('❌ Invalid response format: not an object');
+      return false;
     }
-  }
 
-  private formatQuestion(q: any): ReadingQuestion {
-    return {
-      type: q.type,
-      question: q.question,
-      answer: q.answer,
-      explanation: q.explanation,
-      options: q.options,
-      textEvidence: q.textEvidence,
-      vocabularyContext: q.vocabularyContext,
-      literaryDevice: q.literaryDevice,
-    };
-  }
+    if (!Array.isArray(parsedResult.questions)) {
+      console.error('❌ Invalid response format: questions is not an array');
+      return false;
+    }
 
-  private generateDefaultTitle(options: ReadingContentOptions): string {
-    const grade = options.grade || 5;
-    const genre = options.genre || 'Reading';
-    const difficulty = options.difficulty || 'intermediate';
-    return `Grade ${grade} ${genre} Comprehension (${difficulty} level)`;
-  }
+    if (parsedResult.questions.length !== numberOfQuestions) {
+      console.error(`❌ Wrong number of questions: got ${parsedResult.questions.length}, expected ${numberOfQuestions}`);
+      return false;
+    }
 
-  private generateDefaultInstructions(options: ReadingContentOptions): string {
-    return `Read the following ${options.genre || ''} passage carefully. Answer the questions using evidence from the text.${
-      options.includeVocabulary ? ' Pay attention to vocabulary words in context.' : ''
-    }`;
-  }
-
-  private generateDefaultPassage(options: ReadingContentOptions): ReadingPassage {
-    return {
-      title: 'Sample Reading Passage',
-      genre: options.genre || 'fiction',
-      text: 'This is a sample reading passage. Please generate actual content.',
-      wordCount: options.wordCount || 250,
-      readingLevel: options.difficulty || 'intermediate',
-      themes: ['Sample Theme'],
-      vocabulary: [
-        {
-          word: 'sample',
-          definition: 'An example used to represent something',
-          context: 'This is a sample passage.',
-        },
-      ],
-    };
-  }
-
-  private generateDefaultQuestions(options: ReadingContentOptions): ReadingQuestion[] {
-    return [{
-      type: 'main_idea',
-      question: 'What is the main idea of the passage?',
-      answer: 'The main idea would be determined from the actual passage.',
-      explanation: 'The main idea is typically supported by key details throughout the text.',
-    }];
+    return true;
   }
 
   private async buildReadingPrompt(options: ReadingContentOptions): Promise<string> {
     const {
       grade = 5,
-      genre = 'fiction',
       difficulty = 'intermediate',
       topic,
       includeVocabulary = true,
       includeComprehension = true,
-      includeAnalysis = true,
-      wordCount = 300,
-      focus = ['main_idea', 'vocabulary'],
-      customInstructions,
-      numberOfQuestions = 3
+      numberOfQuestions = 10,
+      customInstructions = '',
+      readingLevel,
+      genre,
+      focus = []
     } = options;
 
-    // Special handling for character traits focus
-    const isCharacterTraitsFocus = customInstructions?.toLowerCase().includes('character trait') || 
-                                 focus.includes('characters');
+    const gradeSpecificPrompt = grade <= 2 ? `
+- Use very simple sentences
+- Limit each paragraph to 3-4 sentences
+- Use familiar situations and characters
+- Repeat important words and concepts
+- Include clear cause-and-effect relationships` : '';
 
-    let prompt = `Generate a ${difficulty}-level ${genre} reading comprehension worksheet with the following specifications:
+    return `
+Generate a grade-appropriate reading passage with comprehension questions.
 
-1. Create a ${wordCount}-word passage for grade ${grade} students${topic ? ` about ${topic}` : ''}
-2. ${isCharacterTraitsFocus ? `The passage should focus on character development and clearly demonstrate various character traits through actions, dialogue, and descriptions.
-   Include characters that show distinct personality traits that students can identify and analyze.
-   Generate EXACTLY ${numberOfQuestions} questions that focus on character analysis, including:
-   - Questions about identifying specific character traits
-   - Questions about how characters demonstrate these traits through actions
-   - Questions about how characters change or react to situations` : ''}
-3. Return the response in the following JSON format:
+PASSAGE REQUIREMENTS:
+1. Write a SHORT story (2-3 paragraphs) about a character showing specific traits through their actions
+2. The story must be appropriate for ${readingLevel || `grade ${grade}`} students
+3. Focus on the topic: ${topic}
+4. Difficulty level: ${difficulty}
+5. Include clear examples of character traits in action${gradeSpecificPrompt}
+
+RESPONSE FORMAT:
 {
-  "title": "An engaging title for the worksheet",
-  "instructions": "Clear instructions for students",
-  "passage": {
-    "title": "Title of the reading",
-    "author": "Author name if applicable",
-    "genre": "${genre}",
-    "text": "The full passage text",
-    "wordCount": ${wordCount},
-    "readingLevel": "${difficulty}",
-    "themes": ["Theme 1", "Theme 2"],
-    "vocabulary": [
-      {
-        "word": "Vocabulary word",
-        "definition": "Word definition",
-        "context": "How the word is used in the passage"
-      }
-    ]
-  },
+  "title": "A clear, engaging title",
+  "passage": "The story showing character traits",
   "questions": [
     {
-      "type": "vocabulary/comprehension/analysis/main_idea/inference",
-      "question": "The question text",
-      "answer": "The correct answer",
-      "explanation": "Why this is correct",
-      "options": ["A", "B", "C", "D"] (for multiple choice),
-      "textEvidence": "Relevant quote from the passage",
-      "vocabularyContext": "Context for vocabulary questions",
-      "literaryDevice": "Relevant literary device if applicable"
+      "question": "Question about character traits",
+      "type": "multiple_choice",
+      "options": ["A) ...", "B) ...", "C) ...", "D) ..."],
+      "answer": "Correct letter (A, B, C, or D)",
+      "explanation": "Why this shows understanding of character traits"
     }
   ],
-  "literaryElements": [
+  "vocabulary": [
     {
-      "element": "Literary element name",
-      "explanation": "How it's used in the passage"
+      "word": "A character trait word from the story",
+      "definition": "Simple definition",
+      "context": "How it was used in the story"
     }
-  ],
-  "discussionPrompts": ["Prompt 1", "Prompt 2"],
-  "extendedActivities": ["Activity 1", "Activity 2"]
+  ]
 }
 
-Requirements:
-- Make content engaging and grade-appropriate for ${grade}th grade
-- Use clear, age-appropriate language
-- Include varied question types
-${isCharacterTraitsFocus ? `- Focus questions on identifying and analyzing character traits
-- Include questions about character actions, feelings, and motivations
-- Ask students to provide text evidence supporting character traits
-- Include questions about how characters change or react to situations` : ''}
-${includeVocabulary ? '- Include vocabulary in context' : ''}
-${includeComprehension ? '- Include text-based comprehension questions' : ''}
-${includeAnalysis ? '- Include analysis and critical thinking questions' : ''}
+REQUIREMENTS:
+- Generate EXACTLY ${numberOfQuestions} questions
+- Questions should focus on identifying and understanding character traits
+- Include 3-5 character trait vocabulary words
+- Make all content age-appropriate
+${customInstructions ? `\nAdditional Instructions:\n${customInstructions}` : ''}
+`;
+  }
 
-Focus areas:
-${focus.map(f => this.focusPrompts[f] || `Focus on ${f}`).join('\n')}
+  async generateReadingContent(
+    options: ReadingContentOptions,
+    retryCount = 0
+  ): Promise<ReadingGenerationResult> {
+    const MAX_RETRIES = 3;
+    try {
+      const prompt = await this.buildReadingPrompt(options);
+      
+      console.log(`📚 Attempting to generate reading content (attempt ${retryCount + 1}/${MAX_RETRIES + 1})...`);
 
-Genre-specific guidelines:
-${this.genrePrompts[genre] || 'Create grade-appropriate reading content'}
+      const result = await this.generateContent({
+        prompt,
+        temperature: 0.7,
+        maxTokens: 2000
+      });
 
-${customInstructions ? `Additional requirements:\n${customInstructions}` : ''}`;
+      let parsedResult: any;
+      try {
+        parsedResult = JSON.parse(result);
+      } catch (parseError) {
+        console.error('❌ Failed to parse response:', parseError);
+        if (retryCount < MAX_RETRIES) {
+          return this.generateReadingContent(options, retryCount + 1);
+        }
+        throw new Error('Failed to parse reading content response');
+      }
 
-    return prompt;
+      // Validate the response
+      if (!this.validateResponse(parsedResult, options.numberOfQuestions || 10)) {
+        if (retryCount < MAX_RETRIES) {
+          console.log('🔄 Response validation failed, retrying...');
+          return this.generateReadingContent(options, retryCount + 1);
+        }
+        return this.generateDefaultContent(options);
+      }
+
+      console.log('✅ Successfully generated reading content!');
+      return parsedResult;
+    } catch (error) {
+      console.error('❌ Error generating reading content:', error);
+      if (retryCount < MAX_RETRIES) {
+        const delay = Math.pow(2, retryCount) * 1000;
+        await new Promise(resolve => setTimeout(resolve, delay));
+        return this.generateReadingContent(options, retryCount + 1);
+      }
+      return this.generateDefaultContent(options);
+    }
+  }
+
+  private validateResponse(response: any, options: ReadingContentOptions): boolean {
+    if (!response.title || !response.passage || !response.questions) {
+      console.error('❌ Missing required fields in response');
+      return false;
+    }
+
+    const expectedQuestions = options.numberOfQuestions || 10;
+    if (!Array.isArray(response.questions) || response.questions.length !== expectedQuestions) {
+      console.error(`❌ Expected ${expectedQuestions} questions but got ${response.questions?.length || 0}`);
+      return false;
+    }
+
+    // Validate each question has required fields
+    const validQuestions = response.questions.every((q: any) => 
+      q.question && 
+      q.type && 
+      q.answer && 
+      (q.type !== 'multiple_choice' || (Array.isArray(q.options) && q.options.length >= 2))
+    );
+
+    if (!validQuestions) {
+      console.error('❌ Invalid question format in response');
+      return false;
+    }
+
+    // Validate passage is not empty
+    if (!response.passage.trim()) {
+      console.error('❌ Empty passage');
+      return false;
+    }
+
+    // Validate vocabulary if included
+    if (response.vocabulary && (!Array.isArray(response.vocabulary) || !response.vocabulary.every((v: any) => 
+      v.word && v.definition && v.context
+    ))) {
+      console.error('❌ Invalid vocabulary format');
+      return false;
+    }
+
+    return true;
+  }
+
+  private generateDefaultContent(options: ReadingContentOptions): ReadingGenerationResult {
+    const { numberOfQuestions = 10, topic = 'general reading', readingLevel = 'grade 5' } = options;
+    
+    return {
+      title: `${readingLevel} Reading Comprehension: ${topic}`,
+      passage: `This is a default reading passage about ${topic}. The actual content generation failed, but this placeholder ensures the worksheet can still be created. Please try generating again or modify your requirements if the issue persists.`,
+      questions: Array(numberOfQuestions).fill(null).map((_, i) => ({
+        question: `Question ${i + 1}: What did you learn from the passage about ${topic}?`,
+        type: 'short_answer',
+        answer: 'Answer will vary based on student response.',
+        explanation: 'Look for evidence from the text to support the answer.'
+      })),
+      vocabulary: [
+        {
+          word: 'comprehension',
+          definition: 'The ability to understand something.',
+          context: 'Used in reading comprehension exercises.'
+        }
+      ]
+    };
+  }
+
+  private formatQuestion(question: any): ReadingQuestion {
+    return {
+      question: question.question,
+      type: question.type || 'multiple_choice',
+      options: question.options || [],
+      answer: question.answer,
+      explanation: question.explanation
+    };
+  }
+
+  private generateDefaultTitle(options: ReadingContentOptions): string {
+    const grade = options.grade || 5;
+    const topic = options.topic ? `: ${options.topic}` : '';
+    const difficulty = options.difficulty || 'intermediate';
+    return `Grade ${grade} Reading Worksheet${topic} (${difficulty} level)`;
+  }
+
+  private generateDefaultPassage(options: ReadingContentOptions): string {
+    return `This is a sample reading passage for grade ${options.grade || 5} students. 
+    It focuses on ${options.topic || 'reading comprehension'} skills.`;
+  }
+
+  private generateDefaultObjectives(options: ReadingContentOptions): string[] {
+    return [
+      'Improve reading comprehension skills',
+      'Develop vocabulary understanding',
+      'Practice critical thinking'
+    ];
+  }
+
+  private generateDefaultQuestions(options: ReadingContentOptions): ReadingQuestion[] {
+    const count = options.numberOfQuestions || 5;
+    return Array(count).fill(null).map((_, index) => ({
+      question: `Reading comprehension question ${index + 1}`,
+      type: 'multiple_choice',
+      options: ['Option A', 'Option B', 'Option C', 'Option D'],
+      answer: 'Option A',
+      explanation: 'This is a sample explanation.'
+    }));
   }
 
   protected async enhancePrompt(prompt: string, context: any = {}): Promise<string> {
-    return `${prompt}\n\nEnsure content is engaging, age-appropriate, and promotes critical thinking. Return ONLY valid JSON.`;
+    return `${prompt}\n\nEnsure all content is grade-appropriate and engaging. Return ONLY valid JSON.`;
   }
 } 
