@@ -37,16 +37,21 @@ export class BaseAIContentGenerator {
     try {
       const mergedOptions = {
         model: 'gpt-3.5-turbo',
-        maxTokens: 2000, // Adjusted for GPT-3.5 Turbo's typical response length
+        maxTokens: 2000,
         temperature: 0.7,
         timeout: 60000,
         hasCustomInstructions: false,
         ...options
       };
 
+      // Ensure we have a valid string prompt
       const enhancedPrompt = typeof options.prompt === 'string' 
         ? options.prompt 
-        : JSON.stringify(options.prompt);
+        : JSON.stringify(options.prompt, null, 2);
+
+      if (!enhancedPrompt) {
+        throw new AIServiceError('Prompt cannot be empty', 'invalid_request');
+      }
 
       console.log('🔄 Making API request with model:', mergedOptions.model);
       
@@ -64,14 +69,15 @@ export class BaseAIContentGenerator {
         ],
         temperature: mergedOptions.temperature,
         max_tokens: mergedOptions.maxTokens,
-        response_format: { type: "json_object" } // Enforce JSON response
+        response_format: { type: "json_object" }
       });
 
-      if (!response.choices?.[0]?.message?.content) {
+      const generatedContent = response.choices?.[0]?.message?.content;
+      if (!generatedContent) {
         throw new Error('No content generated from OpenAI API');
       }
 
-      return response.choices[0].message.content;
+      return generatedContent;
     } catch (error: any) {
       console.error('Error generating content:', error);
       

@@ -401,6 +401,9 @@ ${options.customInstructions ? `Additional requirements:\n${options.customInstru
   }
 
   private async generateScienceContent(options: ResourceGenerationOptions) {
+    const numberOfQuestions = options.questionCount || 10;
+    console.log(`🔬 Generating ${numberOfQuestions} science questions...`);
+
     const scienceOptions: ScienceContentOptions = {
       grade: parseInt(options.gradeLevel) || 5,
       subject: options.topicArea as 'biology' | 'chemistry' | 'physics' | 'earth_science' | 'environmental',
@@ -409,7 +412,7 @@ ${options.customInstructions ? `Additional requirements:\n${options.customInstru
       includeExperiments: options.includeExperiments || false,
       includeDiagrams: options.includeDiagrams || false,
       includeQuestions: true,
-      numberOfQuestions: 5,
+      numberOfQuestions,
       customInstructions: options.customInstructions
     };
 

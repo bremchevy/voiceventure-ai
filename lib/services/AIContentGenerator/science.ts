@@ -30,6 +30,7 @@ interface ScienceGenerationResult extends GenerationResult {
 }
 
 export class ScienceContentGenerator extends BaseAIContentGenerator {
+  private readonly MAX_QUESTIONS = 20; // Maximum number of questions allowed
   private readonly subjectPrompts: Record<string, string> = {
     biology: 'Create content about living organisms, systems, and processes',
     chemistry: 'Generate content about matter, substances, and chemical reactions',
@@ -62,7 +63,15 @@ export class ScienceContentGenerator extends BaseAIContentGenerator {
       customInstructions = ''
     } = options;
 
+    // Enforce maximum question limit
+    const limitedQuestions = Math.min(numberOfQuestions, this.MAX_QUESTIONS);
+    if (limitedQuestions !== numberOfQuestions) {
+      console.log(`⚠️ Requested ${numberOfQuestions} questions exceeds maximum of ${this.MAX_QUESTIONS}. Limiting to ${this.MAX_QUESTIONS} questions.`);
+    }
+
     const prompt = `Generate a science ${topic ? `worksheet about ${topic}` : 'worksheet'} for grade ${grade} students.
+
+CRITICAL: You MUST generate EXACTLY ${limitedQuestions} questions in your response.
 
 Please provide the response in the following JSON format:
 {
@@ -88,11 +97,11 @@ Please provide the response in the following JSON format:
 }
 
 Requirements:
+- Generate EXACTLY ${limitedQuestions} questions
 - Make it ${difficulty} difficulty for grade ${grade}
 - Focus on ${subject} concepts
 ${includeExperiments ? '- Include hands-on experiments\n' : ''}
 ${includeDiagrams ? '- Include diagrams or visual aids\n' : ''}
-${includeQuestions ? `- Include ${numberOfQuestions} questions\n` : ''}
 ${customInstructions ? `Additional requirements:\n${customInstructions}` : ''}
 
 Ensure all content is scientifically accurate and grade-appropriate.`;
@@ -100,46 +109,105 @@ Ensure all content is scientifically accurate and grade-appropriate.`;
     return prompt;
   }
 
+  private validateResponse(parsedResult: any, numberOfQuestions: number): boolean {
+    if (!parsedResult || typeof parsedResult !== 'object') {
+      console.error('❌ Invalid response format: not an object');
+      return false;
+    }
+
+    if (!Array.isArray(parsedResult.questions)) {
+      console.error('❌ Invalid response format: questions is not an array');
+      return false;
+    }
+
+    if (parsedResult.questions.length !== numberOfQuestions) {
+      console.error(`❌ Wrong number of questions: got ${parsedResult.questions.length}, expected ${numberOfQuestions}`);
+      return false;
+    }
+
+    return true;
+  }
+
   async generateScienceContent(
     options: ScienceContentOptions,
-    genOptions?: GenerationOptions
+    retryCount = 0
   ): Promise<ScienceGenerationResult> {
-    const prompt = await this.buildSciencePrompt(options);
-    await this.validatePrompt(prompt);
-
-    const generationOptions: GenerationOptions = {
-      ...genOptions,
-      customInstructions: options.customInstructions,
-      temperature: 0.7, // Slightly higher for more creative responses
-      maxTokens: 2500 // Increased for more detailed content
-    };
-
-    const result = await this.generateContent(prompt, generationOptions);
-
+    const MAX_RETRIES = 3;
     try {
-      const parsedContent = JSON.parse(result.content);
+      const {
+        numberOfQuestions = 5,
+        ...otherOptions
+      } = options;
+
+      // Enforce maximum question limit
+      const limitedQuestions = Math.min(numberOfQuestions, this.MAX_QUESTIONS);
+      if (limitedQuestions !== numberOfQuestions) {
+        console.log(`⚠️ Requested ${numberOfQuestions} questions exceeds maximum of ${this.MAX_QUESTIONS}. Limiting to ${this.MAX_QUESTIONS} questions.`);
+      }
+
+      const prompt = await this.buildSciencePrompt({ ...otherOptions, numberOfQuestions: limitedQuestions });
+      
+      console.log(`🔬 Attempting to generate ${limitedQuestions} science questions (attempt ${retryCount + 1}/${MAX_RETRIES + 1})...`);
+
+      const result = await this.generateContent({
+        prompt,
+        temperature: 0.7,
+        maxTokens: Math.max(2000, limitedQuestions * 150)
+      });
+
+      let parsedResult: any;
+      try {
+        parsedResult = JSON.parse(result);
+      } catch (parseError) {
+        console.error('❌ Failed to parse response:', parseError);
+        if (retryCount < MAX_RETRIES) {
+          return this.generateScienceContent(options, retryCount + 1);
+        }
+        throw new Error('Failed to parse response');
+      }
+
+      // Validate the response has the correct number of questions
+      if (!this.validateResponse(parsedResult, limitedQuestions)) {
+        if (retryCount < MAX_RETRIES) {
+          await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
+          return this.generateScienceContent(options, retryCount + 1);
+        }
+        return this.generateDefaultContent({ ...options, numberOfQuestions: limitedQuestions });
+      }
+
+      console.log(`✅ Successfully generated ${limitedQuestions} science questions!`);
       return {
-        ...result,
-        title: parsedContent.title || this.generateDefaultTitle(options),
-        introduction: parsedContent.introduction || this.generateDefaultIntroduction(options),
-        learningObjectives: parsedContent.learningObjectives || this.generateDefaultObjectives(options),
-        questions: parsedContent.questions.map(this.formatQuestion),
-        keyTerms: parsedContent.keyTerms || [],
-        additionalResources: parsedContent.additionalResources || []
+        ...parsedResult,
+        title: parsedResult.title || this.generateDefaultTitle(options),
+        introduction: parsedResult.introduction || this.generateDefaultIntroduction(options),
+        learningObjectives: parsedResult.learningObjectives || this.generateDefaultObjectives(options),
+        questions: (parsedResult.questions || []).map(this.formatQuestion),
+        keyTerms: parsedResult.keyTerms || [],
+        additionalResources: parsedResult.additionalResources || []
       };
-    } catch (error) {
-      console.error('Error parsing AI response:', error);
-      // Provide structured fallback content
-      return {
-        ...result,
-        title: this.generateDefaultTitle(options),
-        introduction: this.generateDefaultIntroduction(options),
-        learningObjectives: this.generateDefaultObjectives(options),
-        questions: this.generateDefaultQuestions(options),
-        keyTerms: [],
-        additionalResources: []
-      };
+    } catch (error: any) {
+      console.error('❌ Error:', error);
+      if (retryCount < MAX_RETRIES && (
+        error?.status === 500 || 
+        error?.code === 'connection_error' ||
+        error?.message?.includes('Internal server error')
+      )) {
+        await new Promise(resolve => setTimeout(resolve, Math.pow(2, retryCount) * 1000));
+        return this.generateScienceContent(options, retryCount + 1);
+      }
+      return this.generateDefaultContent(options);
     }
+  }
+
+  private generateDefaultContent(options: ScienceContentOptions): ScienceGenerationResult {
+    return {
+      title: this.generateDefaultTitle(options),
+      introduction: this.generateDefaultIntroduction(options),
+      learningObjectives: this.generateDefaultObjectives(options),
+      questions: this.generateDefaultQuestions(options),
+      keyTerms: [],
+      additionalResources: []
+    };
   }
 
   private formatQuestion(question: any): ScienceQuestion {
