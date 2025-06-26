@@ -315,8 +315,8 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
     grade: "3rd Grade",
     subject: "Math",
     theme: "General",
-    problemType: "Addition & Subtraction",
-    problemCount: 6,
+    problemType: "",
+    problemCount: 10,
     resourceType: "worksheet",
     quizQuestionCount: 10,
     quizQuestionTypes: ["Multiple Choice", "Short Answer"],
@@ -631,11 +631,6 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
     // Update topic suggestions when subject or resource type changes
     const suggestions = suggestedTopics[settings.subject]?.[settings.resourceType] || [];
     setTopicSuggestions(suggestions);
-    
-    // If there's no topic area set yet, set the first suggestion as default
-    if (!settings.topicArea && suggestions.length > 0) {
-      setSettings(prev => ({ ...prev, topicArea: suggestions[0] }));
-    }
   }, [settings.subject, settings.resourceType]);
 
   const generateMathProblems = (settings: WorksheetSettings): MathProblem[] => {
@@ -871,6 +866,16 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
   }
 
   const generateWorksheet = async () => {
+    // Add validation check for topic area
+    if (!settings.topicArea.trim()) {
+      toast({
+        title: "Topic Area Required",
+        description: "Please select or enter a topic area before generating.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     try {
       setCurrentStep("generating");
       
@@ -1332,18 +1337,24 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
 
       {/* Topic Area Field */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-3">
+        <label className="block text-sm font-medium text-gray-700 mb-3 required-field">
           Topic Area
           <span className="text-xs text-gray-500 ml-2">(What specific topic would you like to cover?)</span>
         </label>
         <div className="space-y-2">
-        <input
-          type="text"
-          value={settings.topicArea}
-          onChange={(e) => setSettings((prev) => ({ ...prev, topicArea: e.target.value }))}
-          placeholder="e.g., Water Cycle, Fractions, Character Traits..."
-          className="w-full p-3 rounded-lg border-2 border-gray-200 text-sm focus:border-purple-500 focus:outline-none"
-        />
+          <input
+            type="text"
+            value={settings.topicArea}
+            onChange={(e) => setSettings((prev) => ({ ...prev, topicArea: e.target.value }))}
+            placeholder="e.g., Water Cycle, Fractions, Character Traits..."
+            className={`w-full p-3 rounded-lg border-2 ${
+              !settings.topicArea.trim() ? 'border-red-200' : 'border-gray-200'
+            } text-sm focus:border-purple-500 focus:outline-none`}
+            required
+          />
+          {!settings.topicArea.trim() && (
+            <p className="text-sm text-red-500 mt-1">Please select or enter a topic area</p>
+          )}
           <div className="flex flex-wrap gap-2">
             {topicSuggestions.map((topic, index) => (
               <button
@@ -1863,6 +1874,12 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
           to {
             width: var(--target-width);
           }
+        }
+
+        .required-field::after {
+          content: "*";
+          color: #dc2626;
+          margin-left: 4px;
         }
       `}</style>
     </div>
