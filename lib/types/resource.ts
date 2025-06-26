@@ -1,5 +1,15 @@
 export type ResourceType = 'worksheet' | 'quiz' | 'rubric' | 'lesson_plan' | 'exit_slip';
 
+export type Subject = 'math' | 'science' | 'reading';
+
+export type DifficultyLevel = 'basic' | 'intermediate' | 'advanced';
+
+export type GradeLevel = 
+  | 'K' 
+  | '1' | '2' | '3' | '4' | '5' 
+  | '6' | '7' | '8' 
+  | '9' | '10' | '11' | '12';
+
 export interface ResourceMetadata {
   id: string;
   title: string;
@@ -56,10 +66,10 @@ export interface Resource {
 
 export interface ResourceGenerationOptions {
   gradeLevel: string;
-  subject: string;
+  subject: Subject;
   resourceType: ResourceType;
   theme?: string;
-  difficulty?: 'easy' | 'medium' | 'hard';
+  difficulty?: DifficultyLevel;
   problemCount?: number;
   topicArea?: string;
   customInstructions?: string;

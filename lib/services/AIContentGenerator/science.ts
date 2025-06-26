@@ -1,9 +1,11 @@
 import { BaseAIContentGenerator, GenerationOptions, GenerationResult } from './base';
+import { getPromptEnhancements } from './difficulty-scaling';
+import { DifficultyLevel, Subject } from '../../types/resource';
 
 export interface ScienceContentOptions {
-  grade?: number;
+  grade?: string;
   subject?: 'biology' | 'chemistry' | 'physics' | 'earth_science' | 'environmental';
-  difficulty?: 'basic' | 'intermediate' | 'advanced';
+  difficulty?: DifficultyLevel;
   topic?: string;
   includeExperiments?: boolean;
   includeDiagrams?: boolean;
@@ -52,7 +54,7 @@ export class ScienceContentGenerator extends BaseAIContentGenerator {
 
   private async buildSciencePrompt(options: ScienceContentOptions): Promise<string> {
     const {
-      grade = 5,
+      grade = '5',
       subject = 'general',
       difficulty = 'intermediate',
       topic,
@@ -69,9 +71,14 @@ export class ScienceContentGenerator extends BaseAIContentGenerator {
       console.log(`⚠️ Requested ${numberOfQuestions} questions exceeds maximum of ${this.MAX_QUESTIONS}. Limiting to ${this.MAX_QUESTIONS} questions.`);
     }
 
+    // Get difficulty-based enhancements
+    const difficultyEnhancements = getPromptEnhancements(grade, 'science', difficulty);
+
     const prompt = `Generate a science ${topic ? `worksheet about ${topic}` : 'worksheet'} for grade ${grade} students.
 
 CRITICAL: You MUST generate EXACTLY ${limitedQuestions} questions in your response.
+
+${difficultyEnhancements}
 
 Please provide the response in the following JSON format:
 {
@@ -221,7 +228,7 @@ Ensure all content is scientifically accurate and grade-appropriate.`;
   }
 
   private generateDefaultTitle(options: ScienceContentOptions): string {
-    const grade = options.grade || 5;
+    const grade = options.grade || '5';
     const topic = options.topic ? `: ${options.topic}` : '';
     const difficulty = options.difficulty || 'intermediate';
     return `Grade ${grade} Science Worksheet${topic} (${difficulty} level)`;

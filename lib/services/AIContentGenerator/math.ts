@@ -1,8 +1,10 @@
 import { BaseAIContentGenerator, GenerationOptions, GenerationResult } from './base';
+import { getPromptEnhancements } from './difficulty-scaling';
+import { DifficultyLevel, Subject } from '../../types/resource';
 
 export interface MathProblemOptions {
-  grade?: number;
-  difficulty?: 'easy' | 'medium' | 'hard';
+  grade?: string;
+  difficulty?: DifficultyLevel;
   topic?: string;
   includeSteps?: boolean;
   includeVisuals?: boolean;
@@ -65,8 +67,8 @@ Make sure ALL problems involve fractions, not just whole numbers.`,
     const MAX_RETRIES = 3;
     try {
       const {
-        grade = 5,
-        difficulty = 'medium',
+        grade = '5',
+        difficulty = 'intermediate',
         topic = 'general',
         includeSteps = false,
         includeVisuals = false,
@@ -80,6 +82,9 @@ Make sure ALL problems involve fractions, not just whole numbers.`,
         console.log(`⚠️ Requested ${numberOfProblems} problems exceeds maximum of ${this.MAX_PROBLEMS}. Limiting to ${this.MAX_PROBLEMS} problems.`);
       }
 
+      // Get difficulty-based enhancements
+      const difficultyEnhancements = getPromptEnhancements(grade, 'math', difficulty);
+
       console.log(`🎲 Attempting to generate ${limitedProblems} math problems (attempt ${retryCount + 1}/${MAX_RETRIES + 1})...`);
 
       const result = await this.generateContent({
@@ -87,6 +92,8 @@ Make sure ALL problems involve fractions, not just whole numbers.`,
 
 Topic: ${topic}
 Difficulty: ${difficulty}
+
+${difficultyEnhancements}
 
 CRITICAL: You MUST generate EXACTLY ${limitedProblems} problems in your response.
 
@@ -132,7 +139,7 @@ ${customInstructions ? `${customInstructions}\n` : ''}`,
           await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
           return this.generateMathContent(options, retryCount + 1);
         }
-      return {
+        return {
           title: `Grade ${options.grade} ${options.topic} Practice`,
           instructions: 'Solve the following problems. Show your work where necessary.',
           problems: this.generateDefaultProblems(options),
@@ -162,9 +169,9 @@ ${customInstructions ? `${customInstructions}\n` : ''}`,
   }
 
   private generateDefaultTitle(options: MathProblemOptions): string {
-    const grade = options.grade || 5;
+    const grade = options.grade || '5';
     const topic = options.topic || 'Math';
-    const difficulty = options.difficulty || 'medium';
+    const difficulty = options.difficulty || 'intermediate';
     return `Grade ${grade} ${topic} Practice (${difficulty} level)`;
   }
 
@@ -175,11 +182,11 @@ ${customInstructions ? `${customInstructions}\n` : ''}`,
   }
 
   private generateDefaultProblems(options: MathProblemOptions): any[] {
-    const { numberOfProblems = 10, grade = 5, topic = 'general' } = options;
+    const { numberOfProblems = 10, grade = '5', topic = 'general' } = options;
     return Array(numberOfProblems).fill(null).map((_, index) => ({
       question: `Problem ${index + 1}: Basic ${topic} problem for grade ${grade}`,
       answer: 'Please try generating the worksheet again',
-      difficulty: 'medium'
+      difficulty: 'intermediate'
     }));
   }
 
@@ -194,8 +201,8 @@ ${customInstructions ? `${customInstructions}\n` : ''}`,
 
   private async buildMathPrompt(options: MathProblemOptions): Promise<string> {
     const {
-      grade = 5,
-      difficulty = 'medium',
+      grade = '5',
+      difficulty = 'intermediate',
       topic = 'arithmetic',
       includeSteps = true,
       includeVisuals = false,

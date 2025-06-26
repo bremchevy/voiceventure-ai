@@ -1,4 +1,5 @@
 import OpenAI from 'openai'
+import { createAIClient } from '@/lib/services/AIContentGenerator/config'
 
 export interface WhisperConfig {
   model: 'base' | 'small' | 'medium' | 'large';
@@ -14,7 +15,11 @@ export class TranscriptionService {
   private config: WhisperConfig
 
   constructor(apiKey: string, config: Partial<WhisperConfig> = {}) {
-    this.openai = new OpenAI({ apiKey })
+    this.openai = createAIClient({
+      apiKey,
+      maxRetries: 3,
+      timeout: 60000 // Longer timeout for audio processing
+    })
     this.config = {
       model: 'base',
       language: 'en',

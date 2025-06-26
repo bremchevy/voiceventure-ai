@@ -1580,16 +1580,6 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
           </Button>
         </div>
 
-        {/* Request Summary in Preview */}
-        {request && (
-          <div className="bg-purple-50 border border-purple-200 rounded-lg p-3 mb-4">
-            <div className="flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-purple-600" />
-              <span className="text-xs font-medium text-purple-800">Based on your request: "{request}"</span>
-            </div>
-          </div>
-        )}
-
         {/* Resource Preview */}
         <div className="bg-white p-8 rounded-lg shadow-lg max-w-4xl mx-auto" ref={worksheetRef}>
           <div className="text-center mb-8">

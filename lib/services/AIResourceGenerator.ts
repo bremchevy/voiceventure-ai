@@ -401,7 +401,7 @@ ${options.customInstructions ? `Additional requirements:\n${options.customInstru
     console.log(`📚 Generating ${numberOfQuestions} reading questions...`);
 
     const readingOptions: ReadingContentOptions = {
-      grade: parseInt(options.gradeLevel) || 5,
+      grade: options.gradeLevel,
       difficulty: options.difficulty as 'basic' | 'intermediate' | 'advanced',
       topic: options.topicArea,
       includeVocabulary: options.includeVocabulary || true,
