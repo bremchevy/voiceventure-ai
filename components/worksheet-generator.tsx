@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import { ChevronLeft, Download, Edit, Store, CheckCircle, Sparkles, ArrowLeft, Check, Loader2 } from "lucide-react"
 import { generatePDF } from "@/lib/utils/pdf"
 import { toast } from "@/components/ui/use-toast"
+import { RubricDisplay } from "@/components/ui/rubric-display"
 
 // BackArrow component for consistent navigation
 const BackArrow = ({
@@ -52,7 +53,7 @@ interface WorksheetSettings {
   quizQuestionCount?: number
   selectedQuestionTypes?: string[]
   rubricCriteria?: string[]
-  rubricStyle?: string
+  rubricStyle?: "4-point" | "3-point" | "checklist"
   exitSlipFormat?: string
   lessonDuration?: string
   lessonObjectives?: string[]
@@ -279,11 +280,19 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
     // More precise resource type detection with context
     const resourcePatterns = [
       {
+        type: "worksheet",
+        patterns: [
+          /\bworksheet\b/i,
+          /\bpractice\s+sheet\b/i,
+          /\bactivity\s+sheet\b/i
+        ],
+        icon: "📝",
+        title: "Worksheet Generator"
+      },
+      {
         type: "quiz",
         patterns: [
-          /\b(?:vocabulary|spelling|reading)\s+quiz\b/i,
-          /\b(?:math|science)\s+test\b/i,
-          /\bassessment\s+(?:for|on)\s+[^.]+/i,
+          /\b(?:quiz|test|assessment|evaluation)\b/i,
           /\bmake\s+(?:a|an)\s+quiz\b/i,
           /\bcreate\s+(?:a|an)\s+quiz\b/i
         ],
@@ -291,22 +300,12 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
         title: "Quiz Generator"
       },
       {
-        type: "worksheet",
-        patterns: [
-          /\b(?:practice|review)\s+(?:worksheet|sheet|problems)\b/i,
-          /\b(?:math|reading|writing|science)\s+worksheet\b/i,
-          /\bworksheet\s+(?:for|on)\s+[^.]+/i,
-          /\bmake\s+(?:a|an)\s+worksheet\b/i,
-          /\bcreate\s+(?:a|an)\s+worksheet\b/i
-        ],
-        icon: "📝",
-        title: "Worksheet Generator"
-      },
-      {
         type: "rubric",
         patterns: [
-          /\b(?:grading|scoring)\s+rubric\b/i,
-          /\brubric\s+(?:for|on)\s+[^.]+/i,
+          /\brubric\b/i,
+          /\bgrading\s+(?:guide|criteria|scale)\b/i,
+          /\bevaluation\s+(?:guide|criteria|scale)\b/i,
+          /\bscoring\s+(?:guide|criteria|scale)\b/i,
           /\bmake\s+(?:a|an)\s+rubric\b/i,
           /\bcreate\s+(?:a|an)\s+rubric\b/i
         ],
@@ -316,8 +315,9 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
       {
         type: "lesson_plan",
         patterns: [
-          /\blesson\s+plan\s+(?:for|on)\s+[^.]+/i,
-          /\b(?:daily|weekly)\s+lesson\s+plan\b/i,
+          /\blesson\s+plan\b/i,
+          /\bteaching\s+plan\b/i,
+          /\bunit\s+plan\b/i,
           /\bmake\s+(?:a|an)\s+lesson\s+plan\b/i,
           /\bcreate\s+(?:a|an)\s+lesson\s+plan\b/i
         ],
@@ -362,7 +362,7 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
     problemCount: 10,
     resourceType: "worksheet",
     quizQuestionCount: 10,
-    selectedQuestionTypes: ["Multiple Choice"],
+    selectedQuestionTypes: [],
     rubricCriteria: ["Content", "Organization", "Grammar"],
     rubricStyle: "4-point",
     exitSlipFormat: "multiple-choice",
@@ -518,6 +518,19 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
     const suggestions = suggestedTopics[settings.subject]?.[settings.resourceType] || [];
     setTopicSuggestions(suggestions);
   }, [settings.subject, settings.resourceType]);
+
+  // Add a useEffect to clean up settings when resource type changes
+  useEffect(() => {
+    if (settings.resourceType === "rubric") {
+      setSettings(prev => ({
+        ...prev,
+        problemCount: 0,
+        quizQuestionCount: 0,
+        selectedQuestionTypes: [],
+        problemType: ""
+      }));
+    }
+  }, [settings.resourceType]);
 
   const generateMathProblems = (settings: WorksheetSettings): MathProblem[] => {
     const problems: MathProblem[] = []
@@ -868,7 +881,8 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
           questionCount: settings.problemCount,
           focus: settings.focus,
           customInstructions: settings.customInstructions,
-          selectedQuestionTypes: settings.selectedQuestionTypes?.map(type => getQuestionTypes(type)) || ['multiple_choice']
+          selectedQuestionTypes: settings.selectedQuestionTypes?.map(type => getQuestionTypes(type)) || ['multiple_choice'],
+          rubricStyle: settings.rubricStyle
         }),
       });
 
@@ -1251,12 +1265,21 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
 
       {settings.resourceType === "rubric" && (
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-3">Rubric Style</label>
+          <label className="block text-sm font-medium text-gray-700 mb-3">
+            Rubric Style
+            {settings.rubricStyle && (
+              <span className="text-purple-600 ml-2">
+                Selected: {settings.rubricStyle === "4-point" ? "4-Point Scale" : 
+                          settings.rubricStyle === "3-point" ? "3-Point Scale" : 
+                          "Checklist Style"}
+              </span>
+            )}
+          </label>
           <div className="space-y-2">
             {[
-              { type: "4-point", label: "4-Point Scale", desc: "Excellent, Good, Satisfactory, Needs Improvement" },
-              { type: "3-point", label: "3-Point Scale", desc: "Exceeds, Meets, Below Expectations" },
-              { type: "checklist", label: "Checklist Style", desc: "Simple yes/no criteria" },
+              { type: "4-point" as const, label: "4-Point Scale", desc: "Excellent, Good, Satisfactory, Needs Improvement" },
+              { type: "3-point" as const, label: "3-Point Scale", desc: "Exceeds, Meets, Below Expectations" },
+              { type: "checklist" as const, label: "Checklist Style", desc: "Simple yes/no criteria" },
             ].map((style) => (
               <button
                 key={style.type}
@@ -1267,8 +1290,15 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
                     : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
                 }`}
               >
-                <div className="font-medium">{style.label}</div>
-                <div className="text-xs text-gray-500">{style.desc}</div>
+                <div className="flex justify-between items-center">
+                  <div>
+                    <div className="font-medium">{style.label}</div>
+                    <div className="text-xs text-gray-500">{style.desc}</div>
+                  </div>
+                  {settings.rubricStyle === style.type && (
+                    <span className="text-purple-600 text-xl">✓</span>
+                  )}
+                </div>
               </button>
             ))}
           </div>
@@ -1383,49 +1413,51 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
       </div>
 
       {/* Number of Questions Selection */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-3">
-          Number of Questions
-          <span className="text-xs text-gray-500 ml-2">(How many questions would you like?)</span>
-        </label>
-        <div className="grid grid-cols-4 gap-3">
-          {[5, 10, 15, 20].map((number) => (
-            <button
-              key={number}
-              onClick={() => setSettings((prev) => ({ 
-                ...prev, 
-                problemCount: number,
-                quizQuestionCount: number 
-              }))}
-              className={`p-3 rounded-lg border-2 text-sm font-medium transition-all ${
-                (settings.problemCount === number || settings.quizQuestionCount === number)
-                  ? "border-purple-500 bg-purple-50 text-purple-700"
-                  : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
-              }`}
-            >
-              {number}
-            </button>
-          ))}
+      {settings.resourceType !== "rubric" && (
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-3">
+            Number of Questions
+            <span className="text-xs text-gray-500 ml-2">(How many questions would you like?)</span>
+          </label>
+          <div className="grid grid-cols-4 gap-3">
+            {[5, 10, 15, 20].map((number) => (
+              <button
+                key={number}
+                onClick={() => setSettings((prev) => ({ 
+                  ...prev, 
+                  problemCount: number,
+                  quizQuestionCount: number 
+                }))}
+                className={`p-3 rounded-lg border-2 text-sm font-medium transition-all ${
+                  (settings.problemCount === number || settings.quizQuestionCount === number)
+                    ? "border-purple-500 bg-purple-50 text-purple-700"
+                    : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
+                }`}
+              >
+                {number}
+              </button>
+            ))}
+          </div>
+          <div className="mt-3">
+            <input
+              type="number"
+              min="1"
+              max="50"
+              value={settings.resourceType === "worksheet" ? settings.problemCount : settings.quizQuestionCount}
+              onChange={(e) => {
+                const value = Math.min(50, Math.max(1, parseInt(e.target.value) || 1));
+                setSettings((prev) => ({ 
+                  ...prev, 
+                  problemCount: value,
+                  quizQuestionCount: value 
+                }));
+              }}
+              placeholder="Custom number (1-50)"
+              className="w-full p-3 rounded-lg border-2 border-gray-200 text-sm focus:border-purple-500 focus:outline-none"
+            />
+          </div>
         </div>
-        <div className="mt-3">
-          <input
-            type="number"
-            min="1"
-            max="50"
-            value={settings.resourceType === "worksheet" ? settings.problemCount : settings.quizQuestionCount}
-            onChange={(e) => {
-              const value = Math.min(50, Math.max(1, parseInt(e.target.value) || 1));
-              setSettings((prev) => ({ 
-                ...prev, 
-                problemCount: value,
-                quizQuestionCount: value 
-              }));
-            }}
-            placeholder="Custom number (1-50)"
-            className="w-full p-3 rounded-lg border-2 border-gray-200 text-sm focus:border-purple-500 focus:outline-none"
-          />
-        </div>
-      </div>
+      )}
 
       {/* Custom Instructions Field */}
       <div>
@@ -1554,6 +1586,51 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
   const renderPreview = () => {
     if (!generatedWorksheet) return null;
 
+    // For rubrics, use the new RubricDisplay component
+    if (settings.resourceType === "rubric") {
+      try {
+        const rubricContent = typeof generatedWorksheet.content === 'string' 
+          ? JSON.parse(generatedWorksheet.content)
+          : generatedWorksheet.content;
+        
+        return (
+          <div className="relative bg-white rounded-lg shadow-lg">
+            {/* Content */}
+            <div className="p-4">
+              <RubricDisplay content={rubricContent} />
+              
+              {/* Action Buttons - Inside content area */}
+              <div className="mt-8 flex flex-col sm:flex-row justify-between gap-4">
+                <Button
+                  variant="outline"
+                  onClick={() => setCurrentStep('settings')}
+                  className="flex items-center gap-2"
+                >
+                  <ArrowLeft className="w-4 h-4" />
+                  Back to Settings
+                </Button>
+                <Button 
+                  onClick={handleDownloadPDF} 
+                  className="flex items-center gap-2"
+                >
+                  <Download className="w-4 h-4" />
+                  Download PDF
+                </Button>
+              </div>
+            </div>
+          </div>
+        );
+      } catch (error) {
+        console.error('Error parsing rubric content:', error);
+        return (
+          <div className="bg-red-50 text-red-600 p-4 rounded">
+            Error displaying rubric. Please try regenerating.
+          </div>
+        );
+      }
+    }
+
+    // Handle other resource types as before
     const { title, content, sections, metadata } = generatedWorksheet;
 
     return (
@@ -1629,27 +1706,63 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
               }
 
               if (section.type === 'rubric') {
-                let sectionContent;
-                try {
-                  sectionContent = typeof section.content === 'string' ? JSON.parse(section.content) : section.content;
-                } catch (error) {
-                  console.error('Error parsing rubric content:', error);
-                  sectionContent = [];
-                }
+                const rubricData = section.content;
+                
                 return (
-                  <div key={sectionIndex} className="space-y-6">
-                    {section.title && <h2 className="text-xl font-semibold mb-4">{section.title}</h2>}
-                    {sectionContent.map((criterion: any, index: number) => (
-                      <div key={index} className="border rounded-lg p-4">
-                        <h3 className="font-medium mb-2">{criterion.criterion}</h3>
-                        <p className="text-gray-600 mb-4">{criterion.description}</p>
-                        <div className="grid grid-cols-4 gap-4">
-                          {criterion.levels.map((level: any, levelIndex: number) => (
-                            <div key={levelIndex} className="text-sm">
-                              <div className="font-medium">{level.label} ({level.score})</div>
-                              <div className="text-gray-600">{level.description}</div>
-                            </div>
-                          ))}
+                  <div key={sectionIndex} className="space-y-8">
+                    {/* Header with Name and Date */}
+                    <div className="text-center">
+                      <h1 className="text-2xl font-bold mb-4">{rubricData.title}</h1>
+                      <div className="mb-4">
+                        <div className="mb-2">Name: ________________</div>
+                        <div>Date: ________________</div>
+                      </div>
+                      <p className="text-gray-600 mb-6">{rubricData.introduction}</p>
+                    </div>
+
+                    {/* Criteria */}
+                    {rubricData.criteria?.map((criterion, index) => (
+                      <div key={index} className="mb-8">
+                        {/* Criterion Header */}
+                        <div className="bg-gray-50 p-4 rounded-t-lg border border-gray-200">
+                          <h3 className="font-bold text-lg mb-2">{criterion.criterion}</h3>
+                          <p className="text-gray-600">{criterion.description}</p>
+                        </div>
+                        
+                        {/* Levels Table */}
+                        <div className="border-x border-b border-gray-200 rounded-b-lg overflow-hidden">
+                          <table className="w-full">
+                            <thead className="bg-gray-50">
+                              <tr>
+                                <th className="px-4 py-2 text-left font-medium text-gray-600 w-20">Score</th>
+                                <th className="px-4 py-2 text-left font-medium text-gray-600 w-32">Level</th>
+                                <th className="px-4 py-2 text-left font-medium text-gray-600">Description</th>
+                                {criterion.levels.some(level => level.examples?.length > 0) && (
+                                  <th className="px-4 py-2 text-left font-medium text-gray-600">Examples</th>
+                                )}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {criterion.levels.map((level, levelIndex) => (
+                                <tr key={levelIndex} className={levelIndex % 2 === 0 ? 'bg-white' : 'bg-gray-50'}>
+                                  <td className="px-4 py-3 font-medium">{level.score}</td>
+                                  <td className="px-4 py-3">{level.label}</td>
+                                  <td className="px-4 py-3">{level.description}</td>
+                                  {criterion.levels.some(l => l.examples?.length > 0) && (
+                                    <td className="px-4 py-3">
+                                      {level.examples?.length > 0 && (
+                                        <ul className="list-disc ml-4 space-y-1">
+                                          {level.examples.map((example, exIndex) => (
+                                            <li key={exIndex} className="text-gray-600">{example}</li>
+                                          ))}
+                                        </ul>
+                                      )}
+                                    </td>
+                                  )}
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
                         </div>
                       </div>
                     ))}
@@ -1659,59 +1772,38 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
 
               let sectionContent;
               try {
-                sectionContent = typeof section.content === 'string' ? JSON.parse(section.content) : section.content;
+                // First check if the content is already an object
+                if (typeof section.content === 'object') {
+                  sectionContent = section.content;
+                } else if (typeof section.content === 'string') {
+                  // Try to parse as JSON, if it fails, use the string as is
+                  try {
+                    sectionContent = JSON.parse(section.content);
+                  } catch {
+                    sectionContent = section.content;
+                  }
+                } else {
+                  sectionContent = '';
+                }
               } catch (error) {
-                console.error('Error parsing section content:', error);
-                // If parsing fails, treat content as plain text
-                sectionContent = [{
-                  question: section.content,
-                  type: 'text'
-                }];
+                console.error('Error handling section content:', error);
+                sectionContent = section.content || '';
               }
 
               return (
-                <div key={sectionIndex} className="space-y-4">
-                  {section.title && <h2 className="text-xl font-semibold mb-4">{section.title}</h2>}
-                  {Array.isArray(sectionContent) && sectionContent.map((problem: any, index: number) => (
-                    <div key={index} className="border-b pb-6 mb-6">
-                      <p className="font-medium text-lg mb-3">{index + 1}. {problem.question}</p>
-                      {problem.type === 'true_false' ? (
-                        <div className="ml-6 mt-3 space-y-3">
-                          <div className="flex items-center gap-4">
-                            <div className="flex items-center gap-2">
-                              <div className="w-5 h-5 border-2 border-gray-300 rounded-full"></div>
-                              <span className="text-gray-700">True</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <div className="w-5 h-5 border-2 border-gray-300 rounded-full"></div>
-                              <span className="text-gray-700">False</span>
-                            </div>
-                          </div>
-                        </div>
-                      ) : problem.options ? (
-                        <div className="ml-6 mt-3 space-y-2">
-                          {problem.options.map((option: string, optIndex: number) => (
-                            <div key={optIndex} className="flex items-center gap-3">
-                              <div className="w-6 h-6 border-2 border-gray-300 rounded-full"></div>
-                              <span>{option}</span>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="ml-6 mt-3">
-                          <div className="space-y-4">
-                            <div className="border-b-2 border-gray-300 h-6"></div>
-                            <div className="border-b-2 border-gray-300 h-6"></div>
-                          </div>
-                        </div>
-                      )}
-                      {problem.visual && (
-                        <div className="ml-6 mt-4 p-3 bg-gray-50 rounded-lg text-gray-600">
-                          {problem.visual}
-                        </div>
-                      )}
-                    </div>
-                  ))}
+                <div key={sectionIndex} className="mb-6">
+                  {section.title && (
+                    <h3 className="text-lg font-semibold mb-2">{section.title}</h3>
+                  )}
+                  <div className="prose max-w-none">
+                    {typeof sectionContent === 'string' ? (
+                      <p className="whitespace-pre-wrap">{sectionContent}</p>
+                    ) : (
+                      <pre className="bg-gray-50 p-4 rounded-lg overflow-x-auto">
+                        {JSON.stringify(sectionContent, null, 2)}
+                      </pre>
+                    )}
+                  </div>
                 </div>
               );
             })}
