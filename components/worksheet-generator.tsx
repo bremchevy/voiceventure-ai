@@ -83,6 +83,124 @@ const themeEmojis = {
   General: ["⭐", "🌟", "✨", "🎯", "🎈"],
 } as const;
 
+// Add this after the themeEmojis constant
+const suggestedTopics: Record<string, Record<string, string[]>> = {
+  Math: {
+    worksheet: [
+      "Addition and Subtraction",
+      "Multiplication Tables",
+      "Division Practice",
+      "Fractions and Decimals",
+      "Geometry Basics",
+      "Word Problems",
+      "Place Value",
+      "Money Math",
+      "Time and Measurement",
+      "Basic Algebra"
+    ],
+    quiz: [
+      "Number Operations",
+      "Fraction Operations",
+      "Geometry Concepts",
+      "Measurement Units",
+      "Problem Solving",
+      "Math Facts",
+      "Mental Math",
+      "Math Vocabulary"
+    ],
+    lesson_plan: [
+      "Introduction to Fractions",
+      "Understanding Place Value",
+      "Basic Geometry Shapes",
+      "Addition Strategies",
+      "Multiplication Concepts",
+      "Money and Currency",
+      "Time Telling"
+    ],
+    exit_slip: [
+      "Today's Math Concept",
+      "Problem Solving Check",
+      "Math Vocabulary Review",
+      "Number Sense",
+      "Operations Practice"
+    ]
+  },
+  Reading: {
+    worksheet: [
+      "Reading Comprehension",
+      "Main Idea and Details",
+      "Character Analysis",
+      "Story Elements",
+      "Vocabulary Building",
+      "Making Inferences",
+      "Author's Purpose",
+      "Text Features",
+      "Sequencing Events",
+      "Compare and Contrast"
+    ],
+    quiz: [
+      "Story Comprehension",
+      "Vocabulary Check",
+      "Reading Strategies",
+      "Literary Elements",
+      "Character Traits",
+      "Reading Fluency"
+    ],
+    lesson_plan: [
+      "Reading Strategies",
+      "Phonics and Decoding",
+      "Comprehension Skills",
+      "Vocabulary Development",
+      "Reading Fluency",
+      "Literary Elements"
+    ],
+    exit_slip: [
+      "Story Understanding",
+      "Vocabulary Check",
+      "Reading Strategy",
+      "Main Idea Review",
+      "Character Analysis"
+    ]
+  },
+  Science: {
+    worksheet: [
+      "Life Cycles",
+      "Weather and Climate",
+      "Solar System",
+      "Plant Parts",
+      "Animal Habitats",
+      "Simple Machines",
+      "States of Matter",
+      "Food Chains",
+      "Human Body Systems",
+      "Earth's Resources"
+    ],
+    quiz: [
+      "Scientific Method",
+      "Earth Science Basics",
+      "Life Science Topics",
+      "Physical Science",
+      "Environmental Science",
+      "Space Science"
+    ],
+    lesson_plan: [
+      "Scientific Investigation",
+      "Earth and Space",
+      "Living Things",
+      "Physical Properties",
+      "Environmental Science",
+      "Weather Studies"
+    ],
+    exit_slip: [
+      "Science Concept Check",
+      "Experiment Results",
+      "Scientific Vocabulary",
+      "Process Understanding",
+      "Data Analysis"
+    ]
+  }
+};
+
 interface MathProblem {
   question: string
   answer: number
@@ -225,6 +343,9 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
   const [currentStep, setCurrentStep] = useState("settings")
   const worksheetRef = useRef<HTMLDivElement>(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Add this inside the WorksheetGenerator component, before the return statement
+  const [topicSuggestions, setTopicSuggestions] = useState<string[]>([]);
 
   const generationSteps = [
     { icon: "🔍", text: "Analyzing your request", completed: false },
@@ -505,6 +626,18 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
     }
   }, [request]);
 
+  // Add this after the existing useEffect
+  useEffect(() => {
+    // Update topic suggestions when subject or resource type changes
+    const suggestions = suggestedTopics[settings.subject]?.[settings.resourceType] || [];
+    setTopicSuggestions(suggestions);
+    
+    // If there's no topic area set yet, set the first suggestion as default
+    if (!settings.topicArea && suggestions.length > 0) {
+      setSettings(prev => ({ ...prev, topicArea: suggestions[0] }));
+    }
+  }, [settings.subject, settings.resourceType]);
+
   const generateMathProblems = (settings: WorksheetSettings): MathProblem[] => {
     const problems: MathProblem[] = []
     const { problemType, problemCount, theme, subject } = settings
@@ -767,6 +900,7 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
           includeVocabulary: settings.includeVocabulary,
           questionCount: settings.problemCount,
           focus: settings.focus,
+          customInstructions: settings.customInstructions,
         }),
       });
 
@@ -1202,13 +1336,30 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
           Topic Area
           <span className="text-xs text-gray-500 ml-2">(What specific topic would you like to cover?)</span>
         </label>
-        <input
-          type="text"
-          value={settings.topicArea}
-          onChange={(e) => setSettings((prev) => ({ ...prev, topicArea: e.target.value }))}
-          placeholder="e.g., Water Cycle, Fractions, Character Traits..."
-          className="w-full p-3 rounded-lg border-2 border-gray-200 text-sm focus:border-purple-500 focus:outline-none"
-        />
+        <div className="space-y-2">
+          <input
+            type="text"
+            value={settings.topicArea}
+            onChange={(e) => setSettings((prev) => ({ ...prev, topicArea: e.target.value }))}
+            placeholder="e.g., Water Cycle, Fractions, Character Traits..."
+            className="w-full p-3 rounded-lg border-2 border-gray-200 text-sm focus:border-purple-500 focus:outline-none"
+          />
+          <div className="flex flex-wrap gap-2">
+            {topicSuggestions.map((topic, index) => (
+              <button
+                key={index}
+                onClick={() => setSettings(prev => ({ ...prev, topicArea: topic }))}
+                className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
+                  settings.topicArea === topic
+                    ? "bg-purple-100 text-purple-700 border-2 border-purple-300"
+                    : "bg-gray-100 text-gray-700 border-2 border-gray-200 hover:bg-gray-200"
+                }`}
+              >
+                {topic}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
       {/* Custom Instructions Field */}

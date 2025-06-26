@@ -52,36 +52,59 @@ Make sure ALL problems involve fractions, not just whole numbers.`,
     const generationOptions: GenerationOptions = {
       ...genOptions,
       customInstructions: options.customInstructions,
+      temperature: 0.2, // Lower temperature for more consistent JSON output
     };
 
-    const result = await this.generateContent(prompt, generationOptions);
+    let attempts = 0;
+    const maxAttempts = 2;
 
-    // Parse the generated content into our template format
-    try {
-      const parsedContent = JSON.parse(result.content);
-      return {
-        ...result,
-        title: parsedContent.title || this.generateDefaultTitle(options),
-        instructions: parsedContent.instructions || this.generateDefaultInstructions(options),
-        problems: parsedContent.problems.map((p: any) => ({
-          question: p.question,
-          answer: p.answer,
-          visual: p.visual,
-          steps: p.steps,
-        })),
-        decorations: this.getThemeDecorations(options),
-      };
-    } catch (error) {
-      console.error('Error parsing AI response:', error);
-      // Fallback to default format if parsing fails
-      return {
-        ...result,
-        title: this.generateDefaultTitle(options),
-        instructions: this.generateDefaultInstructions(options),
-        problems: this.generateDefaultProblems(options),
-        decorations: this.getThemeDecorations(options),
-      };
+    while (attempts < maxAttempts) {
+      try {
+        const result = await this.generateContent(prompt, generationOptions);
+        const content = result.content.trim();
+        
+        // Validate the response
+        if (await this.validateResponse(content)) {
+          const parsedContent = JSON.parse(content);
+          return {
+            ...result,
+            title: parsedContent.title || this.generateDefaultTitle(options),
+            instructions: parsedContent.instructions || this.generateDefaultInstructions(options),
+            problems: parsedContent.problems.map((p: any) => ({
+              question: p.question,
+              answer: p.answer,
+              visual: p.visual,
+              steps: p.steps,
+            })),
+            decorations: this.getThemeDecorations(options),
+          };
+        }
+        
+        // If validation fails, increment attempts and try again
+        attempts++;
+        if (attempts < maxAttempts) {
+          console.log(`Retrying content generation (attempt ${attempts + 1}/${maxAttempts})`);
+          continue;
+        }
+      } catch (error) {
+        console.error('Error in content generation:', error);
+        attempts++;
+        if (attempts < maxAttempts) {
+          console.log(`Retrying after error (attempt ${attempts + 1}/${maxAttempts})`);
+          continue;
+        }
+      }
     }
+
+    // If all attempts fail, return default content
+    console.log('Falling back to default content after failed attempts');
+    return {
+      content: '',
+      title: this.generateDefaultTitle(options),
+      instructions: this.generateDefaultInstructions(options),
+      problems: this.generateDefaultProblems(options),
+      decorations: this.getThemeDecorations(options),
+    };
   }
 
   private generateDefaultTitle(options: MathProblemOptions): string {
@@ -106,6 +129,11 @@ Make sure ALL problems involve fractions, not just whole numbers.`,
   }
 
   private getThemeDecorations(options: MathProblemOptions): string[] {
+    // Add theme-specific decorations
+    if (options.customInstructions?.toLowerCase().includes('dinosaur') || 
+        options.topic?.toLowerCase().includes('dinosaur')) {
+      return ['🦖', '🦕', '🦴', '🌋', '🌿'];
+    }
     return ['⭐', '📝', '🔢', '✏️', '📐'];
   }
 
@@ -120,45 +148,67 @@ Make sure ALL problems involve fractions, not just whole numbers.`,
       customInstructions,
     } = options;
 
-    // Special handling for fractions
-    const isFractionTopic = topic.toLowerCase().includes('fraction') || 
-                           (customInstructions && customInstructions.toLowerCase().includes('fraction'));
+    // Extract theme and core math concept
+    const theme = customInstructions?.toLowerCase().includes('dinosaur') ? 'dinosaurs' : 
+                 topic.toLowerCase().includes('dinosaur') ? 'dinosaurs' : undefined;
+    
+    const mathConcepts = ['addition', 'subtraction', 'multiplication', 'division', 'fractions', 'decimals', 'geometry', 'measurement']
+      .find(concept => topic.toLowerCase().includes(concept)) || 'arithmetic';
 
     let prompt = `Generate a math worksheet with the following specifications:
 
-1. Create EXACTLY ${numberOfProblems} ${difficulty} level ${isFractionTopic ? 'fraction' : topic} problems for grade ${grade}
-2. Return the response in the following JSON format:
+1. Create EXACTLY ${numberOfProblems} ${difficulty} level math problems for grade ${grade}
+2. Core math concept: ${mathConcepts}
+${theme ? `3. IMPORTANT: Every problem MUST be themed around ${theme}. Use real facts and scenarios about ${theme}.` : ''}
+4. Return ONLY a valid JSON object with this structure:
 {
-  "title": "An engaging title for the worksheet",
+  "title": "Grade ${grade} ${theme ? theme + '-themed ' : ''}${mathConcepts} Practice",
   "instructions": "Clear instructions for students",
   "problems": [
     {
       "question": "The problem text",
-      "answer": "The correct answer (number or text)",
-      "visual": "A visual representation using text/emoji (if applicable)",
-      "steps": ["Step 1", "Step 2", ...] (if steps are requested)
+      "steps": ["Step 1", "Step 2"],
+      "answer": "The answer",
+      "visual": "Optional ASCII art or text diagram"
     }
   ]
 }
 
-IMPORTANT: 
-- The response MUST contain EXACTLY ${numberOfProblems} problems, no more and no less.
-${isFractionTopic ? '- EVERY problem MUST involve fractions, not just whole numbers.\n- Include a mix of operations with fractions (addition, subtraction, multiplication, division).' : ''}
+${theme ? `Example themed problem:
+If the theme is dinosaurs: "A Tyrannosaurus Rex could eat 500 pounds of meat in one bite. If it took 6 bites to finish its meal, how many pounds of meat did it eat in total?"
 
-Requirements:
-- Make problems engaging and grade-appropriate
-- Use clear mathematical notation
-- Include real-world contexts where possible
-${includeSteps ? '- Include step-by-step solutions' : ''}
-${includeVisuals ? '- Add text-based visual representations' : ''}
+Requirements for themed problems:
+- Every problem MUST incorporate ${theme} in a meaningful way
+- Use real facts about ${theme} when possible
+- Make the ${theme} theme central to the problem, not just decoration
+- Include ${theme}-related visuals when appropriate` : ''}
 
-Topic-specific guidelines:
-${isFractionTopic ? this.topicPrompts['fractions'] : (this.topicPrompts[topic] || 'Create grade-appropriate math problems')}`;
+Requirements for all problems:
+- Grade-appropriate difficulty
+- Clear, concise wording
+- Step-by-step solutions when helpful
+${includeVisuals ? '- Include ASCII art or text diagrams when helpful' : ''}
+${includeSteps ? '- Show solution steps for complex problems' : ''}
+${customInstructions ? `\nAdditional Requirements:\n${customInstructions}` : ''}`;
 
     return prompt;
   }
 
   protected async enhancePrompt(prompt: string, context: any = {}): Promise<string> {
-    return `${prompt}\n\nEnsure all mathematical notation is clear and properly formatted. Return ONLY valid JSON.`;
+    return `${prompt}\n\nIMPORTANT: Return ONLY a valid JSON object. Do not include any additional text, comments, or explanations.`;
+  }
+
+  private async validateResponse(content: string): Promise<boolean> {
+    try {
+      const parsed = JSON.parse(content.trim());
+      if (!parsed.title || !parsed.instructions || !Array.isArray(parsed.problems)) {
+        console.error('Invalid response structure:', parsed);
+        return false;
+      }
+      return true;
+    } catch (error) {
+      console.error('Invalid JSON in response:', error);
+      return false;
+    }
   }
 } 
