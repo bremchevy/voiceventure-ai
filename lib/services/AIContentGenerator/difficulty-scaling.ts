@@ -224,10 +224,10 @@ export function getDifficultyParameters(
   // Subject-specific adjustments
   const subjectScaling = getSubjectScaling(subject, band);
 
-  // Get base parameters
+  // Get base parameters with default question types
   let params = {
     cognitiveLevel: scaleCognitiveLevels(baseCognitive, difficultyScaleFactor),
-    questionTypes: QUESTION_TYPES_BY_BAND[band],
+    questionTypes: QUESTION_TYPES_BY_BAND[band] || ['multiple_choice', 'short_answer'],
     languageComplexity: calculateLanguageComplexity(band, difficulty),
     visualSupport: calculateVisualSupport(band, subject),
     conceptDepth: calculateConceptDepth(band, difficulty) * subjectScaling,
@@ -438,7 +438,7 @@ ${Object.entries(params.cognitiveLevel)
    - ${getVisualGuidelines(params.visualSupport)}
 
 4. Question Types:
-   - Use these types: ${params.questionTypes.join(', ')}
+   - Use these types: ${Array.isArray(params.questionTypes) ? params.questionTypes.join(', ') : 'multiple_choice, short_answer'}
 
 5. Concept Depth (${params.conceptDepth}/10):
    - ${getConceptDepthGuidelines(params.conceptDepth, subject)}
