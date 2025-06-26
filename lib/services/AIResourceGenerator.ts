@@ -6,21 +6,32 @@ import { TemplateManager } from './TemplateManager/base';
 import type { ResourceGenerationOptions, GeneratedResource, ResourceType } from '@/lib/types/resource';
 import OpenAI from 'openai';
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-  maxRetries: 3,
-  timeout: 30000
-});
-
 export class AIResourceGenerator {
   private mathGenerator: MathContentGenerator;
   private readingGenerator: ReadingContentGenerator;
   private scienceGenerator: ScienceContentGenerator;
   private generalGenerator: GeneralContentGenerator;
   private templateManager: TemplateManager;
+  private readonly openai: OpenAI;
 
-  constructor() {
+  private readonly themeDecorations: Record<string, string[]> = {
+    'general': ['📝', '✨', '🎯', '🌟'],
+    'nature': ['🌿', '🌺', '🌳', '🦋'],
+    'space': ['🚀', '⭐', '🌙', '🌠'],
+    'ocean': ['🌊', '🐠', '🐋', '🐚'],
+    'science': ['🔬', '⚗️', '🧪', '🔭'],
+    'math': ['➗', '📐', '💫', '🔢'],
+    'sports': ['⚽', '🏀', '🎯', '🏆'],
+    'music': ['🎵', '🎼', '🎹', '🎸'],
+    'art': ['🎨', '🖌️', '🎭', '✨'],
+    'technology': ['💻', '🤖', '⚡', '📱']
+  };
+
+  constructor(apiKey: string) {
     console.log('🔧 Initializing AIResourceGenerator');
+    this.openai = new OpenAI({
+      apiKey: apiKey
+    });
     this.mathGenerator = new MathContentGenerator();
     this.readingGenerator = new ReadingContentGenerator();
     this.scienceGenerator = new ScienceContentGenerator();
@@ -97,7 +108,7 @@ ${options.customInstructions ? `Additional requirements:\n${options.customInstru
         
         console.log('📋 Generating rubric with style:', rubricStyle);
         
-        const completion = await openai.chat.completions.create({
+        const completion = await this.openai.chat.completions.create({
           model: "gpt-3.5-turbo",
           messages: [
             {
@@ -169,7 +180,7 @@ Return the response in this exact JSON format:
               theme: options.theme,
               difficulty: options.difficulty
             },
-            decorations: options.theme ? themeDecorations[options.theme.toLowerCase()] : ['📝', '✨', '🎯', '🌟']
+            decorations: options.theme ? this.themeDecorations[options.theme.toLowerCase()] : ['📝', '✨', '🎯', '🌟']
           };
         } catch (error) {
           console.error('Error parsing rubric content:', error);
@@ -255,7 +266,8 @@ Return the response in this exact JSON format:
             generatedAt: new Date().toISOString(),
             theme: options.theme,
             difficulty: options.difficulty
-          }
+          },
+          decorations: options.theme ? this.themeDecorations[options.theme.toLowerCase()] : ['📝', '✨', '🎯', '🌟']
         };
       }
 
@@ -501,4 +513,46 @@ Return the response in this exact JSON format:
   private async generateGeneralContent(options: ResourceGenerationOptions): Promise<any> {
     console.log('Generating general content...');
     const numberOfQuestions = options.questionCount || options.problemCount || 10;
-    console.log(`
+    console.log(`Generating ${numberOfQuestions} questions for ${options.subject} ${options.resourceType}`);
+
+    return this.generalGenerator.generateGeneralContent({
+      grade: parseInt(options.gradeLevel),
+      difficulty: options.difficulty || 'medium',
+      topic: options.topicArea,
+      includeQuestions: options.includeQuestions,
+      includeVisuals: options.includeVisuals,
+      numberOfQuestions,
+      customInstructions: options.customInstructions
+    });
+  }
+
+  private getRubricLevels(style: string): { score: string; label: string }[] {
+    switch (style) {
+      case '4-point':
+        return [
+          { score: '4', label: 'Excellent' },
+          { score: '3', label: 'Good' },
+          { score: '2', label: 'Satisfactory' },
+          { score: '1', label: 'Needs Improvement' }
+        ];
+      case '3-point':
+        return [
+          { score: '3', label: 'Exceeds Expectations' },
+          { score: '2', label: 'Meets Expectations' },
+          { score: '1', label: 'Below Expectations' }
+        ];
+      case 'checklist':
+        return [
+          { score: '✓', label: 'Complete' },
+          { score: '×', label: 'Incomplete' }
+        ];
+      default:
+        return [
+          { score: '4', label: 'Excellent' },
+          { score: '3', label: 'Good' },
+          { score: '2', label: 'Satisfactory' },
+          { score: '1', label: 'Needs Improvement' }
+        ];
+    }
+  }
+}
