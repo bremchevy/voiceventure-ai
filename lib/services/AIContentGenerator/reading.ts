@@ -40,19 +40,47 @@ export class ReadingContentGenerator extends BaseAIContentGenerator {
     'story elements': 'Explore plot, setting, characters, and other story elements',
   };
 
-  private validateResponse(parsedResult: any, numberOfQuestions: number): boolean {
-    if (!parsedResult || typeof parsedResult !== 'object') {
-      console.error('❌ Invalid response format: not an object');
+  private validateResponse(response: any, options: ReadingContentOptions): boolean {
+    if (!response.title || !response.passage || !response.questions) {
+      console.error('❌ Missing required fields in response');
       return false;
     }
 
-    if (!Array.isArray(parsedResult.questions)) {
+    if (!Array.isArray(response.questions)) {
       console.error('❌ Invalid response format: questions is not an array');
       return false;
     }
 
-    if (parsedResult.questions.length !== numberOfQuestions) {
-      console.error(`❌ Wrong number of questions: got ${parsedResult.questions.length}, expected ${numberOfQuestions}`);
+    const expectedQuestions = options.numberOfQuestions || 10;
+    if (!Array.isArray(response.questions) || response.questions.length !== expectedQuestions) {
+      console.error(`❌ Expected ${expectedQuestions} questions but got ${response.questions?.length || 0}`);
+      return false;
+    }
+
+    // Validate each question has required fields
+    const validQuestions = response.questions.every((q: any) => 
+      q.question && 
+      q.type && 
+      q.answer && 
+      (q.type !== 'multiple_choice' || (Array.isArray(q.options) && q.options.length >= 2))
+    );
+
+    if (!validQuestions) {
+      console.error('❌ Invalid question format in response');
+      return false;
+    }
+
+    // Validate passage is not empty
+    if (!response.passage.trim()) {
+      console.error('❌ Empty passage');
+      return false;
+    }
+
+    // Validate vocabulary if included
+    if (response.vocabulary && (!Array.isArray(response.vocabulary) || !response.vocabulary.every((v: any) => 
+      v.word && v.definition && v.context
+    ))) {
+      console.error('❌ Invalid vocabulary format');
       return false;
     }
 
@@ -72,6 +100,9 @@ export class ReadingContentGenerator extends BaseAIContentGenerator {
       genre,
       focus = []
     } = options;
+
+    // Enforce maximum question limit
+    const limitedQuestions = Math.min(numberOfQuestions, this.MAX_QUESTIONS);
 
     const gradeSpecificPrompt = grade <= 2 ? `
 - Use very simple sentences
@@ -113,7 +144,7 @@ RESPONSE FORMAT:
 }
 
 REQUIREMENTS:
-- Generate EXACTLY ${numberOfQuestions} questions
+- Generate EXACTLY ${limitedQuestions} questions
 - Questions should focus on identifying and understanding character traits
 - Include 3-5 character trait vocabulary words
 - Make all content age-appropriate
@@ -127,14 +158,25 @@ ${customInstructions ? `\nAdditional Instructions:\n${customInstructions}` : ''}
   ): Promise<ReadingGenerationResult> {
     const MAX_RETRIES = 3;
     try {
-      const prompt = await this.buildReadingPrompt(options);
+      const {
+        numberOfQuestions = 5,
+        ...otherOptions
+      } = options;
+
+      // Enforce maximum question limit
+      const limitedQuestions = Math.min(numberOfQuestions, this.MAX_QUESTIONS);
+      if (limitedQuestions !== numberOfQuestions) {
+        console.log(`⚠️ Requested ${numberOfQuestions} questions exceeds maximum of ${this.MAX_QUESTIONS}. Limiting to ${this.MAX_QUESTIONS} questions.`);
+      }
+
+      const prompt = await this.buildReadingPrompt({ ...otherOptions, numberOfQuestions: limitedQuestions });
       
       console.log(`📚 Attempting to generate reading content (attempt ${retryCount + 1}/${MAX_RETRIES + 1})...`);
 
       const result = await this.generateContent({
         prompt,
         temperature: 0.7,
-        maxTokens: 2000
+        maxTokens: Math.max(2000, limitedQuestions * 150)
       });
 
       let parsedResult: any;
@@ -149,7 +191,7 @@ ${customInstructions ? `\nAdditional Instructions:\n${customInstructions}` : ''}
       }
 
       // Validate the response
-      if (!this.validateResponse(parsedResult, options.numberOfQuestions || 10)) {
+      if (!this.validateResponse(parsedResult, { ...options, numberOfQuestions: limitedQuestions })) {
         if (retryCount < MAX_RETRIES) {
           console.log('🔄 Response validation failed, retrying...');
           return this.generateReadingContent(options, retryCount + 1);
@@ -168,48 +210,6 @@ ${customInstructions ? `\nAdditional Instructions:\n${customInstructions}` : ''}
       }
       return this.generateDefaultContent(options);
     }
-  }
-
-  private validateResponse(response: any, options: ReadingContentOptions): boolean {
-    if (!response.title || !response.passage || !response.questions) {
-      console.error('❌ Missing required fields in response');
-      return false;
-    }
-
-    const expectedQuestions = options.numberOfQuestions || 10;
-    if (!Array.isArray(response.questions) || response.questions.length !== expectedQuestions) {
-      console.error(`❌ Expected ${expectedQuestions} questions but got ${response.questions?.length || 0}`);
-      return false;
-    }
-
-    // Validate each question has required fields
-    const validQuestions = response.questions.every((q: any) => 
-      q.question && 
-      q.type && 
-      q.answer && 
-      (q.type !== 'multiple_choice' || (Array.isArray(q.options) && q.options.length >= 2))
-    );
-
-    if (!validQuestions) {
-      console.error('❌ Invalid question format in response');
-      return false;
-    }
-
-    // Validate passage is not empty
-    if (!response.passage.trim()) {
-      console.error('❌ Empty passage');
-      return false;
-    }
-
-    // Validate vocabulary if included
-    if (response.vocabulary && (!Array.isArray(response.vocabulary) || !response.vocabulary.every((v: any) => 
-      v.word && v.definition && v.context
-    ))) {
-      console.error('❌ Invalid vocabulary format');
-      return false;
-    }
-
-    return true;
   }
 
   private generateDefaultContent(options: ReadingContentOptions): ReadingGenerationResult {

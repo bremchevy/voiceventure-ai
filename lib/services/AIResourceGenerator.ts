@@ -397,7 +397,7 @@ ${options.customInstructions ? `Additional requirements:\n${options.customInstru
   }
 
   private async generateReadingContent(options: ResourceGenerationOptions) {
-    const numberOfQuestions = options.questionCount || 10;
+    const numberOfQuestions = options.questionCount || 5;
     console.log(`📚 Generating ${numberOfQuestions} reading questions...`);
 
     const readingOptions: ReadingContentOptions = {

@@ -1066,8 +1066,22 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
       {/* Grade Level */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-3">Grade Level</label>
-        <div className="grid grid-cols-2 gap-3">
-          {["1st Grade", "2nd Grade", "3rd Grade", "4th Grade"].map((grade) => (
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            "Kindergarten",
+            "1st Grade",
+            "2nd Grade", 
+            "3rd Grade",
+            "4th Grade",
+            "5th Grade",
+            "6th Grade",
+            "7th Grade",
+            "8th Grade",
+            "9th Grade",
+            "10th Grade",
+            "11th Grade",
+            "12th Grade"
+          ].map((grade) => (
             <button
               key={grade}
               onClick={() => setSettings((prev) => ({ ...prev, grade }))}
