@@ -36,8 +36,8 @@ export class BaseAIContentGenerator {
   protected async generateContent(options: GenerationOptions): Promise<string> {
     try {
       const mergedOptions = {
-        model: 'gpt-4-turbo-preview',
-        maxTokens: 4000, // Increased for larger content
+        model: 'gpt-3.5-turbo',
+        maxTokens: 2000, // Adjusted for GPT-3.5 Turbo's typical response length
         temperature: 0.7,
         timeout: 60000,
         hasCustomInstructions: false,

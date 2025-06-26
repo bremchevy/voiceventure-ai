@@ -25,6 +25,7 @@ export interface MathGenerationResult extends GenerationResult {
 }
 
 export class MathContentGenerator extends BaseAIContentGenerator {
+  private readonly MAX_PROBLEMS = 20; // Maximum number of problems allowed
   private readonly topicPrompts: Record<string, string> = {
     algebra: 'Create algebra problems involving equations and variables',
     geometry: 'Generate geometry problems with shapes and measurements',
@@ -73,15 +74,21 @@ Make sure ALL problems involve fractions, not just whole numbers.`,
         customInstructions = ''
       } = options;
 
-      console.log(`🎲 Attempting to generate ${numberOfProblems} math problems (attempt ${retryCount + 1}/${MAX_RETRIES + 1})...`);
+      // Enforce maximum problem limit
+      const limitedProblems = Math.min(numberOfProblems, this.MAX_PROBLEMS);
+      if (limitedProblems !== numberOfProblems) {
+        console.log(`⚠️ Requested ${numberOfProblems} problems exceeds maximum of ${this.MAX_PROBLEMS}. Limiting to ${this.MAX_PROBLEMS} problems.`);
+      }
+
+      console.log(`🎲 Attempting to generate ${limitedProblems} math problems (attempt ${retryCount + 1}/${MAX_RETRIES + 1})...`);
 
       const result = await this.generateContent({
-        prompt: `Generate EXACTLY ${numberOfProblems} math problems for grade ${grade} students.
+        prompt: `Generate EXACTLY ${limitedProblems} math problems for grade ${grade} students.
 
 Topic: ${topic}
 Difficulty: ${difficulty}
 
-CRITICAL: You MUST generate EXACTLY ${numberOfProblems} problems in your response.
+CRITICAL: You MUST generate EXACTLY ${limitedProblems} problems in your response.
 
 Return your response in this JSON format:
 {
@@ -99,13 +106,13 @@ Return your response in this JSON format:
 }
 
 Requirements:
-- Generate EXACTLY ${numberOfProblems} problems
+- Generate EXACTLY ${limitedProblems} problems
 - Make all problems ${difficulty} difficulty
 - Focus on ${topic} concepts
 ${includeVisuals ? '- Include visual aids\n' : ''}
 ${includeSteps ? '- Include step-by-step solutions\n' : ''}
 ${customInstructions ? `${customInstructions}\n` : ''}`,
-        maxTokens: Math.max(2500, numberOfProblems * 150),
+        maxTokens: Math.max(2500, limitedProblems * 150),
         temperature: 0.2
       });
 
@@ -120,7 +127,7 @@ ${customInstructions ? `${customInstructions}\n` : ''}`,
         throw new Error('Failed to parse response');
       }
 
-      if (!this.validateResponse(parsedResult, numberOfProblems)) {
+      if (!this.validateResponse(parsedResult, limitedProblems)) {
         if (retryCount < MAX_RETRIES) {
           await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
           return this.generateMathContent(options, retryCount + 1);
@@ -129,11 +136,11 @@ ${customInstructions ? `${customInstructions}\n` : ''}`,
           title: `Grade ${options.grade} ${options.topic} Practice`,
           instructions: 'Solve the following problems. Show your work where necessary.',
           problems: this.generateDefaultProblems(options),
-          warning: `Could not generate ${numberOfProblems} problems after ${MAX_RETRIES} attempts.`
+          warning: `Could not generate ${limitedProblems} problems after ${MAX_RETRIES} attempts.`
         };
       }
 
-      console.log(`✅ Successfully generated ${numberOfProblems} math problems!`);
+      console.log(`✅ Successfully generated ${limitedProblems} math problems!`);
       return parsedResult;
     } catch (error: any) {
       console.error('❌ Error:', error);
