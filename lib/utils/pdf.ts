@@ -8,27 +8,29 @@ const PDF_STYLES = `
     padding: 40px !important;
     background: white !important;
     font-family: Arial, sans-serif !important;
+    width: 100% !important;
+    font-weight: 400 !important;
   }
   
   .pdf-content h1 {
     font-size: 28px !important;
     margin-bottom: 24px !important;
     color: black !important;
-    font-weight: bold !important;
+    font-weight: 700 !important;
   }
   
   .pdf-content h2 {
     font-size: 24px !important;
     margin-bottom: 18px !important;
     color: black !important;
-    font-weight: bold !important;
+    font-weight: 700 !important;
   }
   
   .pdf-content h3 {
     font-size: 20px !important;
     margin-bottom: 16px !important;
     color: black !important;
-    font-weight: bold !important;
+    font-weight: 600 !important;
   }
   
   .pdf-content p, .pdf-content div {
@@ -36,6 +38,8 @@ const PDF_STYLES = `
     line-height: 1.6 !important;
     margin-bottom: 12px !important;
     color: black !important;
+    font-weight: 500 !important;
+    letter-spacing: 0.01em !important;
   }
 
   .pdf-content .font-medium {
@@ -44,22 +48,25 @@ const PDF_STYLES = `
 
   .pdf-content .text-lg {
     font-size: 16px !important;
+    font-weight: 500 !important;
   }
 
   .pdf-content .text-sm {
     font-size: 13px !important;
+    font-weight: 500 !important;
   }
 
   .pdf-content .text-xs {
     font-size: 12px !important;
+    font-weight: 500 !important;
   }
   
   .pdf-content .border {
-    border: 1px solid #000 !important;
+    border: 1.5px solid #000 !important;
   }
   
   .pdf-content .border-b {
-    border-bottom: 1px solid #000 !important;
+    border-bottom: 1.5px solid #000 !important;
   }
   
   .pdf-content .rounded-lg {
@@ -92,7 +99,8 @@ const PDF_STYLES = `
   }
   
   .pdf-content .text-gray-600 {
-    color: #4B5563 !important;
+    color: #2D3748 !important;
+    font-weight: 500 !important;
   }
   
   .pdf-content .bg-gray-50 {
@@ -102,11 +110,23 @@ const PDF_STYLES = `
   .pdf-content .prose {
     font-size: 14px !important;
     line-height: 1.6 !important;
+    font-weight: 500 !important;
   }
 
   .pdf-content .name-date {
     font-size: 16px !important;
     margin-bottom: 20px !important;
+    font-weight: 500 !important;
+  }
+
+  .pdf-content .question {
+    font-weight: 600 !important;
+    letter-spacing: 0.01em !important;
+  }
+
+  .pdf-content .answer-space {
+    border-bottom: 1.5px solid #000 !important;
+    min-height: 24px !important;
   }
 `;
 
@@ -133,23 +153,27 @@ export const generatePDF = async (element: HTMLElement, fileName: string = 'work
     // Add to document temporarily
     document.body.appendChild(container);
 
-    // Create canvas with better settings
+    // A4 dimensions in points (72 points per inch)
+    const a4Width = 595.28;  // 8.27 inches
+    const a4Height = 841.89; // 11.69 inches
+    const marginPt = 40;     // margin in points
+
+    // Create canvas with high quality settings
     const canvas = await html2canvas(clonedElement, {
-      scale: 2,
+      scale: 3, // Higher scale for better quality
       useCORS: true,
       logging: false,
       backgroundColor: '#ffffff',
-      windowWidth: clonedElement.scrollWidth,
-      windowHeight: clonedElement.scrollHeight,
+      allowTaint: false,
+      removeContainer: true,
+      imageTimeout: 0,
       onclone: (clonedDoc) => {
-        // Any additional modifications to the cloned document can be done here
         const element = clonedDoc.querySelector('.pdf-content');
-        if (element) {
-          element.querySelectorAll('*').forEach(el => {
-            if (el instanceof HTMLElement) {
-              el.style.pageBreakInside = 'avoid';
-            }
-          });
+        if (element instanceof HTMLElement) {
+          // Ensure crisp text rendering
+          element.style.webkitFontSmoothing = 'antialiased';
+          element.style.mozOsxFontSmoothing = 'grayscale';
+          element.style.textRendering = 'optimizeLegibility';
         }
       }
     });
@@ -157,38 +181,32 @@ export const generatePDF = async (element: HTMLElement, fileName: string = 'work
     // Remove temporary container
     document.body.removeChild(container);
 
-    // Calculate dimensions to fit on A4
-    const imgWidth = 210; // A4 width in mm
-    const pageHeight = 297; // A4 height in mm
+    // Create PDF with A4 size and high quality settings
+    const pdf = new jsPDF({
+      format: 'a4',
+      unit: 'pt',
+      orientation: 'portrait',
+      compress: false, // Disable compression
+      precision: 16 // Increase precision
+    });
+    
+    // Calculate dimensions to fit on A4 with margins
+    const imgWidth = a4Width - (2 * marginPt);
     const imgHeight = (canvas.height * imgWidth) / canvas.width;
     
-    // Create PDF
-    const pdf = new jsPDF('p', 'mm', 'a4');
-    
-    // Calculate number of pages needed
-    const pagesNeeded = Math.ceil(imgHeight / pageHeight);
-    
-    // Add each page
-    for (let page = 0; page < pagesNeeded; page++) {
-      // Add new page if not first page
-      if (page > 0) {
-        pdf.addPage();
-      }
-      
-      // Calculate position and height for this page
-      const position = -page * pageHeight;
-      
-      pdf.addImage(
-        canvas.toDataURL('image/png', 1.0), 
-        'PNG', 
-        0, 
-        position, 
-        imgWidth, 
-        imgHeight
-      );
-    }
+    // Add image with high quality settings
+    pdf.addImage(
+      canvas.toDataURL('image/png', 1.0), // Maximum quality
+      'PNG',
+      marginPt,
+      marginPt,
+      imgWidth,
+      Math.min(imgHeight, a4Height - (2 * marginPt)),
+      undefined, // No alias
+      'FAST' // High quality
+    );
 
-    // Save the PDF
+    // Save the PDF with high quality settings
     pdf.save(fileName);
     return true;
   } catch (error) {
