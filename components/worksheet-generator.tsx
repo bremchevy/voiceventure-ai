@@ -37,13 +37,8 @@ interface ResourceType {
 }
 
 interface DetectedSubject {
-  subject: string
-  type: string
-  focus?: string[]
-  patterns?: RegExp[]
-  subTypes?: {
-    [key: string]: RegExp[] | undefined
-  }
+  subject: string;
+  type: string;
 }
 
 // NEW: Add additional settings for different resource types
@@ -55,7 +50,7 @@ interface WorksheetSettings {
   problemCount: number
   resourceType: "worksheet" | "quiz" | "rubric" | "lesson_plan" | "exit_slip"
   quizQuestionCount?: number
-  quizQuestionTypes?: string[]
+  selectedQuestionTypes?: string[]
   rubricCriteria?: string[]
   rubricStyle?: string
   exitSlipFormat?: string
@@ -85,6 +80,42 @@ const themeEmojis = {
 
 // Add this after the themeEmojis constant
 const suggestedTopics: Record<string, Record<string, string[]>> = {
+  General: {
+    quiz: [
+      "General Knowledge",
+      "Current Events",
+      "Critical Thinking",
+      "Study Skills",
+      "Test Preparation",
+      "Mixed Topics Review",
+      "Learning Strategies",
+      "Time Management",
+      "Research Skills",
+      "Problem Solving"
+    ],
+    worksheet: [
+      "Study Planning",
+      "Note-Taking Skills",
+      "Research Methods",
+      "Time Management",
+      "Project Planning",
+      "Learning Strategies"
+    ],
+    lesson_plan: [
+      "Study Skills",
+      "Research Methods",
+      "Critical Thinking",
+      "Time Management",
+      "Project-Based Learning"
+    ],
+    exit_slip: [
+      "Learning Reflection",
+      "Study Strategy Check",
+      "Understanding Assessment",
+      "Progress Review",
+      "Goal Setting"
+    ]
+  },
   Math: {
     worksheet: [
       "Addition and Subtraction",
@@ -228,6 +259,18 @@ interface GeneratedWorksheet {
   decorations?: string[];
 }
 
+interface QuizQuestion {
+  type: 'multiple_choice' | 'true_false' | 'short_answer';
+  number: number;
+  question: string;
+  points: number;
+  options?: string[];
+  correct?: string;
+  explanation?: string;
+  sampleAnswer?: string;
+  rubric?: string[];
+}
+
 export default function WorksheetGenerator({ request, onComplete, onBack }: WorksheetGeneratorProps) {
   // NEW: Enhanced resource type detection with specific names
   const detectResourceType = (request: string): ResourceType => {
@@ -319,7 +362,7 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
     problemCount: 10,
     resourceType: "worksheet",
     quizQuestionCount: 10,
-    quizQuestionTypes: ["Multiple Choice", "Short Answer"],
+    selectedQuestionTypes: ["Multiple Choice"],
     rubricCriteria: ["Content", "Organization", "Grammar"],
     rubricStyle: "4-point",
     exitSlipFormat: "multiple-choice",
@@ -365,229 +408,72 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
     if (request) {
       const lowerRequest = request.toLowerCase();
 
-      // First, check for math-specific content
-      const mathMatch = lowerRequest.match(/\b(?:math|mathematics|fractions|algebra|geometry)\b/i);
+      // Detect if it's a quiz request
+      const isQuiz = /\b(quiz|test|assessment|evaluation)\b/i.test(request);
       
-      // Literature-specific detection with more strict pattern
-      const literatureMatch = mathMatch ? null : (
-        request.match(/(?:for|about|on|from)\s+"([^"]+)"(?:\s+by\s+([^"]+))?/i) || 
-        request.match(/(?:reading|book|story|novel|literature)\s+(?:for|about|on|from)\s+([^,]+?)(?:\s+by\s+([^,]+))?(?=\s*$|\s*,|\s+with|\s+including)/i)
-      );
-
-      let detectedSubject: DetectedSubject | null = null;
-      let detectedSubType: string | null = null;
-
-      // If it's a math request, set math subject directly
-      if (mathMatch) {
-        detectedSubject = {
-          subject: "Math",
-          type: "math",
-          focus: ["Fractions & Decimals"]
-        };
-        
+      // Check for specific subject mentions
+      const hasMathMention = /\b(math|mathematics|algebra|geometry|calculus)\b/i.test(request);
+      const hasReadingMention = /\b(reading|literature|comprehension|vocabulary|grammar)\b/i.test(request);
+      const hasScienceMention = /\b(science|biology|chemistry|physics|experiment)\b/i.test(request);
+      
+      // If it's a quiz and no specific subject is mentioned, set to General
+      if (isQuiz && !(hasMathMention || hasReadingMention || hasScienceMention)) {
         setSettings(prev => ({
           ...prev,
-          subject: "Math",
-          problemType: "math",
-          focus: ["Fractions & Decimals"]
+          subject: "General",
+          resourceType: "quiz"
         }));
       }
-      // If literature-specific content and no math terms
+      
+      // Rest of your existing detection logic...
+      const mathMatch = request.match(/\b(\d+)\s*([\+\-\*\/×÷])\s*(\d+)\b/) || 
+                       lowerRequest.match(/\b(?:math|mathematics|fractions|algebra|geometry)\b/i);
+      
+      const literatureMatch = mathMatch ? null : 
+        request.match(/(?:for|about|on|from)\s+"([^"]+)"(?:\s+by\s+([^"]+))?/i) || 
+        request.match(/(?:reading|book|story|novel|literature)\s+(?:for|about|on|from)\s+([^,]+?)(?:\s+by\s+([^,]+))?(?=\s*$|\s*,|\s+with|\s+including)/i);
+
+      // Initialize detectedSubject with proper type
+      let detectedSubject: DetectedSubject | null = null;
+
+      // If math-related terms
+      if (/\b(math|addition|subtraction|multiplication|division|algebra|geometry)\b/i.test(lowerRequest)) {
+        detectedSubject = {
+          subject: "Math",
+          type: "math"
+        } as DetectedSubject;
+      }
+      // If literature-specific content
       else if (literatureMatch) {
-        const [_, title, author] = literatureMatch;
         detectedSubject = {
           subject: "Reading",
           type: "language",
           focus: ["Reading Comprehension"]
-        };
+        } as DetectedSubject;
         
         // If vocabulary is mentioned, override the focus
-        if (lowerRequest.includes('vocabulary') || lowerRequest.includes('vocab')) {
-          detectedSubject.focus = ["Spelling, Vocabulary"];
-        }
-        
-        setSettings(prev => ({
-          ...prev,
-          subject: "Reading",
-          problemType: "language",
-          topicArea: title,
-          customInstructions: detectedSubject?.focus?.[0] ? 
-            `Focus on ${detectedSubject.focus[0].toLowerCase()} from "${title}"${author ? ` by ${author}` : ''}` :
-            `Focus on reading comprehension from "${title}"${author ? ` by ${author}` : ''}`,
-          includeVocabulary: detectedSubject?.focus?.[0]?.includes("Vocabulary") ?? false
-        }));
-      } else {
-        // Check each subject pattern
-        const subjectPatterns = [
-          {
-            subject: "Math",
-            type: "math",
-            patterns: [
-              // Core math concepts
-              /\b(?:math|mathematics|arithmetic)\b/i,
-              // Operations
-              /\b(?:addition|subtraction|multiplication|division)\b/i,
-              // Advanced topics
-              /\b(?:algebra|geometry|calculus|trigonometry)\b/i,
-              // Number concepts
-              /\b(?:fractions|decimals|percentages|integers)\b/i,
-              // Problem types
-              /\b(?:word problems|equations|inequalities)\b/i
-            ],
-            subTypes: {
-              "Addition, Subtraction, Mixed Operations": [
-                /\b(?:addition|subtraction|mixed operations)\b/i,
-                /\b(?:adding|subtracting)\b/i,
-                /\b(?:plus|minus|sums|differences)\b/i
-              ],
-              "Multiplication & Division": [
-                /\b(?:multiplication|division)\b/i,
-                /\b(?:multiplying|dividing)\b/i,
-                /\b(?:times|divided by|products|quotients)\b/i
-              ],
-              "Fractions & Decimals": [
-                /\b(?:fractions?|fractional)\b/i,
-                /\b(?:decimals?|decimal numbers?)\b/i,
-                /\b(?:mixed numbers?|improper fractions?)\b/i
-              ],
-              "Word Problems": [
-                /\b(?:word problems|story problems)\b/i,
-                /\b(?:real-world|application)\b/i
-              ]
-            }
-          },
-          {
+        if (/\b(vocabulary|spelling)\b/i.test(lowerRequest)) {
+          detectedSubject = {
             subject: "Reading",
             type: "language",
-            patterns: [
-              // Language arts
-              /\b(?:reading|language arts|english|ela)\b/i,
-              // Specific skills
-              /\b(?:vocabulary|comprehension|grammar)\b/i,
-              // Literature
-              /\b(?:literature|story|novel|book)\b/i,
-              // Writing
-              /\b(?:writing|composition|essay)\b/i
-            ],
-            subTypes: {
-              "Spelling, Vocabulary": [
-                /\b(?:spelling|vocabulary|vocab|words)\b/i,
-                /\b(?:definitions|word meanings)\b/i
-              ],
-              "Reading Comprehension": [
-                /\b(?:comprehension|understanding|analysis)\b/i,
-                /\b(?:main idea|details|inference)\b/i
-              ],
-              "Grammar & Writing": [
-                /\b(?:grammar|writing|sentences)\b/i,
-                /\b(?:punctuation|parts of speech)\b/i
-              ]
-            }
-          },
-          {
-            subject: "Science",
-            type: "science",
-            patterns: [
-              // General science
-              /\b(?:science|scientific method)\b/i,
-              // Specific branches
-              /\b(?:biology|chemistry|physics)\b/i,
-              // Topics
-              /\b(?:earth science|life science|physical science)\b/i,
-              // Activities
-              /\b(?:experiment|observation|hypothesis)\b/i
-            ],
-            subTypes: {
-              "Labeling, Matching": [
-                /\b(?:labeling|matching|diagrams)\b/i,
-                /\b(?:parts|structures|systems)\b/i
-              ],
-              "Observation": [
-                /\b(?:observation|experiment|data)\b/i,
-                /\b(?:scientific method|hypothesis)\b/i
-              ],
-              "Concepts": [
-                /\b(?:concepts|principles|theories)\b/i,
-                /\b(?:laws|rules|formulas)\b/i
-              ]
-            }
-          },
-          {
-            subject: "Social Studies",
-            type: "social",
-            patterns: [
-              // General social studies
-              /\b(?:social studies|history|geography)\b/i,
-              // Specific areas
-              /\b(?:civics|government|economics)\b/i,
-              // Topics
-              /\b(?:culture|society|civilization)\b/i,
-              // Skills
-              /\b(?:maps|timelines|primary sources)\b/i
-            ],
-            subTypes: {
-              "Geography": [
-                /\b(?:geography|maps|locations)\b/i,
-                /\b(?:countries|continents|regions)\b/i
-              ],
-              "History": [
-                /\b(?:history|historical|timeline)\b/i,
-                /\b(?:events|periods|eras)\b/i
-              ],
-              "Civics": [
-                /\b(?:civics|government|citizenship)\b/i,
-                /\b(?:rights|responsibilities|democracy)\b/i
-              ]
-            }
-          }
-        ];
-
-        // Check each subject pattern
-        for (const subjectPattern of subjectPatterns) {
-          if (subjectPattern.patterns.some(pattern => pattern.test(lowerRequest))) {
-            detectedSubject = {
-              subject: subjectPattern.subject,
-              type: subjectPattern.type,
-              patterns: subjectPattern.patterns,
-              subTypes: Object.fromEntries(
-                Object.entries(subjectPattern.subTypes).map(([key, value]) => [key, value || undefined])
-              )
-            };
-            
-            // Check for specific sub-types
-            for (const [subType, patterns] of Object.entries(subjectPattern.subTypes)) {
-              if (patterns.some((pattern: RegExp) => pattern.test(lowerRequest))) {
-                detectedSubType = subType;
-                break;
-              }
-            }
-
-            if (detectedSubject) {
-              setSettings(prev => ({
-                ...prev,
-                subject: detectedSubject?.subject ?? prev.subject,
-                problemType: detectedSubject?.type ?? prev.problemType,
-                focus: detectedSubType ? [detectedSubType] : undefined,
-                customInstructions: detectedSubType ? 
-                  `Focus on ${detectedSubType.toLowerCase()}` : 
-                  detectedSubject?.subject ? `Focus on ${detectedSubject.subject.toLowerCase()} concepts` : prev.customInstructions
-              }));
-            }
-            break;
-          }
+            focus: ["Vocabulary"]
+          } as DetectedSubject;
         }
+      }
+      // If science-related terms
+      else if (/\b(science|experiment|hypothesis|observation)\b/i.test(lowerRequest)) {
+        detectedSubject = {
+          subject: "Science",
+          type: "science"
+        } as DetectedSubject;
+      }
 
-        if (detectedSubject) {
-          setSettings(prev => ({
-            ...prev,
-            subject: detectedSubject?.subject ?? prev.subject,
-            problemType: detectedSubject?.type ?? prev.problemType,
-            focus: detectedSubType ? [detectedSubType] : undefined,
-            customInstructions: detectedSubType ? 
-              `Focus on ${detectedSubType.toLowerCase()}` : 
-              detectedSubject?.subject ? `Focus on ${detectedSubject.subject.toLowerCase()} concepts` : prev.customInstructions
-          }));
-        }
+      if (detectedSubject && !literatureMatch) {
+        setSettings(prev => ({
+          ...prev,
+          subject: detectedSubject!.subject,
+          problemType: detectedSubject!.type
+        }));
       }
 
       // Detect resource type
@@ -802,39 +688,115 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
     return questions
   }
 
+  const getQuestionTypes = (format: string): string => {
+    switch (format) {
+      case 'Multiple Choice':
+        return 'multiple_choice';
+      case 'True/False':
+        return 'true_false';
+      case 'Short Answer':
+        return 'short_answer';
+      default:
+        return 'multiple_choice';
+    }
+  };
+
   // NEW: Generate different resource types
   const generateQuizQuestions = (settings: WorksheetSettings) => {
-    const questions = []
-    const questionCount = settings.quizQuestionCount || 10
-    const questionTypes = settings.quizQuestionTypes || ["Multiple Choice"]
+    console.group('Quiz Generation Process');
+    console.log('Initializing Quiz Generation:', {
+      questionCount: settings.quizQuestionCount,
+      selectedTypes: settings.selectedQuestionTypes,
+      subject: settings.subject,
+      grade: settings.grade,
+      difficulty: settings.difficulty,
+      topic: settings.topicArea
+    });
 
-    for (let i = 0; i < questionCount; i++) {
-      const questionType = questionTypes[i % questionTypes.length]
+    const questions: QuizQuestion[] = [];
+    const questionCount = settings.quizQuestionCount || 10;
+    const selectedTypes = settings.selectedQuestionTypes?.map(type => getQuestionTypes(type)) || ['multiple_choice'];
+    const topic = settings.topicArea.trim();
 
-      if (questionType === "Multiple Choice") {
-        questions.push({
-          type: "multiple_choice",
-          question: `Question ${i + 1}: Sample multiple choice question about ${settings.subject.toLowerCase()}?`,
-          options: ["A) Option 1", "B) Option 2", "C) Option 3", "D) Option 4"],
-          correct: "A",
-        })
-      } else if (questionType === "True/False") {
-        questions.push({
-          type: "true_false",
-          question: `Question ${i + 1}: True or False - Sample statement about ${settings.subject.toLowerCase()}.`,
-          correct: "True",
-        })
-      } else if (questionType === "Short Answer") {
-        questions.push({
-          type: "short_answer",
-          question: `Question ${i + 1}: Explain the concept of [topic] in ${settings.subject.toLowerCase()}.`,
-          points: 5,
-        })
+    // Generate questions based on selected type(s)
+    selectedTypes.forEach((type) => {
+      const questionsForType = Math.floor(questionCount / selectedTypes.length);
+      const extraQuestions = type === selectedTypes[selectedTypes.length - 1] ? questionCount % selectedTypes.length : 0;
+      const totalQuestions = questionsForType + extraQuestions;
+
+      console.log(`Generating ${totalQuestions} questions of type ${type}`);
+
+      for (let i = 0; i < totalQuestions; i++) {
+        const questionNumber = questions.length + 1;
+
+        switch (type) {
+          case 'multiple_choice':
+            questions.push({
+              type: 'multiple_choice',
+              number: questionNumber,
+              question: `Question ${questionNumber}: ${topic ? `Based on ${topic}, ` : ''}What is the correct answer about ${settings.subject.toLowerCase()}?`,
+              options: [
+                "A) Option 1 - Correct answer with detailed explanation",
+                "B) Option 2 - Plausible but incorrect answer",
+                "C) Option 3 - Common misconception",
+                "D) Option 4 - Clearly incorrect answer"
+              ],
+              correct: "A",
+              points: 2
+            });
+            break;
+
+          case 'true_false':
+            questions.push({
+              type: 'true_false',
+              number: questionNumber,
+              question: `Question ${questionNumber}: ${topic ? `Regarding ${topic}, true or false: ` : 'True or False: '}This statement about ${settings.subject.toLowerCase()} is correct.`,
+              correct: "True",
+              explanation: "Explanation why this statement is true/false",
+              points: 1
+            });
+            break;
+
+          case 'short_answer':
+            questions.push({
+              type: 'short_answer',
+              number: questionNumber,
+              question: `Question ${questionNumber}: ${topic ? `In the context of ${topic}, explain ` : 'Explain '}the concept in ${settings.subject.toLowerCase()}.`,
+              sampleAnswer: "Sample answer showing expected level of detail and key points to cover",
+              points: 5,
+              rubric: [
+                "Complete explanation - 5 points",
+                "Partial explanation with minor errors - 3-4 points",
+                "Basic understanding shown - 2 points",
+                "Minimal or incorrect response - 0-1 points"
+              ]
+            });
+            break;
+        }
       }
+    });
+
+    interface QuestionSummary {
+      count: number;
+      totalPoints: number;
     }
 
-    return questions
-  }
+    const questionSummary = questions.reduce((acc: Record<string, QuestionSummary>, q) => {
+      acc[q.type] = acc[q.type] || { count: 0, totalPoints: 0 };
+      acc[q.type].count++;
+      acc[q.type].totalPoints += q.points;
+      return acc;
+    }, {} as Record<string, QuestionSummary>);
+
+    console.log('Quiz Generation Summary:', {
+      totalQuestions: questions.length,
+      totalPoints: Object.values(questionSummary).reduce((sum, type) => sum + type.totalPoints, 0),
+      questionsByType: questionSummary
+    });
+
+    console.groupEnd();
+    return questions;
+  };
 
   const generateRubricCriteria = (settings: WorksheetSettings) => {
     const criteria = settings.rubricCriteria || ["Content", "Organization"]
@@ -906,6 +868,7 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
           questionCount: settings.problemCount,
           focus: settings.focus,
           customInstructions: settings.customInstructions,
+          selectedQuestionTypes: settings.selectedQuestionTypes?.map(type => getQuestionTypes(type)) || ['multiple_choice']
         }),
       });
 
@@ -1100,8 +1063,8 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
       {/* Subject */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-3">Subject</label>
-        <div className="grid grid-cols-3 gap-3">
-          {["Math", "Reading", "Science"].map((subject) => (
+        <div className="grid grid-cols-4 gap-3">
+          {["General", "Math", "Reading", "Science"].map((subject) => (
             <button
               key={subject}
               onClick={() => setSettings((prev) => ({ ...prev, subject }))}
@@ -1111,7 +1074,15 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
                   : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
               }`}
             >
-              {subject}
+              <div className="flex items-center justify-center gap-2">
+                <span>
+                  {subject === "General" ? "🎯" : 
+                   subject === "Math" ? "📐" : 
+                   subject === "Reading" ? "📚" : 
+                   "🔬"}
+                </span>
+                <span>{subject}</span>
+              </div>
             </button>
           ))}
         </div>
@@ -1234,38 +1205,47 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-3">Quiz Format</label>
           <div className="space-y-2">
-            {["Multiple Choice", "Short Answer", "True/False", "Mixed Format"].map((format) => (
+            {["Multiple Choice", "True/False", "Short Answer"].map((format) => (
               <button
                 key={format}
                 onClick={() => {
-                  const currentTypes = settings.quizQuestionTypes || []
-                  if (format === "Mixed Format") {
-                    setSettings((prev) => ({
-                      ...prev,
-                      quizQuestionTypes: ["Multiple Choice", "Short Answer", "True/False"],
-                    }))
-                  } else {
-                    const newTypes = currentTypes.includes(format)
-                      ? currentTypes.filter((t) => t !== format)
-                      : [...currentTypes.filter((t) => t !== "Mixed Format"), format]
-                    setSettings((prev) => ({ ...prev, quizQuestionTypes: newTypes }))
-                  }
+                  // Clear existing types and set only the clicked type
+                  const newTypes = [format];
+                  console.group('Quiz Format Selection Update');
+                  console.log('Format Change:', {
+                    format,
+                    newTypes
+                  });
+                  
+                  setSettings((prev) => {
+                    const newSettings = { ...prev, selectedQuestionTypes: newTypes };
+                    console.log('Updated Settings:', {
+                      selectedTypes: newSettings.selectedQuestionTypes,
+                      totalFormats: newSettings.selectedQuestionTypes?.length || 0
+                    });
+                    return newSettings;
+                  });
+                  console.groupEnd();
                 }}
-                className={`w-full p-3 rounded-lg border-2 text-sm font-medium transition-all text-left ${
-                  (format === "Mixed Format" && (settings.quizQuestionTypes?.length ?? 0) >= 2) ||
-                  (settings.quizQuestionTypes?.includes(format) ?? false)
+                className={`w-full p-3 rounded-lg border-2 text-sm font-medium transition-all text-left flex items-center justify-between ${
+                  settings.selectedQuestionTypes?.includes(format)
                     ? "border-purple-500 bg-purple-50 text-purple-700"
                     : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
                 }`}
               >
-                {format}{" "}
-                {(format === "Mixed Format" && (settings.quizQuestionTypes?.length ?? 0) >= 2) ||
-                (settings.quizQuestionTypes?.includes(format) ?? false)
-                  ? "✓"
-                  : ""}
+                <div className="flex items-center gap-2">
+                  <span>{format === "Multiple Choice" ? "🔘" : format === "Short Answer" ? "✏️" : "⚖️"}</span>
+                  <span>{format}</span>
+                </div>
+                {settings.selectedQuestionTypes?.includes(format) && (
+                  <span className="text-purple-600">✓</span>
+                )}
               </button>
             ))}
           </div>
+          {(!settings.selectedQuestionTypes || settings.selectedQuestionTypes.length === 0) && (
+            <p className="text-sm text-red-500 mt-2">Please select at least one quiz format</p>
+          )}
         </div>
       )}
 
@@ -1352,22 +1332,37 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
       {/* Topic Area Field */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-3 required-field">
+          {settings.resourceType === "quiz" ? (
+            <>
+              Quiz Topic
+              <span className="text-xs text-gray-500 ml-2">(What would you like to test?)</span>
+            </>
+          ) : (
+            <>
           Topic Area
           <span className="text-xs text-gray-500 ml-2">(What specific topic would you like to cover?)</span>
+            </>
+          )}
         </label>
         <div className="space-y-2">
           <input
             type="text"
             value={settings.topicArea}
             onChange={(e) => setSettings((prev) => ({ ...prev, topicArea: e.target.value }))}
-            placeholder="e.g., Water Cycle, Fractions, Character Traits..."
+            placeholder={settings.resourceType === "quiz" 
+              ? "e.g., Chapter 5 Review, Multiplication Facts, Reading Comprehension..."
+              : "e.g., Water Cycle, Fractions, Character Traits..."}
             className={`w-full p-3 rounded-lg border-2 ${
               !settings.topicArea.trim() ? 'border-red-200' : 'border-gray-200'
             } text-sm focus:border-purple-500 focus:outline-none`}
             required
           />
           {!settings.topicArea.trim() && (
-            <p className="text-sm text-red-500 mt-1">Please select or enter a topic area</p>
+            <p className="text-sm text-red-500 mt-1">
+              {settings.resourceType === "quiz" 
+                ? "Please enter what you want to test"
+                : "Please select or enter a topic area"}
+            </p>
           )}
           <div className="flex flex-wrap gap-2">
             {topicSuggestions.map((topic, index) => (
@@ -1680,7 +1675,20 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
                   {Array.isArray(sectionContent) && sectionContent.map((problem: any, index: number) => (
                     <div key={index} className="border-b pb-6 mb-6">
                       <p className="font-medium text-lg mb-3">{index + 1}. {problem.question}</p>
-                      {problem.options ? (
+                      {problem.type === 'true_false' ? (
+                        <div className="ml-6 mt-3 space-y-3">
+                          <div className="flex items-center gap-4">
+                            <div className="flex items-center gap-2">
+                              <div className="w-5 h-5 border-2 border-gray-300 rounded-full"></div>
+                              <span className="text-gray-700">True</span>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <div className="w-5 h-5 border-2 border-gray-300 rounded-full"></div>
+                              <span className="text-gray-700">False</span>
+                            </div>
+                          </div>
+                        </div>
+                      ) : problem.options ? (
                         <div className="ml-6 mt-3 space-y-2">
                           {problem.options.map((option: string, optIndex: number) => (
                             <div key={optIndex} className="flex items-center gap-3">

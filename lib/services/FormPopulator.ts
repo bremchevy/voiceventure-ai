@@ -180,6 +180,9 @@ export class FormPopulator {
       'mathematics': 'Math',
       'english': 'Reading',
       'ela': 'Reading',
+      'general knowledge': 'General',
+      'general studies': 'General',
+      'general': 'General'
       // Add more mappings as needed
     };
     return subjectMap[currentSubject.toLowerCase()] || currentSubject;

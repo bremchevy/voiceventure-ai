@@ -216,10 +216,10 @@ export function getDifficultyParameters(
   
   // Scale factors based on difficulty
   const difficultyScaleFactor = {
-    basic: 0.8,
-    intermediate: 1.0,
-    advanced: 1.2
-  }[difficulty] || 1.0;
+    basic: 0.6,
+    intermediate: 0.8,
+    advanced: 1.0
+  }[difficulty] || 0.8;
 
   // Subject-specific adjustments
   const subjectScaling = getSubjectScaling(subject, band);
@@ -228,10 +228,10 @@ export function getDifficultyParameters(
   let params = {
     cognitiveLevel: scaleCognitiveLevels(baseCognitive, difficultyScaleFactor),
     questionTypes: QUESTION_TYPES_BY_BAND[band] || ['multiple_choice', 'short_answer'],
-    languageComplexity: calculateLanguageComplexity(band, difficulty),
-    visualSupport: calculateVisualSupport(band, subject),
-    conceptDepth: calculateConceptDepth(band, difficulty) * subjectScaling,
-    multiStepComplexity: calculateMultiStepComplexity(band, difficulty) * subjectScaling
+    languageComplexity: calculateLanguageComplexity(band, difficulty) * 0.8,
+    visualSupport: calculateVisualSupport(band, subject) * 1.2,
+    conceptDepth: calculateConceptDepth(band, difficulty) * subjectScaling * 0.8,
+    multiStepComplexity: calculateMultiStepComplexity(band, difficulty) * subjectScaling * 0.7
   };
 
   // Special adjustments for specific grades
@@ -356,8 +356,9 @@ function calculateVisualSupport(band: keyof typeof GRADE_BANDS, subject: Subject
   const subjectModifier = {
     math: 2,
     science: 1,
-    reading: 0
-  }[subject];
+    reading: 0,
+    general: 1
+  }[subject] || 0;
 
   return Math.min(Math.max(bandBaseSupport + subjectModifier, 1), 10);
 }
@@ -401,15 +402,16 @@ function getSubjectScaling(subject: Subject, band: keyof typeof GRADE_BANDS): nu
   const subjectBase = {
     math: 1.0,
     science: 0.9,
-    reading: 0.8
-  }[subject];
+    reading: 0.8,
+    general: 0.7
+  }[subject] || 0.7;
 
   // Band-specific adjustments
   const bandModifier = {
-    EARLY_ELEMENTARY: 0.8,
-    UPPER_ELEMENTARY: 1.0,
-    MIDDLE_SCHOOL: 1.2,
-    HIGH_SCHOOL: 1.4
+    EARLY_ELEMENTARY: 0.7,
+    UPPER_ELEMENTARY: 0.8,
+    MIDDLE_SCHOOL: 0.9,
+    HIGH_SCHOOL: 1.0
   }[band];
 
   return subjectBase * bandModifier;
@@ -478,36 +480,44 @@ function getConceptDepthGuidelines(depth: number, subject: Subject): string {
       low: 'Focus on literal comprehension and basic vocabulary',
       medium: 'Include inferential understanding and context clues',
       high: 'Explore themes, author\'s purpose, and literary analysis'
+    },
+    general: {
+      low: 'Focus on foundational knowledge and basic recall',
+      medium: 'Include application and analysis of concepts',
+      high: 'Explore complex relationships and critical thinking'
     }
-  }[subject];
+  };
 
-  if (depth <= 3) return subjectSpecific.low;
-  if (depth <= 7) return subjectSpecific.medium;
-  return subjectSpecific.high;
+  const depthLevel = depth <= 0.33 ? 'low' : depth <= 0.66 ? 'medium' : 'high';
+  return subjectSpecific[subject]?.[depthLevel] || subjectSpecific.general[depthLevel];
 }
 
 function getComplexityGuidelines(complexity: number, subject: Subject): string {
   const subjectSpecific = {
     math: {
-      low: 'Single-step problems with clear instructions',
-      medium: 'Two to three step problems with some guidance',
-      high: 'Multi-step problems requiring strategic thinking'
+      low: 'Use simple numbers and single-step problems',
+      medium: 'Include multi-step problems and basic formulas',
+      high: 'Incorporate complex formulas and word problems'
     },
     science: {
-      low: 'Single-variable relationships and simple processes',
-      medium: 'Multi-variable interactions with guided analysis',
-      high: 'Complex systems analysis and experimental design'
+      low: 'Use basic terminology and simple concepts',
+      medium: 'Include scientific processes and relationships',
+      high: 'Explore complex systems and interdependencies'
     },
     reading: {
-      low: 'Direct recall and simple comprehension questions',
-      medium: 'Analysis of text elements and basic inference',
-      high: 'Complex analysis across multiple text elements'
+      low: 'Use simple sentences and familiar vocabulary',
+      medium: 'Include compound sentences and grade-level vocabulary',
+      high: 'Explore complex texts and advanced vocabulary'
+    },
+    general: {
+      low: 'Use straightforward questions and familiar topics',
+      medium: 'Include analytical questions and cross-topic connections',
+      high: 'Explore interdisciplinary concepts and real-world applications'
     }
-  }[subject];
+  };
 
-  if (complexity <= 3) return subjectSpecific.low;
-  if (complexity <= 7) return subjectSpecific.medium;
-  return subjectSpecific.high;
+  const complexityLevel = complexity <= 0.33 ? 'low' : complexity <= 0.66 ? 'medium' : 'high';
+  return subjectSpecific[subject]?.[complexityLevel] || subjectSpecific.general[complexityLevel];
 }
 
 function getGradeBandSpecificGuidelines(band: keyof typeof GRADE_BANDS, subject: Subject): string {
@@ -539,7 +549,16 @@ EARLY READING GUIDELINES:
 - Focus on letter recognition and sounds
 - Keep sentences short and simple
 - Include rhyming and word families
-- Use familiar vocabulary and contexts`
+- Use familiar vocabulary and contexts`,
+      general: `
+EARLY GENERAL GUIDELINES:
+- Use simple, clear language
+- Include visual aids and examples
+- Focus on basic concepts
+- Connect to daily experiences
+- Use engaging activities
+- Include interactive elements
+- Make learning fun and relatable`
     },
     UPPER_ELEMENTARY: {
       math: `
@@ -568,7 +587,16 @@ UPPER ELEMENTARY READING GUIDELINES:
 - Incorporate different genres
 - Include inference and prediction
 - Focus on main idea and details
-- Use text evidence for support`
+- Use text evidence for support`,
+      general: `
+UPPER ELEMENTARY GENERAL GUIDELINES:
+- Use grade-appropriate language
+- Include critical thinking elements
+- Focus on real-world connections
+- Incorporate multiple perspectives
+- Include problem-solving tasks
+- Use engaging examples
+- Encourage independent thinking`
     },
     MIDDLE_SCHOOL: {
       math: `
@@ -597,7 +625,16 @@ MIDDLE SCHOOL READING GUIDELINES:
 - Use multiple text types
 - Incorporate research skills
 - Include critical thinking
-- Focus on argument analysis`
+- Focus on argument analysis`,
+      general: `
+MIDDLE SCHOOL GENERAL GUIDELINES:
+- Develop analytical skills
+- Include research components
+- Focus on critical evaluation
+- Use diverse perspectives
+- Incorporate current events
+- Include cross-disciplinary connections
+- Encourage independent thinking`
     },
     HIGH_SCHOOL: {
       math: `
@@ -608,10 +645,7 @@ HIGH SCHOOL MATH GUIDELINES:
 - Incorporate calculus principles
 - Include mathematical modeling
 - Focus on logical reasoning
-- Use real-world applications
-- Include cross-concept connections
-- Require mathematical justification
-- Incorporate technology tools`,
+- Use real-world applications`,
       science: `
 HIGH SCHOOL SCIENCE GUIDELINES:
 - Explore advanced theories and models
@@ -620,10 +654,7 @@ HIGH SCHOOL SCIENCE GUIDELINES:
 - Focus on scientific research
 - Include peer review process
 - Use advanced technology
-- Incorporate cross-disciplinary concepts
-- Include real-world applications
-- Focus on scientific writing
-- Use advanced data visualization`,
+- Incorporate cross-disciplinary concepts`,
       reading: `
 HIGH SCHOOL READING GUIDELINES:
 - Analyze complex texts and themes
@@ -632,15 +663,21 @@ HIGH SCHOOL READING GUIDELINES:
 - Use multiple text synthesis
 - Include research methodology
 - Focus on academic writing
-- Incorporate rhetorical analysis
-- Include cultural context
-- Use advanced vocabulary
-- Focus on author's purpose and craft`
+- Incorporate rhetorical analysis`,
+      general: `
+HIGH SCHOOL GENERAL GUIDELINES:
+- Focus on advanced concepts
+- Include complex analysis
+- Use research methodology
+- Incorporate critical theory
+- Include interdisciplinary connections
+- Focus on real-world applications
+- Develop analytical thinking`
     }
   }[band];
 
   return `GRADE BAND SPECIFIC GUIDELINES:
-${guidelines[subject]}`;
+${guidelines[subject] || guidelines['general']}`;
 }
 
 // Add this after the getGradeBandSpecificGuidelines function

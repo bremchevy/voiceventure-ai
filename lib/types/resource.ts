@@ -1,6 +1,6 @@
 export type ResourceType = 'worksheet' | 'quiz' | 'rubric' | 'lesson_plan' | 'exit_slip';
 
-export type Subject = 'math' | 'science' | 'reading';
+export type Subject = 'math' | 'reading' | 'science' | 'general';
 
 export type DifficultyLevel = 'basic' | 'intermediate' | 'advanced';
 

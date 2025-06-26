@@ -1,6 +1,7 @@
 import { MathContentGenerator } from './AIContentGenerator/math';
 import { ReadingContentGenerator, ReadingContentOptions } from './AIContentGenerator/reading';
 import { ScienceContentGenerator, ScienceContentOptions } from './AIContentGenerator/science';
+import { GeneralContentGenerator, GeneralContentOptions } from './AIContentGenerator/general';
 import { TemplateManager } from './TemplateManager/base';
 import type { ResourceGenerationOptions, GeneratedResource, ResourceType } from '@/lib/types/resource';
 import OpenAI from 'openai';
@@ -15,6 +16,7 @@ export class AIResourceGenerator {
   private mathGenerator: MathContentGenerator;
   private readingGenerator: ReadingContentGenerator;
   private scienceGenerator: ScienceContentGenerator;
+  private generalGenerator: GeneralContentGenerator;
   private templateManager: TemplateManager;
 
   constructor() {
@@ -22,6 +24,7 @@ export class AIResourceGenerator {
     this.mathGenerator = new MathContentGenerator();
     this.readingGenerator = new ReadingContentGenerator();
     this.scienceGenerator = new ScienceContentGenerator();
+    this.generalGenerator = new GeneralContentGenerator();
     this.templateManager = new TemplateManager();
   }
 
@@ -137,6 +140,11 @@ ${options.customInstructions ? `Additional requirements:\n${options.customInstru
         case 'science':
           return this.formatContentForTemplate(
             await this.generateScienceContent(options),
+            options
+          );
+        case 'general':
+          return this.formatContentForTemplate(
+            await this.generateGeneralContent(options),
             options
           );
         default:
@@ -375,7 +383,10 @@ ${options.customInstructions ? `Additional requirements:\n${options.customInstru
       'science': 'science',
       'biology': 'science',
       'chemistry': 'science',
-      'physics': 'science'
+      'physics': 'science',
+      'general knowledge': 'general',
+      'general studies': 'general',
+      'general': 'general'
     };
 
     return subjectMap[subject.toLowerCase()] || subject.toLowerCase();
@@ -433,6 +444,94 @@ ${options.customInstructions ? `Additional requirements:\n${options.customInstru
     };
 
     return await this.scienceGenerator.generateScienceContent(scienceOptions);
+  }
+
+  private async generateGeneralContent(options: ResourceGenerationOptions): Promise<any> {
+    console.log('Generating general content...');
+    const numberOfQuestions = options.questionCount || options.problemCount || 10;
+    console.log(`🎯 Generating ${numberOfQuestions} general questions...`);
+
+    // Generate focus points from topic area if not provided
+    const derivedFocus = options.focus || this.generateFocusFromTopic(options.topicArea);
+
+    const generalOptions: GeneralContentOptions = {
+      grade: options.gradeLevel,
+      difficulty: options.difficulty,
+      topic: options.topicArea || options.topic,
+      includeVisuals: options.includeVisuals,
+      numberOfQuestions,
+      customInstructions: options.customInstructions,
+      questionTypes: options.selectedQuestionTypes || ['multiple_choice'],
+      focus: derivedFocus
+    };
+
+    console.log('🎯 Generating general content with options:', generalOptions);
+    return this.generalGenerator.generateGeneralContent(generalOptions);
+  }
+
+  private generateFocusFromTopic(topic?: string): string[] {
+    if (!topic) return [];
+
+    // Split the topic into words and remove common words
+    const words = topic.toLowerCase().split(/\s+/);
+    const commonWords = new Set(['the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of']);
+    const significantWords = words.filter(word => !commonWords.has(word));
+
+    // Generate focus areas based on the topic
+    const focusAreas = new Set<string>();
+
+    // Add the main topic
+    focusAreas.add(topic);
+
+    // Add key aspects based on common educational themes
+    if (topic.includes('war') || topic.includes('conflict')) {
+      focusAreas.add('causes and effects');
+      focusAreas.add('key events');
+      focusAreas.add('historical significance');
+      focusAreas.add('social impact');
+    } else if (topic.includes('science') || topic.includes('biology') || topic.includes('chemistry')) {
+      focusAreas.add('key concepts');
+      focusAreas.add('practical applications');
+      focusAreas.add('scientific principles');
+    } else if (topic.includes('math') || topic.includes('mathematics')) {
+      focusAreas.add('problem-solving');
+      focusAreas.add('practical applications');
+      focusAreas.add('core concepts');
+    }
+
+    // Add general focus areas
+    focusAreas.add('main concepts');
+    focusAreas.add('practical examples');
+    focusAreas.add('critical thinking');
+
+    return Array.from(focusAreas);
+  }
+
+  private getQuestionTypes(options: ResourceGenerationOptions): string[] {
+    // If specific question types are selected in the UI, use only those
+    if (options.selectedQuestionTypes && options.selectedQuestionTypes.length > 0) {
+      return options.selectedQuestionTypes;
+    }
+
+    // Default question types
+    const defaultTypes = ['multiple_choice', 'true_false', 'short_answer'];
+    
+    // If it's a quiz, adjust based on quiz type
+    if (options.resourceType.toLowerCase() === 'quiz') {
+      switch (options.quizType) {
+        case 'vocabulary':
+          return ['multiple_choice', 'matching'];
+        case 'comprehension':
+          return ['multiple_choice', 'short_answer'];
+        case 'analysis':
+          return ['short_answer', 'long_answer'];
+        case 'mixed':
+        default:
+          return defaultTypes;
+      }
+    }
+
+    return defaultTypes;
   }
 
   private async generateContent(prompt: string, options: ResourceGenerationOptions) {

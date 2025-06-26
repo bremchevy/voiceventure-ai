@@ -57,11 +57,13 @@ export class CommandProcessor {
     { pattern: /\b(math|mathematics)\b/i, subject: "Math", confidence: 1.0 },
     { pattern: /\b(reading|english|language\s+arts|ela)\b/i, subject: "Reading", confidence: 1.0 },
     { pattern: /\b(science)\b/i, subject: "Science", confidence: 1.0 },
+    { pattern: /\b(general|general\s+knowledge|general\s+studies)\b/i, subject: "General", confidence: 1.0 },
     
     // Subject-specific contexts with high confidence
     { pattern: /\b(science\s+worksheet|science\s+experiment|science\s+lab|science\s+lesson)\b/i, subject: "Science", confidence: 1.0 },
     { pattern: /\b(book\s+report|reading\s+comprehension)\b/i, subject: "Reading", confidence: 1.0 },
     { pattern: /\b(math\s+problems|math\s+practice)\b/i, subject: "Math", confidence: 1.0 },
+    { pattern: /\b(quiz|test|assessment|general\s+review)\b/i, subject: "General", confidence: 0.8 },
     
     // Science topics with high confidence
     { pattern: /\b(biology|chemistry|physics|earth science|environmental science)\b/i, subject: "Science", confidence: 1.0 },
@@ -82,10 +84,15 @@ export class CommandProcessor {
     { pattern: /\b(comprehension|literacy|vocabulary|grammar|punctuation)\b/i, subject: "Reading", confidence: 0.9 },
     { pattern: /\b(story|narrative|poetry|fiction|non-fiction|literature)\b/i, subject: "Reading", confidence: 0.9 },
     
+    // General topics with high confidence
+    { pattern: /\b(history|geography|social\s+studies|current\s+events)\b/i, subject: "General", confidence: 0.9 },
+    { pattern: /\b(critical\s+thinking|study\s+skills|test\s+prep|review)\b/i, subject: "General", confidence: 0.9 },
+    
     // Partial matches with lower confidence - only use if no higher confidence matches
     { pattern: /\b(numbers|counting)\b/i, subject: "Math", confidence: 0.7 },
     { pattern: /\b(book|writing)\b/i, subject: "Reading", confidence: 0.7 },
-    { pattern: /\b(nature|experiment|lab)\b/i, subject: "Science", confidence: 0.7 }
+    { pattern: /\b(nature|experiment|lab)\b/i, subject: "Science", confidence: 0.7 },
+    { pattern: /\b(knowledge|learning|education)\b/i, subject: "General", confidence: 0.7 }
   ];
 
   // Resource type patterns with confidence scores
