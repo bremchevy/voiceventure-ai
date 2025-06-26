@@ -1337,13 +1337,13 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
           <span className="text-xs text-gray-500 ml-2">(What specific topic would you like to cover?)</span>
         </label>
         <div className="space-y-2">
-          <input
-            type="text"
-            value={settings.topicArea}
-            onChange={(e) => setSettings((prev) => ({ ...prev, topicArea: e.target.value }))}
-            placeholder="e.g., Water Cycle, Fractions, Character Traits..."
-            className="w-full p-3 rounded-lg border-2 border-gray-200 text-sm focus:border-purple-500 focus:outline-none"
-          />
+        <input
+          type="text"
+          value={settings.topicArea}
+          onChange={(e) => setSettings((prev) => ({ ...prev, topicArea: e.target.value }))}
+          placeholder="e.g., Water Cycle, Fractions, Character Traits..."
+          className="w-full p-3 rounded-lg border-2 border-gray-200 text-sm focus:border-purple-500 focus:outline-none"
+        />
           <div className="flex flex-wrap gap-2">
             {topicSuggestions.map((topic, index) => (
               <button

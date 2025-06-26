@@ -13,30 +13,33 @@ const PDF_STYLES = `
   }
   
   .pdf-content h1 {
-    font-size: 28px !important;
-    margin-bottom: 24px !important;
+    font-size: 32px !important;
+    margin-bottom: 26px !important;
     color: black !important;
     font-weight: 700 !important;
+    line-height: 1.3 !important;
   }
   
   .pdf-content h2 {
-    font-size: 24px !important;
-    margin-bottom: 18px !important;
+    font-size: 26px !important;
+    margin-bottom: 20px !important;
     color: black !important;
     font-weight: 700 !important;
+    line-height: 1.3 !important;
   }
   
   .pdf-content h3 {
-    font-size: 20px !important;
-    margin-bottom: 16px !important;
+    font-size: 22px !important;
+    margin-bottom: 18px !important;
     color: black !important;
     font-weight: 600 !important;
+    line-height: 1.3 !important;
   }
   
   .pdf-content p, .pdf-content div {
-    font-size: 14px !important;
-    line-height: 1.6 !important;
-    margin-bottom: 12px !important;
+    font-size: 16px !important;
+    line-height: 1.8 !important;
+    margin-bottom: 14px !important;
     color: black !important;
     font-weight: 500 !important;
     letter-spacing: 0.01em !important;
@@ -47,18 +50,21 @@ const PDF_STYLES = `
   }
 
   .pdf-content .text-lg {
-    font-size: 16px !important;
+    font-size: 18px !important;
     font-weight: 500 !important;
+    line-height: 1.7 !important;
   }
 
   .pdf-content .text-sm {
-    font-size: 13px !important;
+    font-size: 15px !important;
     font-weight: 500 !important;
+    line-height: 1.7 !important;
   }
 
   .pdf-content .text-xs {
-    font-size: 12px !important;
+    font-size: 14px !important;
     font-weight: 500 !important;
+    line-height: 1.6 !important;
   }
   
   .pdf-content .border {
@@ -74,28 +80,28 @@ const PDF_STYLES = `
   }
   
   .pdf-content .space-y-4 > * + * {
-    margin-top: 1.25rem !important;
+    margin-top: 1.5rem !important;
   }
   
   .pdf-content .space-y-6 > * + * {
-    margin-top: 1.75rem !important;
+    margin-top: 2rem !important;
   }
   
   .pdf-content .mb-4 {
-    margin-bottom: 1.25rem !important;
+    margin-bottom: 1.5rem !important;
   }
   
   .pdf-content .mb-8 {
-    margin-bottom: 2.25rem !important;
+    margin-bottom: 2.5rem !important;
   }
   
   .pdf-content .p-4 {
-    padding: 1.25rem !important;
+    padding: 1.5rem !important;
   }
   
   .pdf-content .grid {
     display: grid !important;
-    grid-gap: 1.25rem !important;
+    grid-gap: 1.5rem !important;
   }
   
   .pdf-content .text-gray-600 {
@@ -108,25 +114,27 @@ const PDF_STYLES = `
   }
 
   .pdf-content .prose {
-    font-size: 14px !important;
-    line-height: 1.6 !important;
+    font-size: 16px !important;
+    line-height: 1.8 !important;
     font-weight: 500 !important;
   }
 
   .pdf-content .name-date {
-    font-size: 16px !important;
-    margin-bottom: 20px !important;
+    font-size: 18px !important;
+    margin-bottom: 22px !important;
     font-weight: 500 !important;
+    line-height: 1.7 !important;
   }
 
   .pdf-content .question {
     font-weight: 600 !important;
     letter-spacing: 0.01em !important;
+    line-height: 1.8 !important;
   }
 
   .pdf-content .answer-space {
     border-bottom: 1.5px solid #000 !important;
-    min-height: 24px !important;
+    min-height: 32px !important;
   }
 `;
 

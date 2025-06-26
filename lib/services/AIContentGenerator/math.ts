@@ -60,24 +60,24 @@ Make sure ALL problems involve fractions, not just whole numbers.`,
 
     while (attempts < maxAttempts) {
       try {
-        const result = await this.generateContent(prompt, generationOptions);
+    const result = await this.generateContent(prompt, generationOptions);
         const content = result.content.trim();
-        
+
         // Validate the response
         if (await this.validateResponse(content)) {
           const parsedContent = JSON.parse(content);
-          return {
-            ...result,
-            title: parsedContent.title || this.generateDefaultTitle(options),
-            instructions: parsedContent.instructions || this.generateDefaultInstructions(options),
-            problems: parsedContent.problems.map((p: any) => ({
-              question: p.question,
-              answer: p.answer,
-              visual: p.visual,
-              steps: p.steps,
-            })),
-            decorations: this.getThemeDecorations(options),
-          };
+      return {
+        ...result,
+        title: parsedContent.title || this.generateDefaultTitle(options),
+        instructions: parsedContent.instructions || this.generateDefaultInstructions(options),
+        problems: parsedContent.problems.map((p: any) => ({
+          question: p.question,
+          answer: p.answer,
+          visual: p.visual,
+          steps: p.steps,
+        })),
+        decorations: this.getThemeDecorations(options),
+      };
         }
         
         // If validation fails, increment attempts and try again
@@ -86,7 +86,7 @@ Make sure ALL problems involve fractions, not just whole numbers.`,
           console.log(`Retrying content generation (attempt ${attempts + 1}/${maxAttempts})`);
           continue;
         }
-      } catch (error) {
+    } catch (error) {
         console.error('Error in content generation:', error);
         attempts++;
         if (attempts < maxAttempts) {
@@ -98,13 +98,13 @@ Make sure ALL problems involve fractions, not just whole numbers.`,
 
     // If all attempts fail, return default content
     console.log('Falling back to default content after failed attempts');
-    return {
+      return {
       content: '',
-      title: this.generateDefaultTitle(options),
-      instructions: this.generateDefaultInstructions(options),
-      problems: this.generateDefaultProblems(options),
-      decorations: this.getThemeDecorations(options),
-    };
+        title: this.generateDefaultTitle(options),
+        instructions: this.generateDefaultInstructions(options),
+        problems: this.generateDefaultProblems(options),
+        decorations: this.getThemeDecorations(options),
+      };
   }
 
   private generateDefaultTitle(options: MathProblemOptions): string {
