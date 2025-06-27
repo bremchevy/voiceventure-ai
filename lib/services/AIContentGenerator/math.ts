@@ -6,8 +6,6 @@ export interface MathProblemOptions {
   grade?: string;
   difficulty?: DifficultyLevel;
   topic?: string;
-  includeSteps?: boolean;
-  includeVisuals?: boolean;
   numberOfProblems?: number;
   customInstructions?: string;
 }
@@ -15,8 +13,6 @@ export interface MathProblemOptions {
 export interface MathProblem {
   question: string;
   answer: string | number;
-  visual?: string;
-  steps?: string[];
 }
 
 export interface MathGenerationResult extends GenerationResult {
@@ -70,8 +66,6 @@ Make sure ALL problems involve fractions, not just whole numbers.`,
         grade = '5',
         difficulty = 'intermediate',
         topic = 'general',
-        includeSteps = false,
-        includeVisuals = false,
         numberOfProblems = 10,
         customInstructions = ''
       } = options;
@@ -103,10 +97,9 @@ Return your response in this JSON format:
   "instructions": "Clear instructions for students",
   "problems": [
     {
-      "question": "The actual problem text",
-      "answer": "The correct answer",
-      ${includeVisuals ? `"visual": "A text description of a visual aid",` : ''}
-      ${includeSteps ? `"steps": ["Step 1", "Step 2", "Step 3"],` : ''}
+      "type": "short_answer",
+      "question": "The actual problem text with specific numbers and clear context",
+      "answer": "The correct answer with units if applicable",
       "difficulty": "${difficulty}"
     }
   ]
@@ -116,9 +109,19 @@ Requirements:
 - Generate EXACTLY ${limitedProblems} problems
 - Make all problems ${difficulty} difficulty
 - Focus on ${topic} concepts
-${includeVisuals ? '- Include visual aids\n' : ''}
-${includeSteps ? '- Include step-by-step solutions\n' : ''}
-${customInstructions ? `${customInstructions}\n` : ''}`,
+- Use specific numbers and clear context in each problem
+- Include proper units in answers where applicable
+- Make problems grade-appropriate and challenging
+- Avoid generic or template-like problems
+- IMPORTANT: Set type to "short_answer" for all problems
+${customInstructions ? `${customInstructions}\n` : ''}
+
+Example problem for fractions:
+{
+  "type": "short_answer",
+  "question": "Sarah has 2 3/4 cups of flour and needs 4 1/8 cups for her recipe. How many more cups of flour does she need?",
+  "answer": "1 3/8 cups"
+}`,
         maxTokens: Math.max(2500, limitedProblems * 150),
         temperature: 0.2
       });
@@ -126,6 +129,14 @@ ${customInstructions ? `${customInstructions}\n` : ''}`,
       let parsedResult: GenerationResult;
       try {
         parsedResult = JSON.parse(result);
+        
+        // Ensure all problems have type set to 'short_answer'
+        if (parsedResult.problems) {
+          parsedResult.problems = parsedResult.problems.map(problem => ({
+            ...problem,
+            type: 'short_answer'
+          }));
+        }
       } catch (parseError) {
         console.error('❌ Failed to parse response:', parseError);
         if (retryCount < MAX_RETRIES) {
@@ -176,9 +187,7 @@ ${customInstructions ? `${customInstructions}\n` : ''}`,
   }
 
   private generateDefaultInstructions(options: MathProblemOptions): string {
-    return `Solve each problem carefully. Show your work where needed. ${
-      options.includeSteps ? 'Follow the step-by-step guides for help.' : ''
-    }`;
+    return `Solve each problem carefully. Show your work where needed.`;
   }
 
   private generateDefaultProblems(options: MathProblemOptions): any[] {
@@ -204,8 +213,6 @@ ${customInstructions ? `${customInstructions}\n` : ''}`,
       grade = '5',
       difficulty = 'intermediate',
       topic = 'arithmetic',
-      includeSteps = true,
-      includeVisuals = false,
       numberOfProblems = 5,
       customInstructions,
     } = options;
@@ -249,8 +256,6 @@ Requirements for all problems:
 - Grade-appropriate difficulty
 - Clear, concise wording
 - Step-by-step solutions when helpful
-${includeVisuals ? '- Include ASCII art or text diagrams when helpful' : ''}
-${includeSteps ? '- Show solution steps for complex problems' : ''}
 ${customInstructions ? `\nAdditional Requirements:\n${customInstructions}` : ''}`;
 
     return prompt;

@@ -29,7 +29,7 @@ export async function POST(request: Request) {
     // Validate environment first
     validateEnvironment();
     
-    const options: ResourceGenerationOptions = await request.json();
+    const options = await request.json();
     console.log('📝 Received generation request:', options);
 
     if (!options.subject || !options.gradeLevel || !options.resourceType) {
@@ -60,23 +60,20 @@ export async function POST(request: Request) {
 
     console.log('🎯 Enhanced generation options:', enhancedOptions);
 
-    // Initialize the generator with API key
-    const generator = new AIResourceGenerator(process.env.OPENAI_API_KEY || '');
-    console.log('🎯 Generating resource with options:', enhancedOptions);
-
-    const resource = await generator.generateResource(enhancedOptions);
+    const generator = new AIResourceGenerator();
+    const result = await generator.generateResource(enhancedOptions);
 
     // Log success and return result
     console.log('✅ Content generated successfully');
     console.log('✨ Resource generated successfully, preparing to stream');
     console.log('📦 Resource structure:', { 
-      hasContent: !!resource.content, 
-      hasMetadata: !!resource.metadata, 
-      contentLength: resource.content?.length || 0,
-      sections: resource.sections?.length || 0
+      hasContent: !!result.content, 
+      hasMetadata: !!result.metadata, 
+      contentLength: result.content?.length || 0,
+      sections: result.sections?.length || 0
     });
 
-    return NextResponse.json(resource);
+    return NextResponse.json(result);
   } catch (error) {
     console.error('❌ Error generating resource:', error);
     return NextResponse.json(

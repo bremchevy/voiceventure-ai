@@ -37,19 +37,14 @@ export class TemplateManager {
   }
 
   async renderTemplate(templateId: string, options: TemplateRenderOptions): Promise<string> {
-    console.log('🎨 Rendering template:', templateId);
-    console.log('📝 Template data:', JSON.stringify(options.data, null, 2));
-
     const template = this.getTemplate(templateId);
     const styles = { ...this.defaultStyles, ...template.styles, ...options.styles };
     
     // Generate HTML
     try {
       const html = this.generateHTML(template, styles, options.data);
-      console.log('✅ Template rendered successfully');
       return html;
     } catch (error) {
-      console.error('❌ Error rendering template:', error);
       throw error;
     }
   }

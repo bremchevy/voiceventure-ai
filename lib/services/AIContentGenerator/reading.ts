@@ -44,18 +44,15 @@ export class ReadingContentGenerator extends BaseAIContentGenerator {
 
   private validateResponse(response: any, options: ReadingContentOptions): boolean {
     if (!response.title || !response.passage || !response.questions) {
-      console.error('❌ Missing required fields in response');
       return false;
     }
 
     if (!Array.isArray(response.questions)) {
-      console.error('❌ Invalid response format: questions is not an array');
       return false;
     }
 
     const expectedQuestions = options.numberOfQuestions || 10;
     if (!Array.isArray(response.questions) || response.questions.length !== expectedQuestions) {
-      console.error(`❌ Expected ${expectedQuestions} questions but got ${response.questions?.length || 0}`);
       return false;
     }
 
@@ -68,21 +65,11 @@ export class ReadingContentGenerator extends BaseAIContentGenerator {
     );
 
     if (!validQuestions) {
-      console.error('❌ Invalid question format in response');
       return false;
     }
 
     // Validate passage is not empty
     if (!response.passage.trim()) {
-      console.error('❌ Empty passage');
-      return false;
-    }
-
-    // Validate vocabulary if included
-    if (response.vocabulary && (!Array.isArray(response.vocabulary) || !response.vocabulary.every((v: any) => 
-      v.word && v.definition && v.context
-    ))) {
-      console.error('❌ Invalid vocabulary format');
       return false;
     }
 
@@ -472,13 +459,8 @@ ${customInstructions ? `\nAdditional Instructions:\n${customInstructions}` : ''}
 
       // Enforce maximum question limit
       const limitedQuestions = Math.min(numberOfQuestions, this.MAX_QUESTIONS);
-      if (limitedQuestions !== numberOfQuestions) {
-        console.log(`⚠️ Requested ${numberOfQuestions} questions exceeds maximum of ${this.MAX_QUESTIONS}. Limiting to ${this.MAX_QUESTIONS} questions.`);
-      }
 
       const prompt = await this.buildReadingPrompt({ ...otherOptions, numberOfQuestions: limitedQuestions });
-      
-      console.log(`📚 Attempting to generate reading content (attempt ${retryCount + 1}/${MAX_RETRIES + 1})...`);
 
       const result = await this.generateContent({
         prompt,
@@ -490,7 +472,6 @@ ${customInstructions ? `\nAdditional Instructions:\n${customInstructions}` : ''}
       try {
         parsedResult = JSON.parse(result);
       } catch (parseError) {
-        console.error('❌ Failed to parse response:', parseError);
         if (retryCount < MAX_RETRIES) {
           return this.generateReadingContent(options, retryCount + 1);
         }
@@ -500,19 +481,15 @@ ${customInstructions ? `\nAdditional Instructions:\n${customInstructions}` : ''}
       // Validate the response
       if (!this.validateResponse(parsedResult, { ...options, numberOfQuestions: limitedQuestions })) {
         if (retryCount < MAX_RETRIES) {
-          console.log('🔄 Response validation failed, retrying...');
           return this.generateReadingContent(options, retryCount + 1);
         }
         return this.generateDefaultContent(options);
       }
 
-      console.log('✅ Successfully generated reading content!');
       return parsedResult;
     } catch (error) {
-      console.error('❌ Error generating reading content:', error);
       if (retryCount < MAX_RETRIES) {
-        const delay = Math.pow(2, retryCount) * 1000;
-        await new Promise(resolve => setTimeout(resolve, delay));
+        await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
         return this.generateReadingContent(options, retryCount + 1);
       }
       return this.generateDefaultContent(options);

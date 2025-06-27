@@ -118,17 +118,14 @@ Ensure all content is scientifically accurate and grade-appropriate.`;
 
   private validateResponse(parsedResult: any, numberOfQuestions: number): boolean {
     if (!parsedResult || typeof parsedResult !== 'object') {
-      console.error('❌ Invalid response format: not an object');
       return false;
     }
 
     if (!Array.isArray(parsedResult.questions)) {
-      console.error('❌ Invalid response format: questions is not an array');
       return false;
     }
 
     if (parsedResult.questions.length !== numberOfQuestions) {
-      console.error(`❌ Wrong number of questions: got ${parsedResult.questions.length}, expected ${numberOfQuestions}`);
       return false;
     }
 
@@ -148,13 +145,8 @@ Ensure all content is scientifically accurate and grade-appropriate.`;
 
       // Enforce maximum question limit
       const limitedQuestions = Math.min(numberOfQuestions, this.MAX_QUESTIONS);
-      if (limitedQuestions !== numberOfQuestions) {
-        console.log(`⚠️ Requested ${numberOfQuestions} questions exceeds maximum of ${this.MAX_QUESTIONS}. Limiting to ${this.MAX_QUESTIONS} questions.`);
-      }
 
       const prompt = await this.buildSciencePrompt({ ...otherOptions, numberOfQuestions: limitedQuestions });
-      
-      console.log(`🔬 Attempting to generate ${limitedQuestions} science questions (attempt ${retryCount + 1}/${MAX_RETRIES + 1})...`);
 
       const result = await this.generateContent({
         prompt,
@@ -166,7 +158,6 @@ Ensure all content is scientifically accurate and grade-appropriate.`;
       try {
         parsedResult = JSON.parse(result);
       } catch (parseError) {
-        console.error('❌ Failed to parse response:', parseError);
         if (retryCount < MAX_RETRIES) {
           return this.generateScienceContent(options, retryCount + 1);
         }
@@ -182,24 +173,10 @@ Ensure all content is scientifically accurate and grade-appropriate.`;
         return this.generateDefaultContent({ ...options, numberOfQuestions: limitedQuestions });
       }
 
-      console.log(`✅ Successfully generated ${limitedQuestions} science questions!`);
-      return {
-        ...parsedResult,
-        title: parsedResult.title || this.generateDefaultTitle(options),
-        introduction: parsedResult.introduction || this.generateDefaultIntroduction(options),
-        learningObjectives: parsedResult.learningObjectives || this.generateDefaultObjectives(options),
-        questions: (parsedResult.questions || []).map(this.formatQuestion),
-        keyTerms: parsedResult.keyTerms || [],
-        additionalResources: parsedResult.additionalResources || []
-      };
-    } catch (error: any) {
-      console.error('❌ Error:', error);
-      if (retryCount < MAX_RETRIES && (
-        error?.status === 500 || 
-        error?.code === 'connection_error' ||
-        error?.message?.includes('Internal server error')
-      )) {
-        await new Promise(resolve => setTimeout(resolve, Math.pow(2, retryCount) * 1000));
+      return parsedResult;
+    } catch (error) {
+      if (retryCount < MAX_RETRIES) {
+        await new Promise(resolve => setTimeout(resolve, 1000 * (retryCount + 1)));
         return this.generateScienceContent(options, retryCount + 1);
       }
       return this.generateDefaultContent(options);

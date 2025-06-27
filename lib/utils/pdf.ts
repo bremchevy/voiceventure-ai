@@ -13,11 +13,72 @@ const PDF_STYLES = `
   }
   
   .pdf-content h1 {
-    font-size: 32px !important;
-    margin-bottom: 26px !important;
+    font-size: 24px !important;
+    margin-bottom: 20px !important;
     color: black !important;
     font-weight: 700 !important;
-    line-height: 1.3 !important;
+    text-align: center !important;
+  }
+  
+  .pdf-content .name-date {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 20px !important;
+    margin-bottom: 30px !important;
+    max-width: 600px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }
+
+  .pdf-content .name-date span {
+    font-size: 16px !important;
+    line-height: 1.5 !important;
+  }
+
+  .pdf-content .question-container {
+    margin-bottom: 24px !important;
+  }
+
+  .pdf-content .question {
+    font-weight: 600 !important;
+    font-size: 16px !important;
+    margin-bottom: 12px !important;
+    line-height: 1.5 !important;
+  }
+
+  .pdf-content .options {
+    margin-left: 20px !important;
+  }
+
+  .pdf-content .option {
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    margin-bottom: 8px !important;
+  }
+
+  .pdf-content .option span:first-child {
+    width: 16px !important;
+    height: 16px !important;
+    border: 1px solid #000 !important;
+    border-radius: 50% !important;
+    display: inline-block !important;
+  }
+
+  .pdf-content .answer-space {
+    min-height: 100px !important;
+    border-bottom: 1px solid #000 !important;
+    margin-top: 12px !important;
+  }
+
+  .pdf-content .metadata {
+    margin-top: 40px !important;
+    font-size: 12px !important;
+    color: #666 !important;
+  }
+
+  .pdf-content .metadata p {
+    margin-bottom: 4px !important;
   }
   
   .pdf-content h2 {
@@ -117,24 +178,6 @@ const PDF_STYLES = `
     font-size: 16px !important;
     line-height: 1.8 !important;
     font-weight: 500 !important;
-  }
-
-  .pdf-content .name-date {
-    font-size: 18px !important;
-    margin-bottom: 22px !important;
-    font-weight: 500 !important;
-    line-height: 1.7 !important;
-  }
-
-  .pdf-content .question {
-    font-weight: 600 !important;
-    letter-spacing: 0.01em !important;
-    line-height: 1.8 !important;
-  }
-
-  .pdf-content .answer-space {
-    border-bottom: 1.5px solid #000 !important;
-    min-height: 32px !important;
   }
 `;
 

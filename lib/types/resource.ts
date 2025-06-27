@@ -54,13 +54,10 @@ export interface RubricCriterion {
 }
 
 export interface RubricLevel {
-  score: string;
-  label: string;
+  score: number;
   description: string;
   examples?: string[];
 }
-
-export type RubricStyle = '4-point' | '3-point' | 'checklist';
 
 export interface Resource {
   metadata: ResourceMetadata;
@@ -73,31 +70,25 @@ export interface ResourceGenerationOptions {
   resourceType: ResourceType;
   theme?: string;
   difficulty?: DifficultyLevel;
+  problemCount?: number;
   topicArea?: string;
   customInstructions?: string;
-  
-  // Rubric specific options
-  rubricStyle?: '4-point' | '3-point' | 'checklist';
-  rubricCriteria?: string[];
-  
-  // Quiz specific options - only required when resourceType is 'quiz'
-  questionCount?: number;
+  // Quiz specific options
   quizType?: 'vocabulary' | 'comprehension' | 'analysis' | 'mixed';
-  selectedQuestionTypes?: string[];
-  
+  literatureTitle?: string;
+  literatureAuthor?: string;
   // Content focus options
   includeQuestions?: boolean;
   includeVisuals?: boolean;
   includeExperiments?: boolean;
   includeDiagrams?: boolean;
   includeVocabulary?: boolean;
-  visualComplexity?: 'simple' | 'moderate' | 'complex';
-  
-  // Additional metadata
-  focus?: string[];
   readingLevel?: string;
   genre?: string;
   wordCount?: number;
+  focus?: string[];
+  questionCount?: number;
+  visualComplexity?: 'simple' | 'moderate' | 'complex';
 }
 
 export interface ResourceGenerationResult {
