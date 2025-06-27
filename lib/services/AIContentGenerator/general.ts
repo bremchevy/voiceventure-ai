@@ -35,7 +35,7 @@ export class GeneralContentGenerator extends BaseAIContentGenerator {
 
   constructor() {
     super();
-    this.model = 'gpt-4';
+    this.model = 'gpt-3.5-turbo-1106';
     this.openai = new OpenAI();
   }
 
@@ -48,18 +48,21 @@ export class GeneralContentGenerator extends BaseAIContentGenerator {
       console.log('🔄 Making API request with model:', this.model);
       const completion = await this.openai.chat.completions.create({
         model: this.model,
+        response_format: { type: "json_object" },
         messages: [
           {
             role: "system",
-            content: "You are an expert educational content creator, specializing in creating engaging, grade-appropriate learning materials. Follow the instructions exactly and return ONLY valid JSON."
+            content: "You are an expert educational content creator, specializing in creating engaging, grade-appropriate learning materials. You MUST follow the instructions exactly and return ONLY valid JSON."
           },
           {
             role: "user",
             content: prompt
           }
         ],
-        temperature: 0.7,
-        max_tokens: 2000
+        temperature: 0.5,
+        max_tokens: 4000,
+        presence_penalty: 0.1,
+        frequency_penalty: 0.1
       });
 
       // Extract and validate the response
@@ -69,7 +72,14 @@ export class GeneralContentGenerator extends BaseAIContentGenerator {
       }
 
       try {
-        return JSON.parse(content);
+        const parsedContent = JSON.parse(content);
+        // Validate the number of questions
+        if (Array.isArray(parsedContent.questions) && 
+            parsedContent.questions.length !== options.numberOfQuestions) {
+          console.warn(`⚠️ Generated ${parsedContent.questions.length} questions instead of ${options.numberOfQuestions}. Retrying...`);
+          return this.generateGeneralContent(options);
+        }
+        return parsedContent;
       } catch (error) {
         console.error('Error parsing generated content:', error);
         return this.generateDefaultContent(options);

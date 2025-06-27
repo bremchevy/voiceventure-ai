@@ -2,7 +2,7 @@ export type ResourceType = 'worksheet' | 'quiz' | 'rubric' | 'lesson_plan' | 'ex
 
 export type Subject = 'math' | 'reading' | 'science' | 'general';
 
-export type DifficultyLevel = 'basic' | 'intermediate' | 'advanced';
+export type DifficultyLevel = 'easy' | 'medium' | 'hard';
 
 export type GradeLevel = 
   | 'K' 
@@ -54,9 +54,10 @@ export interface RubricCriterion {
 }
 
 export interface RubricLevel {
-  score: number;
+  score: number | string;
   description: string;
   examples?: string[];
+  label?: string;
 }
 
 export interface Resource {
@@ -72,6 +73,7 @@ export interface ResourceGenerationOptions {
   difficulty?: DifficultyLevel;
   problemCount?: number;
   topicArea?: string;
+  topic?: string;
   customInstructions?: string;
   // Quiz specific options
   quizType?: 'vocabulary' | 'comprehension' | 'analysis' | 'mixed';
@@ -89,6 +91,11 @@ export interface ResourceGenerationOptions {
   focus?: string[];
   questionCount?: number;
   visualComplexity?: 'simple' | 'moderate' | 'complex';
+  // Rubric specific options
+  rubricStyle?: '4-point' | '3-point' | 'checklist';
+  rubricCriteria?: string[];
+  // Question type options
+  selectedQuestionTypes?: string[];
 }
 
 export interface ResourceGenerationResult {
@@ -103,11 +110,11 @@ export interface GeneratedResource {
   content: string;
   metadata: {
     gradeLevel: string;
-    subject: string;
+    subject: Subject;
     resourceType: ResourceType;
     generatedAt: string;
     theme?: string;
-    difficulty?: string;
+    difficulty?: DifficultyLevel;
   };
   sections: Array<{
     type: string;

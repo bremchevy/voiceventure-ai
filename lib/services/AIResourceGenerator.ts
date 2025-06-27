@@ -29,100 +29,97 @@ export class AIResourceGenerator {
   }
 
   async generateResource(options: ResourceGenerationOptions): Promise<GeneratedResource> {
-    console.log('🎯 Generating resource with options:', options);
-
     try {
-      // Special handling for exit slips and bell ringers
-      if (options.resourceType.toLowerCase() === 'exit_slip') {
-        const exitSlipPrompt = `Generate a ${options.subject} ${options.topicArea ? `about ${options.topicArea}` : ''} ${options.resourceType === 'exit_slip' ? 'exit slip' : 'bell ringer'} for ${options.gradeLevel} with the following specifications:
-
-1. Create engaging questions that assess student understanding of ${options.topicArea || options.subject} concepts
-2. Include a mix of question types (multiple choice, open-ended, reflection)
-3. Focus on ${options.focus ? options.focus.join(', ') : 'key concepts'}
-4. Return the response in the following JSON format:
-{
-  "title": "An appropriate title for the exit slip",
-  "instructions": "Clear instructions for students",
-  "questions": [
-    {
-      "type": "multiple_choice",
-      "question": "The question text",
-      "options": ["Option A", "Option B", "Option C", "Option D"],
-      "correctAnswer": "The correct option",
-      "explanation": "Why this is the correct answer"
-    },
-    {
-      "type": "open_ended",
-      "question": "A reflective or conceptual question",
-      "expectedResponse": "What you expect students to write about",
-      "criteria": "What to look for in the response"
-    }
-  ]
-}
+      // Handle exit slips
+      if (options.resourceType === 'exit_slip') {
+        const exitSlipPrompt = `
+Generate an exit slip assessment for ${options.subject} ${options.topicArea || 'general'} at the ${options.gradeLevel} level.
 
 Requirements:
-- Questions should be grade-appropriate
-- Include at least one question about the main concept
-- Include at least one reflective question
-- Keep questions concise and clear
-- Use appropriate mathematical notation for math concepts
+- Create 2-3 thoughtful questions that assess student understanding
+- Questions should be grade-appropriate and aligned with learning objectives
+- Include a mix of question types (multiple choice, short answer)
+- Focus on key concepts and learning outcomes
+- Use clear, concise language
 
-${options.customInstructions ? `Additional requirements:\n${options.customInstructions}` : ''}`;
-
-        const result = await this.generateContent(exitSlipPrompt, options);
-        return this.formatContentForTemplate(JSON.parse(result), options);
-      }
-
-      // Special handling for rubrics
-      if (options.resourceType.toLowerCase() === 'rubric') {
-        const rubricPrompt = `Generate a detailed rubric with the following specifications:
-
-1. Create a comprehensive rubric for ${options.subject} ${options.topicArea || ''} evaluation at ${options.gradeLevel} level
-2. Return the response in the following JSON format:
+Format the response as a JSON object with this structure:
 {
-  "title": "An appropriate title for the rubric",
-  "introduction": "Brief description of what this rubric evaluates",
-  "criteria": [
+  "title": "string",
+  "content": "string",
+  "sections": [
     {
-      "criterion": "Name of the criterion",
-      "description": "What this criterion evaluates",
-      "levels": [
+      "type": "questions",
+      "title": "Questions",
+      "content": [
         {
-          "score": "4",
-          "label": "Excellent",
-          "description": "Detailed description of excellent performance"
-        },
-        {
-          "score": "3",
-          "label": "Good",
-          "description": "Detailed description of good performance"
-        },
-        {
-          "score": "2",
-          "label": "Fair",
-          "description": "Detailed description of fair performance"
-        },
-        {
-          "score": "1",
-          "label": "Needs Improvement",
-          "description": "Detailed description of performance needing improvement"
+          "question": "string",
+          "type": "multiple_choice | short_answer",
+          "options": ["string"] // For multiple choice only
         }
       ]
     }
   ]
 }
 
+${options.customInstructions ? `Additional requirements:\n${options.customInstructions}` : ''}`;
+
+        const result = await this.generateContent(exitSlipPrompt, options);
+        return this.formatContentForTemplate(result, options);
+      }
+
+      // Handle rubric generation
+      if (options.resourceType === 'rubric') {
+        const rubricStyle = options.rubricStyle || '4-point';
+        const isChecklist = rubricStyle === 'checklist';
+        
+        const rubricPrompt = `
+Create a detailed rubric for assessing ${options.subject} ${options.topicArea || 'general'} work at the ${options.gradeLevel} level.
+
+Style: ${rubricStyle}
+Difficulty: ${options.difficulty || 'medium'}
+
 Requirements for writing rubrics:
-- Include criteria for content, organization, style, and mechanics
-- Use clear, measurable criteria
-- Focus on specific writing elements
-- Provide detailed descriptions for each performance level
+- Include 4-6 specific criteria relevant to ${options.topicArea || options.subject}
+- Each criterion should be clearly defined and measurable
+- Descriptions should be detailed and specific to the subject matter
 - Use grade-appropriate language and expectations
+- Focus on observable and measurable outcomes
+${isChecklist ? '- Write criteria as specific, observable yes/no statements' : '- Provide clear distinctions between performance levels'}
+
+${isChecklist ? `Example checklist format:
+{
+  "title": "Math Problem Solving Checklist",
+  "description": "Use this checklist to verify each step of your problem-solving process.",
+  "criteria": [
+    {
+      "criterion": "Shows all work clearly",
+      "description": "Each step of the solution is written out and labeled"
+    },
+    {
+      "criterion": "Uses correct mathematical notation",
+      "description": "Proper symbols and notation are used throughout"
+    }
+  ]
+}` : `Example point-based format:
+{
+  "title": "Math Problem Solving Rubric",
+  "description": "This rubric assesses the student's ability to solve mathematical problems.",
+  "levels": [
+    {
+      "score": "4",
+      "label": "Advanced",
+      "description": "Shows complete understanding with clear, detailed work",
+      "examples": ["All steps are shown and explained"]
+    }
+  ]
+}`}
+
+Format your response exactly like the example above, but with complete criteria for ${options.topicArea || options.subject}.
 
 ${options.customInstructions ? `Additional requirements:\n${options.customInstructions}` : ''}`;
 
         const result = await this.generateContent(rubricPrompt, options);
-        return this.formatContentForTemplate(JSON.parse(result), options);
+        return this.formatContentForTemplate(result, options);
       }
 
       // Handle other resource types
@@ -156,55 +153,20 @@ ${options.customInstructions ? `Additional requirements:\n${options.customInstru
     }
   }
 
-  private formatContentForTemplate(content: any, options: ResourceGenerationOptions): GeneratedResource {
+  private formatContentForTemplate(content: string | GeneratedResource | any, options: ResourceGenerationOptions): GeneratedResource {
     try {
+      // If content is already a GeneratedResource, return it as is
+      if (typeof content === 'object' && 'title' in content && 'content' in content && 'metadata' in content && 'sections' in content) {
+        return content as GeneratedResource;
+      }
+
+      // Parse string content if needed
       const parsedContent = typeof content === 'string' ? JSON.parse(content) : content;
       const subject = this.normalizeSubject(options.subject);
-      
-      // Handle reading content differently
-      if (subject === 'reading') {
-        const sections = [];
-        
-        // Add passage section if it exists
-        if (parsedContent.passage) {
-          sections.push({
-            type: 'passage',
-            title: 'Reading Passage',
-            content: parsedContent.passage
-          });
-        }
 
-        // Add vocabulary section if it exists
-        if (parsedContent.vocabulary && parsedContent.vocabulary.length > 0) {
-          sections.push({
-            type: 'vocabulary',
-            title: 'Vocabulary',
-            content: JSON.stringify(parsedContent.vocabulary)
-          });
-        }
-
-        // Add questions section
-        if (parsedContent.questions && parsedContent.questions.length > 0) {
-          sections.push({
-            type: 'questions',
-            title: 'Questions',
-            content: JSON.stringify(parsedContent.questions)
-          });
-        }
-
-        return {
-          title: parsedContent.title || `${options.gradeLevel} Reading Worksheet`,
-          content: '', // Remove the duplicate passage content
-          sections,
-          metadata: {
-            gradeLevel: options.gradeLevel,
-            subject: options.subject,
-            resourceType: options.resourceType,
-            generatedAt: new Date().toISOString(),
-            theme: options.theme,
-            difficulty: options.difficulty
-          }
-        };
+      // If the content is already in GeneratedResource format but was stringified
+      if (parsedContent && 'title' in parsedContent && 'content' in parsedContent && 'metadata' in parsedContent && 'sections' in parsedContent) {
+        return parsedContent as GeneratedResource;
       }
 
       // Default decorations based on subject
@@ -214,103 +176,72 @@ ${options.customInstructions ? `Additional requirements:\n${options.customInstru
         reading: ['📚', '✍️', '📝', '📖']
       };
 
-      // Handle exit slips
-      if (options.resourceType.toLowerCase() === 'exit_slip' && parsedContent.questions) {
-        const formattedContent: GeneratedResource = {
-          title: parsedContent.title || `${options.subject} ${options.resourceType === 'exit_slip' ? 'Exit Slip' : 'Bell Ringer'}`,
-          content: parsedContent.instructions || 'Answer each question thoughtfully. Your responses help us understand your learning.',
-          sections: [{
-            type: 'questions',
-            title: 'Questions',
-            content: JSON.stringify(parsedContent.questions.map((q: any) => ({
-              question: q.question,
-              type: q.type,
-              options: q.options,
-              visual: q.visual || null,
-              explanation: q.explanation || null
-            })))
-          }],
-          metadata: {
-            gradeLevel: options.gradeLevel,
-            subject: options.subject,
-            resourceType: options.resourceType.toLowerCase() as ResourceType,
-            generatedAt: new Date().toISOString(),
-            theme: options.theme,
-            difficulty: options.difficulty
-          },
-          decorations: parsedContent.decorations || subjectDecorations[options.subject.toLowerCase()] || ['📝', '✨', '🎯', '🌟']
-        };
-        return formattedContent;
-      }
-
       // Handle rubrics
-      if (options.resourceType.toLowerCase() === 'rubric' && parsedContent.criteria) {
+      if (options.resourceType === 'rubric') {
+        const isChecklist = options.rubricStyle === 'checklist';
         const formattedContent: GeneratedResource = {
           title: parsedContent.title || `${options.subject} Evaluation Rubric`,
-          content: parsedContent.introduction || this.generateDefaultInstructions(options),
+          content: parsedContent.description || this.generateDefaultInstructions(options),
+          sections: [{
+            type: 'rubric',
+            title: 'Evaluation Criteria',
+            content: JSON.stringify({
+              description: parsedContent.description,
+              levels: isChecklist ? [] : (parsedContent.levels || []),
+              criteria: isChecklist ? (parsedContent.criteria || []) : []
+            })
+          }],
           metadata: {
             gradeLevel: options.gradeLevel,
             subject: options.subject,
             resourceType: 'rubric',
             generatedAt: new Date().toISOString(),
             theme: options.theme,
-            difficulty: options.difficulty
-          },
-          sections: [{
-            type: 'rubric',
-            title: 'Evaluation Criteria',
-            content: JSON.stringify(parsedContent.criteria)
-          }],
-          decorations: parsedContent.decorations || subjectDecorations[options.subject.toLowerCase()] || ['📝', '✨', '🎯', '🌟']
-        };
-        return formattedContent;
-      }
-
-      // Handle structured content (like quizzes with sections)
-      if (parsedContent.sections) {
-        const formattedContent: GeneratedResource = {
-          title: parsedContent.title || `${options.subject} ${options.resourceType}`,
-          content: parsedContent.instructions || this.generateDefaultInstructions(options),
-          sections: parsedContent.sections.map((section: any) => ({
-            type: 'section',
-            title: section.title,
-            content: JSON.stringify(section.problems)
-          })),
-          metadata: {
-            gradeLevel: options.gradeLevel,
-            subject: options.subject,
-            resourceType: options.resourceType.toLowerCase() as ResourceType,
-            generatedAt: new Date().toISOString(),
-            theme: options.theme,
-            difficulty: options.difficulty
+            difficulty: options.difficulty || 'medium'
           },
           decorations: parsedContent.decorations || subjectDecorations[options.subject.toLowerCase()] || ['📝', '✨', '🎯', '🌟']
         };
         return formattedContent;
       }
 
-      // Convert questions/experiments to problems format for non-sectioned content
-      const problems = this.convertToProblems(parsedContent, options.subject);
-
-      const formattedContent: GeneratedResource = {
+      // Create a base GeneratedResource
+      const generatedResource: GeneratedResource = {
         title: parsedContent.title || `${options.subject} ${options.resourceType}`,
-        content: parsedContent.instructions || this.generateDefaultInstructions(options),
-        sections: [{
-          type: 'problems',
-          title: 'Problems',
-          content: JSON.stringify(problems)
-        }],
+        content: parsedContent.content || parsedContent.instructions || this.generateDefaultInstructions(options),
+        sections: parsedContent.sections || [],
         metadata: {
           gradeLevel: options.gradeLevel,
           subject: options.subject,
           resourceType: options.resourceType.toLowerCase() as ResourceType,
           generatedAt: new Date().toISOString(),
           theme: options.theme,
-          difficulty: options.difficulty
+          difficulty: options.difficulty || 'medium'
         },
         decorations: parsedContent.decorations || subjectDecorations[options.subject.toLowerCase()] || ['📝', '✨', '🎯', '🌟']
       };
-      return formattedContent;
+
+      // Handle special cases
+      if (subject === 'reading' && parsedContent.passage) {
+        generatedResource.sections = [
+          {
+            type: 'passage',
+            title: 'Reading Passage',
+            content: parsedContent.passage
+          },
+          ...(parsedContent.vocabulary && parsedContent.vocabulary.length > 0 ? [{
+            type: 'vocabulary',
+            title: 'Vocabulary',
+            content: JSON.stringify(parsedContent.vocabulary)
+          }] : []),
+          ...(parsedContent.questions && parsedContent.questions.length > 0 ? [{
+            type: 'questions',
+            title: 'Questions',
+            content: JSON.stringify(parsedContent.questions)
+          }] : [])
+        ];
+      }
+
+      return generatedResource;
     } catch (error) {
       console.error('Error formatting content:', error);
       throw error;
@@ -393,80 +324,57 @@ ${options.customInstructions ? `Additional requirements:\n${options.customInstru
   }
 
   private async generateMathContent(options: ResourceGenerationOptions) {
-    const numberOfProblems = options.questionCount || options.problemCount || 10;
-    console.log(`📊 Generating ${numberOfProblems} math problems...`);
-    
     return this.mathGenerator.generateMathContent({
-      grade: parseInt(options.gradeLevel),
+      grade: options.gradeLevel,
       difficulty: options.difficulty || 'medium',
-      topic: options.topicArea,
-      includeSteps: options.includeQuestions,
-      includeVisuals: options.includeVisuals,
-      numberOfProblems,
+      topic: options.topicArea || options.topic,
+      numberOfProblems: options.questionCount || options.problemCount || 10,
       customInstructions: options.customInstructions
     });
   }
 
   private async generateReadingContent(options: ResourceGenerationOptions) {
-    const numberOfQuestions = options.questionCount || 5;
-    console.log(`📚 Generating ${numberOfQuestions} reading questions...`);
-
-    const readingOptions: ReadingContentOptions = {
+    return this.readingGenerator.generateReadingContent({
       grade: options.gradeLevel,
-      difficulty: options.difficulty as 'basic' | 'intermediate' | 'advanced',
-      topic: options.topicArea,
+      difficulty: options.difficulty || 'medium',
+      topic: options.topicArea || options.topic,
       includeVocabulary: options.includeVocabulary || true,
       includeComprehension: true,
-      numberOfQuestions,
+      numberOfQuestions: options.questionCount || options.problemCount || 10,
       customInstructions: options.customInstructions,
-      readingLevel: options.gradeLevel,
+      readingLevel: options.readingLevel || options.gradeLevel,
       genre: options.genre,
-      focus: options.focus as string[]
-    };
-
-    return await this.readingGenerator.generateReadingContent(readingOptions);
+      focus: options.focus
+    });
   }
 
   private async generateScienceContent(options: ResourceGenerationOptions) {
-    const numberOfQuestions = options.questionCount || 10;
-    console.log(`🔬 Generating ${numberOfQuestions} science questions...`);
-
-    const scienceOptions: ScienceContentOptions = {
-      grade: parseInt(options.gradeLevel) || 5,
-      subject: options.topicArea as 'biology' | 'chemistry' | 'physics' | 'earth_science' | 'environmental',
-      difficulty: options.difficulty as 'basic' | 'intermediate' | 'advanced',
-      topic: options.topicArea,
+    return this.scienceGenerator.generateScienceContent({
+      grade: options.gradeLevel,
+      difficulty: options.difficulty || 'medium',
+      topic: options.topicArea || options.topic,
       includeExperiments: options.includeExperiments || false,
       includeDiagrams: options.includeDiagrams || false,
       includeQuestions: true,
-      numberOfQuestions,
+      numberOfQuestions: options.questionCount || options.problemCount || 10,
       customInstructions: options.customInstructions
-    };
-
-    return await this.scienceGenerator.generateScienceContent(scienceOptions);
+    });
   }
 
   private async generateGeneralContent(options: ResourceGenerationOptions): Promise<any> {
-    console.log('Generating general content...');
-    const numberOfQuestions = options.questionCount || options.problemCount || 10;
-    console.log(`🎯 Generating ${numberOfQuestions} general questions...`);
-
     // Generate focus points from topic area if not provided
     const derivedFocus = options.focus || this.generateFocusFromTopic(options.topicArea);
 
-    const generalOptions: GeneralContentOptions = {
+    return this.generalGenerator.generateGeneralContent({
       grade: options.gradeLevel,
-      difficulty: options.difficulty,
+      difficulty: options.difficulty || 'medium',
       topic: options.topicArea || options.topic,
-      includeVisuals: options.includeVisuals,
-      numberOfQuestions,
+      includeVisuals: options.includeVisuals || false,
+      numberOfQuestions: options.questionCount || options.problemCount || 10,
       customInstructions: options.customInstructions,
       questionTypes: options.selectedQuestionTypes || ['multiple_choice'],
       focus: derivedFocus
-    };
-
-    console.log('🎯 Generating general content with options:', generalOptions);
-    return this.generalGenerator.generateGeneralContent(generalOptions);
+    });
   }
 
   private generateFocusFromTopic(topic?: string): string[] {
@@ -534,16 +442,20 @@ ${options.customInstructions ? `Additional requirements:\n${options.customInstru
     return defaultTypes;
   }
 
-  private async generateContent(prompt: string, options: ResourceGenerationOptions) {
+  private async generateContent(prompt: string, options: ResourceGenerationOptions): Promise<string> {
     try {
       // Add grade-specific context to the prompt
       const gradeContext = this.getGradeContext(options.gradeLevel);
       const visualContext = this.getVisualContext(options);
       
-      const enhancedPrompt = `
-Generate a ${options.difficulty} ${options.subject} ${options.resourceType} for ${options.gradeLevel} about ${options.topicArea}.
+      let systemPrompt = "You are an expert educational content creator, specializing in creating engaging, grade-appropriate learning materials.";
+      let userPrompt = "";
 
-Number of Questions: ${options.questionCount || options.problemCount || 10}
+      if (options.resourceType === 'rubric') {
+        systemPrompt += " You excel at creating detailed, clear rubrics that help assess student work fairly and consistently.";
+      }
+
+      userPrompt = `${prompt}
 
 Grade-Level Context:
 ${gradeContext}
@@ -551,37 +463,29 @@ ${gradeContext}
 Visual Requirements:
 ${visualContext}
 
-Additional Instructions:
-${options.customInstructions || 'No additional instructions provided.'}
-
 Please generate content that is:
 1. Age-appropriate for ${options.gradeLevel}
 2. Aligned with ${options.gradeLevel} learning standards
-3. Using ${options.visualComplexity} visual elements as appropriate
-4. Formatted in clear, structured JSON
-5. IMPORTANT: Generate EXACTLY ${options.questionCount || options.problemCount || 10} questions/problems, no more and no less
-
-The content should include:
-- A clear title
-- Grade-appropriate instructions
-- Content sections with questions/problems
-- Visual aids where appropriate
-`;
+3. Using ${options.visualComplexity || 'moderate'} visual elements as appropriate
+4. Formatted in clear, structured JSON`;
 
       const completion = await openai.chat.completions.create({
-        model: "gpt-4",
+        model: "gpt-3.5-turbo-1106",
+        response_format: { type: "json_object" },
         messages: [
           {
             role: "system",
-            content: "You are an expert educational content creator, specializing in creating engaging, grade-appropriate learning materials. IMPORTANT: Always format your entire response as a valid JSON object with the following structure:\n{\n  \"title\": string,\n  \"content\": string,\n  \"sections\": Array<{\n    \"type\": string,\n    \"title\"?: string,\n    \"content\": string\n  }>\n}"
+            content: systemPrompt
           },
           {
             role: "user",
-            content: enhancedPrompt
+            content: userPrompt
           }
         ],
-        temperature: 0.7,
-        max_tokens: 2000
+        temperature: 0.2,
+        max_tokens: 4000,
+        presence_penalty: 0.1,
+        frequency_penalty: 0.1
       });
 
       const content = completion.choices[0]?.message?.content;
@@ -589,14 +493,7 @@ The content should include:
         throw new Error('No content generated');
       }
 
-      try {
-        // Validate JSON format
-        const parsedContent = JSON.parse(content);
-        return content;
-      } catch (error) {
-        console.error('Error parsing OpenAI response as JSON:', error);
-        throw new Error('Invalid JSON format in response');
-      }
+      return content;
     } catch (error) {
       console.error('Error generating content:', error);
       throw error;
@@ -604,48 +501,35 @@ The content should include:
   }
 
   private getGradeContext(gradeLevel: string): string {
-    const grade = parseInt(gradeLevel);
+    const grade = parseInt(gradeLevel.replace(/\D/g, '') || '0');
+    let context = '';
+
     if (grade <= 2) {
-      return `
-- Use simple, clear language
-- Keep instructions brief and direct
-- Include more visual aids and examples
-- Focus on concrete concepts
-- Use larger fonts and spacing`;
+      context = 'Focus on basic concepts, use simple language, and include visual aids.';
     } else if (grade <= 4) {
-      return `
-- Use grade-appropriate vocabulary
-- Include step-by-step instructions
-- Balance visual and text content
-- Introduce abstract concepts gradually
-- Include some critical thinking elements`;
+      context = 'Introduce more complex concepts, use grade-appropriate vocabulary, and include some visual support.';
     } else {
-      return `
-- Use more complex vocabulary
-- Include detailed instructions
-- Focus on abstract concepts
-- Encourage critical thinking
-- Include challenging problem-solving tasks`;
+      context = 'Use advanced concepts, incorporate subject-specific terminology, and focus on critical thinking.';
     }
+
+    return context;
   }
 
   private getVisualContext(options: ResourceGenerationOptions): string {
-    const visualRequirements = [];
+    const visualElements = [];
     
     if (options.includeVisuals) {
-      visualRequirements.push(`- Include ${options.visualComplexity} visual aids to support learning`);
+      visualElements.push('- Include visual aids to support learning');
     }
-    
     if (options.includeDiagrams) {
-      visualRequirements.push('- Add relevant diagrams to explain concepts');
+      visualElements.push('- Include diagrams to explain concepts');
     }
-    
     if (options.includeExperiments) {
-      visualRequirements.push('- Include hands-on experiments or activities');
+      visualElements.push('- Include hands-on activities or experiments');
     }
 
-    return visualRequirements.length > 0 
-      ? visualRequirements.join('\n')
-      : '- Minimal visual aids, focus on text-based content';
+    return visualElements.length > 0 
+      ? visualElements.join('\n')
+      : 'No specific visual requirements';
   }
 } 

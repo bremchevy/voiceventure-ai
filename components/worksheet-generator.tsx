@@ -865,10 +865,11 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
           includeExperiments: settings.includeExperiments,
           includeDiagrams: settings.includeDiagrams,
           includeVocabulary: settings.includeVocabulary,
-          questionCount: settings.problemCount,
+          ...(settings.resourceType !== "rubric" && { questionCount: settings.problemCount }),
           focus: settings.focus,
           customInstructions: settings.customInstructions,
-          selectedQuestionTypes: settings.selectedQuestionTypes?.map(type => getQuestionTypes(type)) || ['multiple_choice']
+          selectedQuestionTypes: settings.selectedQuestionTypes?.map(type => getQuestionTypes(type)) || ['multiple_choice'],
+          ...(settings.resourceType === "rubric" && { rubricStyle: settings.rubricStyle || "4-point" })
         }),
       });
 
@@ -1172,6 +1173,54 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
         </div>
       </div>
 
+      {/* Rubric Style Selection */}
+      {settings.resourceType === "rubric" && (
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-3">
+            Rubric Style
+            <span className="text-xs text-gray-500 ml-2">(Choose the evaluation format)</span>
+          </label>
+          <div className="space-y-2">
+            {[
+              {
+                type: "4-point",
+                label: "4-Point Scale",
+                description: "Excellent, Good, Satisfactory, Needs Improvement",
+                icon: "🎯"
+              },
+              {
+                type: "3-point",
+                label: "3-Point Scale",
+                description: "Exceeds, Meets, Below Expectations",
+                icon: "📊"
+              },
+              {
+                type: "checklist",
+                label: "Checklist Style",
+                description: "Simple yes/no criteria",
+                icon: "✓"
+              }
+            ].map((style) => (
+              <button
+                key={style.type}
+                onClick={() => setSettings((prev) => ({ ...prev, rubricStyle: style.type }))}
+                className={`w-full p-3 rounded-lg border-2 text-sm font-medium transition-all text-left flex items-center gap-3 ${
+                  settings.rubricStyle === style.type
+                    ? "border-purple-500 bg-purple-50 text-purple-700"
+                    : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
+                }`}
+              >
+                <span className="text-lg">{style.icon}</span>
+                <div>
+                  <div className="font-medium">{style.label}</div>
+                  <div className="text-xs text-gray-500">{style.description}</div>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Dynamic Sub-Options based on Resource Type - Problem Type ONLY for worksheets */}
       {settings.resourceType === "worksheet" && (
         <div>
@@ -1246,32 +1295,6 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
           {(!settings.selectedQuestionTypes || settings.selectedQuestionTypes.length === 0) && (
             <p className="text-sm text-red-500 mt-2">Please select at least one quiz format</p>
           )}
-        </div>
-      )}
-
-      {settings.resourceType === "rubric" && (
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-3">Rubric Style</label>
-          <div className="space-y-2">
-            {[
-              { type: "4-point", label: "4-Point Scale", desc: "Excellent, Good, Satisfactory, Needs Improvement" },
-              { type: "3-point", label: "3-Point Scale", desc: "Exceeds, Meets, Below Expectations" },
-              { type: "checklist", label: "Checklist Style", desc: "Simple yes/no criteria" },
-            ].map((style) => (
-              <button
-                key={style.type}
-                onClick={() => setSettings((prev) => ({ ...prev, rubricStyle: style.type }))}
-                className={`w-full p-3 rounded-lg border-2 text-sm font-medium transition-all text-left ${
-                  settings.rubricStyle === style.type
-                    ? "border-purple-500 bg-purple-50 text-purple-700"
-                    : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
-                }`}
-              >
-                <div className="font-medium">{style.label}</div>
-                <div className="text-xs text-gray-500">{style.desc}</div>
-              </button>
-            ))}
-          </div>
         </div>
       )}
 
@@ -1383,49 +1406,51 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
       </div>
 
       {/* Number of Questions Selection */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-3">
-          Number of Questions
-          <span className="text-xs text-gray-500 ml-2">(How many questions would you like?)</span>
-        </label>
-        <div className="grid grid-cols-4 gap-3">
-          {[5, 10, 15, 20].map((number) => (
-            <button
-              key={number}
-              onClick={() => setSettings((prev) => ({ 
-                ...prev, 
-                problemCount: number,
-                quizQuestionCount: number 
-              }))}
-              className={`p-3 rounded-lg border-2 text-sm font-medium transition-all ${
-                (settings.problemCount === number || settings.quizQuestionCount === number)
-                  ? "border-purple-500 bg-purple-50 text-purple-700"
-                  : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
-              }`}
-            >
-              {number}
-            </button>
-          ))}
+      {settings.resourceType !== "rubric" && (
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-3">
+            Number of Questions
+            <span className="text-xs text-gray-500 ml-2">(How many questions would you like?)</span>
+          </label>
+          <div className="grid grid-cols-4 gap-3">
+            {[5, 10, 15, 20].map((number) => (
+              <button
+                key={number}
+                onClick={() => setSettings((prev) => ({ 
+                  ...prev, 
+                  problemCount: number,
+                  quizQuestionCount: number 
+                }))}
+                className={`p-3 rounded-lg border-2 text-sm font-medium transition-all ${
+                  (settings.problemCount === number || settings.quizQuestionCount === number)
+                    ? "border-purple-500 bg-purple-50 text-purple-700"
+                    : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
+                }`}
+              >
+                {number}
+              </button>
+            ))}
+          </div>
+          <div className="mt-3">
+            <input
+              type="number"
+              min="1"
+              max="50"
+              value={settings.resourceType === "worksheet" ? settings.problemCount : settings.quizQuestionCount}
+              onChange={(e) => {
+                const value = Math.min(50, Math.max(1, parseInt(e.target.value) || 1));
+                setSettings((prev) => ({ 
+                  ...prev, 
+                  problemCount: value,
+                  quizQuestionCount: value 
+                }));
+              }}
+              placeholder="Custom number (1-50)"
+              className="w-full p-3 rounded-lg border-2 border-gray-200 text-sm focus:border-purple-500 focus:outline-none"
+            />
+          </div>
         </div>
-        <div className="mt-3">
-          <input
-            type="number"
-            min="1"
-            max="50"
-            value={settings.resourceType === "worksheet" ? settings.problemCount : settings.quizQuestionCount}
-            onChange={(e) => {
-              const value = Math.min(50, Math.max(1, parseInt(e.target.value) || 1));
-              setSettings((prev) => ({ 
-                ...prev, 
-                problemCount: value,
-                quizQuestionCount: value 
-              }));
-            }}
-            placeholder="Custom number (1-50)"
-            className="w-full p-3 rounded-lg border-2 border-gray-200 text-sm focus:border-purple-500 focus:outline-none"
-          />
-        </div>
-      </div>
+      )}
 
       {/* Custom Instructions Field */}
       <div>
@@ -1629,91 +1654,73 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
               }
 
               if (section.type === 'rubric') {
-                let sectionContent;
+                let parsedContent;
                 try {
-                  sectionContent = typeof section.content === 'string' ? JSON.parse(section.content) : section.content;
+                  parsedContent = typeof section.content === 'string' ? JSON.parse(section.content) : section.content;
                 } catch (error) {
                   console.error('Error parsing rubric content:', error);
-                  sectionContent = [];
+                  parsedContent = { description: '', levels: [], criteria: [] };
                 }
+
                 return (
                   <div key={sectionIndex} className="space-y-6">
                     {section.title && <h2 className="text-xl font-semibold mb-4">{section.title}</h2>}
-                    {sectionContent.map((criterion: any, index: number) => (
-                      <div key={index} className="border rounded-lg p-4">
-                        <h3 className="font-medium mb-2">{criterion.criterion}</h3>
-                        <p className="text-gray-600 mb-4">{criterion.description}</p>
-                        <div className="grid grid-cols-4 gap-4">
-                          {criterion.levels.map((level: any, levelIndex: number) => (
-                            <div key={levelIndex} className="text-sm">
-                              <div className="font-medium">{level.label} ({level.score})</div>
-                              <div className="text-gray-600">{level.description}</div>
+                    {parsedContent.description && (
+                      <p className="text-gray-600 mb-4">{parsedContent.description}</p>
+                    )}
+                    
+                    {/* Handle checklist style rubric */}
+                    {parsedContent.criteria && Array.isArray(parsedContent.criteria) && (
+                      <div className="space-y-4">
+                        {parsedContent.criteria.map((criterion: any, index: number) => (
+                          <div key={index} className="border rounded-lg p-4">
+                            <div className="flex items-start gap-3">
+                              <div className="w-6 h-6 border-2 border-gray-300 rounded mt-1"></div>
+                              <div>
+                                <h3 className="font-medium mb-2">{criterion.criterion}</h3>
+                                <p className="text-gray-600">{criterion.description}</p>
+                              </div>
                             </div>
-                          ))}
-                        </div>
+                          </div>
+                        ))}
                       </div>
-                    ))}
+                    )}
+
+                    {/* Handle point-based rubric */}
+                    {parsedContent.levels && Array.isArray(parsedContent.levels) && (
+                      <div className="space-y-4">
+                        {parsedContent.levels.map((level: any, index: number) => (
+                          <div key={index} className="border rounded-lg p-4">
+                            <h3 className="font-medium mb-2">{level.label}</h3>
+                            <p className="text-gray-600 mb-4">{level.description}</p>
+                            {level.score && (
+                              <div className={`inline-block px-3 py-1 rounded-full text-sm font-medium ${
+                                level.score === '✓' ? 'bg-green-100 text-green-800' :
+                                level.score === '✗' ? 'bg-red-100 text-red-800' :
+                                'bg-gray-100 text-gray-800'
+                              }`}>
+                                Score: {level.score}
+                              </div>
+                            )}
+                            {level.examples && level.examples.length > 0 && (
+                              <div className="mt-4 text-sm text-gray-600">
+                                <h4 className="font-medium mb-2">Examples:</h4>
+                                <ul className="list-disc list-inside space-y-1">
+                                  {level.examples.map((example: string, exampleIndex: number) => (
+                                    <li key={exampleIndex}>{example}</li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 );
               }
 
               let sectionContent;
-              try {
-                sectionContent = typeof section.content === 'string' ? JSON.parse(section.content) : section.content;
-              } catch (error) {
-                console.error('Error parsing section content:', error);
-                // If parsing fails, treat content as plain text
-                sectionContent = [{
-                  question: section.content,
-                  type: 'text'
-                }];
-              }
-
-              return (
-                <div key={sectionIndex} className="space-y-4">
-                  {section.title && <h2 className="text-xl font-semibold mb-4">{section.title}</h2>}
-                  {Array.isArray(sectionContent) && sectionContent.map((problem: any, index: number) => (
-                    <div key={index} className="border-b pb-6 mb-6">
-                      <p className="font-medium text-lg mb-3">{index + 1}. {problem.question}</p>
-                      {problem.type === 'true_false' ? (
-                        <div className="ml-6 mt-3 space-y-3">
-                          <div className="flex items-center gap-4">
-                            <div className="flex items-center gap-2">
-                              <div className="w-5 h-5 border-2 border-gray-300 rounded-full"></div>
-                              <span className="text-gray-700">True</span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              <div className="w-5 h-5 border-2 border-gray-300 rounded-full"></div>
-                              <span className="text-gray-700">False</span>
-                            </div>
-                          </div>
-                        </div>
-                      ) : problem.options ? (
-                        <div className="ml-6 mt-3 space-y-2">
-                          {problem.options.map((option: string, optIndex: number) => (
-                            <div key={optIndex} className="flex items-center gap-3">
-                              <div className="w-6 h-6 border-2 border-gray-300 rounded-full"></div>
-                              <span>{option}</span>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="ml-6 mt-3">
-                          <div className="space-y-4">
-                            <div className="border-b-2 border-gray-300 h-6"></div>
-                            <div className="border-b-2 border-gray-300 h-6"></div>
-                          </div>
-                        </div>
-                      )}
-                      {problem.visual && (
-                        <div className="ml-6 mt-4 p-3 bg-gray-50 rounded-lg text-gray-600">
-                          {problem.visual}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              );
             })}
           </div>
         </div>
@@ -1742,8 +1749,8 @@ export default function WorksheetGenerator({ request, onComplete, onBack }: Work
           </Button>
         </div>
       </div>
-    );
-  };
+    )
+  }
 
   const renderQualityCheck = () => (
     <div className="space-y-6 relative">
