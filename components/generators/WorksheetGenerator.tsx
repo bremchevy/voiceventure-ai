@@ -83,12 +83,6 @@ export function WorksheetGenerator({ onBack, onComplete, request }: BaseGenerato
           desc: "Passage analysis with main idea, details, and inference questions"
         },
         {
-          id: "literary_analysis",
-          icon: "🎭",
-          name: "Literary Analysis",
-          desc: "Character, plot, theme, and literary device analysis"
-        },
-        {
           id: "vocabulary_context",
           icon: "📖",
           name: "Vocabulary in Context",
@@ -120,21 +114,15 @@ export function WorksheetGenerator({ onBack, onComplete, request }: BaseGenerato
       worksheet: [
         {
           id: "lab_experiment",
-          icon: "🧪",
-          name: "Lab Experiment",
-          desc: "Scientific method, data collection, and analysis"
+          icon: "🔬",
+          name: "Science Context",
+          desc: "Topic-based questions with varying complexity levels"
         },
         {
           id: "observation_analysis",
           icon: "🔬",
           name: "Observation & Analysis",
           desc: "Scientific observations, diagrams, and explanations"
-        },
-        {
-          id: "concept_application",
-          icon: "🌍",
-          name: "Concept Application",
-          desc: "Real-world applications and problem-solving"
         }
       ],
       quiz: [

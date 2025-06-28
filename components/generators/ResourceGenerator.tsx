@@ -237,7 +237,7 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
         difficulty: settings.difficulty,
         topicArea: settings.topicArea,
         includeVocabulary: settings.includeVocabulary || false,
-        questionCount: settings.questionCount || 10,
+        questionCount: ('problemCount' in settings) ? settings.problemCount : (settings.questionCount || 10),
         customInstructions: settings.customInstructions || '',
         selectedQuestionTypes: settings.selectedQuestionTypes,
         format: settings.format
@@ -714,7 +714,7 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
           {/* Display passage for reading formats */}
           {generatedResource.passage && (
             <div className="space-y-2 border-l-4 border-purple-500 pl-4 my-6 bg-gray-50 p-4 rounded-r-lg">
-              <h3 className="font-semibold">Reading Passage:</h3>
+              <h3 className="font-semibold">Text:</h3>
               <p className="whitespace-pre-wrap text-gray-800">{generatedResource.passage.text}</p>
             </div>
           )}

@@ -226,7 +226,7 @@ export async function POST(req: Request) {
       theme,
       difficulty,
       topicArea,
-      questionCount = 10,
+      questionCount,
       customInstructions,
       selectedQuestionTypes = ['multiple_choice'],
       format
@@ -251,10 +251,12 @@ export async function POST(req: Request) {
     // Add resource-specific instructions
     switch (resourceType.toLowerCase()) {
       case 'worksheet':
-        if (questionCount > 0) {
-          systemPrompt += `Generate a worksheet with ${questionCount} problems. `;
-        } else {
-          systemPrompt += `Generate a content-only worksheet without any problems. `;
+        if (typeof questionCount === 'number') {
+          if (questionCount > 0) {
+            systemPrompt += `Generate exactly ${questionCount} problems. `;
+          } else {
+            systemPrompt += `Generate a content-only worksheet without any problems. `;
+          }
         }
         
         // Add subject and format-specific instructions
@@ -280,31 +282,37 @@ export async function POST(req: Request) {
             break;
           
           case 'reading':
-            if (questionCount === 0) {
-              systemPrompt += `Focus on providing a rich, grade-appropriate passage with clear structure and engaging content. `;
-            }
-            // Ensure format is set for reading worksheets
-            let readingFormat = format;
-            if (!format || format === 'worksheet') {
-              readingFormat = 'comprehension'; // Default to comprehension if no specific format
-            }
+            // Only add passage-related instructions for reading formats
+            if (format === 'comprehension' || format === 'literary_analysis' || format === 'vocabulary_context' || !format || format === 'worksheet') {
+              if (questionCount === 0) {
+                systemPrompt += `Focus on providing a rich, grade-appropriate passage with clear structure and engaging content. `;
+              }
+              // Ensure format is set for reading worksheets
+              let readingFormat = format;
+              if (!format || format === 'worksheet') {
+                readingFormat = 'comprehension'; // Default to comprehension if no specific format
+              }
 
-            // Add specific instructions for reading passages
-            systemPrompt += `Create a grade-appropriate passage about ${topicArea}. The passage should be engaging and suitable for ${gradeLevel} students. `;
-            
-            switch (readingFormat) {
-              case 'comprehension':
-                systemPrompt += `Create a reading comprehension worksheet with a passage about ${topicArea}. The passage should demonstrate clear author's purpose and include questions focusing on main ideas, details, and inferences. The passage MUST be included in the response. Return the response in this exact JSON format: ${READING_COMPREHENSION_FORMAT}`;
-                break;
-              case 'literary_analysis':
-                systemPrompt += `Create a literary analysis worksheet with a passage rich in literary elements. The passage MUST be included in the response. Return the response in this exact JSON format: ${READING_LITERARY_ANALYSIS_FORMAT}`;
-                break;
-              case 'vocabulary_context':
-                systemPrompt += `Create a vocabulary-in-context worksheet with a passage containing target vocabulary words. The passage MUST be included in the response. Return the response in this exact JSON format: ${READING_VOCABULARY_FORMAT}`;
-                break;
-              default:
-                systemPrompt += `Create a reading comprehension worksheet with a passage about ${topicArea}. The passage should demonstrate clear author's purpose and include questions focusing on main ideas, details, and inferences. The passage MUST be included in the response. Return the response in this exact JSON format: ${READING_COMPREHENSION_FORMAT}`;
-                break;
+              // Add specific instructions for reading passages
+              systemPrompt += `Create a grade-appropriate passage about ${topicArea}. The passage should be engaging and suitable for ${gradeLevel} students. `;
+              
+              switch (readingFormat) {
+                case 'comprehension':
+                  systemPrompt += `Create a reading comprehension worksheet with a passage about ${topicArea}. The passage should demonstrate clear author's purpose and include exactly ${questionCount} questions focusing on main ideas, details, and inferences. The passage MUST be included in the response. Return the response in this exact JSON format: ${READING_COMPREHENSION_FORMAT}`;
+                  break;
+                case 'literary_analysis':
+                  systemPrompt += `Create a literary analysis worksheet with a passage rich in literary elements. Include exactly ${questionCount} analysis questions. The passage MUST be included in the response. Return the response in this exact JSON format: ${READING_LITERARY_ANALYSIS_FORMAT}`;
+                  break;
+                case 'vocabulary_context':
+                  systemPrompt += `Create a vocabulary-in-context worksheet with a passage containing target vocabulary words. Include exactly ${questionCount} vocabulary-focused questions. The passage MUST be included in the response. Return the response in this exact JSON format: ${READING_VOCABULARY_FORMAT}`;
+                  break;
+                default:
+                  systemPrompt += `Create a reading comprehension worksheet with a passage about ${topicArea}. The passage should demonstrate clear author's purpose and include exactly ${questionCount} questions focusing on main ideas, details, and inferences. The passage MUST be included in the response. Return the response in this exact JSON format: ${READING_COMPREHENSION_FORMAT}`;
+                  break;
+              }
+            } else {
+              // For non-passage reading formats
+              systemPrompt += `Create ${questionCount} questions to assess reading skills. Return the response in this exact JSON format: ${READING_COMPREHENSION_FORMAT}`;
             }
             break;
           
@@ -314,13 +322,13 @@ export async function POST(req: Request) {
             }
             switch (format) {
               case 'lab_experiment':
-                systemPrompt += `Create a laboratory experiment worksheet with clear procedures, safety guidelines, and data collection. Return the response in this exact JSON format: ${SCIENCE_LAB_FORMAT}`;
+                systemPrompt += `Create a laboratory experiment worksheet with clear procedures, safety guidelines, and data collection. Include exactly ${questionCount} analysis questions. Return the response in this exact JSON format: ${SCIENCE_LAB_FORMAT}`;
                 break;
               case 'observation_analysis':
-                systemPrompt += `Create an observation-based worksheet focusing on scientific phenomena and data recording. Return the response in this exact JSON format: ${SCIENCE_OBSERVATION_FORMAT}`;
+                systemPrompt += `Create an observation-based worksheet focusing on scientific phenomena and data recording. Include exactly ${questionCount} observation and analysis prompts. Return the response in this exact JSON format: ${SCIENCE_OBSERVATION_FORMAT}`;
                 break;
               case 'concept_application':
-                systemPrompt += `Create a worksheet that helps students apply scientific concepts to real-world scenarios. Return the response in this exact JSON format: ${SCIENCE_CONCEPT_FORMAT}`;
+                systemPrompt += `Create a worksheet that helps students apply scientific concepts to real-world scenarios. Include exactly ${questionCount} application problems. Return the response in this exact JSON format: ${SCIENCE_CONCEPT_FORMAT}`;
                 break;
             }
             break;
@@ -328,7 +336,7 @@ export async function POST(req: Request) {
         break;
 
       case 'quiz':
-        systemPrompt += `Create a quiz with ${questionCount} questions using these types: ${selectedQuestionTypes.join(', ')}. `;
+        systemPrompt += `Create a quiz with exactly ${questionCount} questions using these types: ${selectedQuestionTypes.join(', ')}. `;
         break;
       case 'rubric':
         systemPrompt += 'Create a detailed rubric with clear criteria and performance levels. ';
@@ -337,7 +345,7 @@ export async function POST(req: Request) {
         systemPrompt += 'Design a comprehensive lesson plan with objectives, activities, and assessment strategies. ';
         break;
       case 'exit slip':
-        systemPrompt += 'Create exit slip questions to assess student understanding. ';
+        systemPrompt += `Create exactly ${questionCount} exit slip questions to assess student understanding. `;
         break;
     }
 
