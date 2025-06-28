@@ -12,16 +12,13 @@ export interface BaseGeneratorSettings {
   theme: 'Halloween' | 'Winter' | 'Spring' | 'General';
   topicArea: string;
   customInstructions?: string;
-  includeVocabulary?: boolean;
   resourceType?: 'worksheet' | 'quiz' | 'exit_slip' | 'lesson_plan' | 'rubric';
   questionCount?: number;
-  focus?: string[];
   selectedQuestionTypes?: string[];
   format?: string;
 }
 
 export interface WorksheetSettings extends BaseGeneratorSettings {
-  problemType: string;
   problemCount: number;
   resourceType: 'worksheet' | 'quiz' | 'exit_slip' | 'lesson_plan' | 'rubric';
   format: string;
@@ -278,4 +275,42 @@ export const isFormat2 = (response: any): response is ApiResponseFormat2 => {
 
 export const isFormat3 = (response: any): response is ApiResponseFormat3 => {
   return 'worksheet' in response && Array.isArray(response.worksheet);
-}; 
+};
+
+// Helper function to check if response is a worksheet
+export const isWorksheetResponse = (response: any): boolean => {
+  return 'worksheet' in response && Array.isArray(response.worksheet);
+};
+
+export type Subject = 'Math' | 'Reading' | 'Science';
+
+export type ResourceType = 'worksheet' | 'quiz' | 'exit_slip' | 'lesson_plan' | 'rubric';
+
+// Math formats
+export type MathFormat = 'standard' | 'guided' | 'interactive';
+
+// Reading formats
+export type ReadingFormat = 'comprehension' | 'literary_analysis' | 'vocabulary_context';
+
+// Science formats
+export type ScienceFormat = 'lab_experiment' | 'observation_analysis' | 'concept_application';
+
+// Combined format type
+export type Format = MathFormat | ReadingFormat | ScienceFormat;
+
+export interface WorksheetSettings {
+  grade: string;
+  subject: Subject;
+  theme: string;
+  problemCount: number;
+  topicArea: string;
+  resourceType: ResourceType;
+  format: Format;
+  customInstructions?: string;
+}
+
+export interface BaseGeneratorProps {
+  onBack: () => void;
+  onComplete: (resource: any) => void;
+  request?: string;
+} 
