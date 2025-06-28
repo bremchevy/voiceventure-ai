@@ -47,6 +47,28 @@ const MATH_GUIDED_FORMAT = `{
   }
 }`;
 
+const MATH_INTERACTIVE_FORMAT = `{
+  "title": "string - The title of the worksheet",
+  "subject": "Math",
+  "grade_level": "string - The grade level",
+  "topic": "string - The specific topic area",
+  "format": "interactive",
+  "problems": [
+    {
+      "problem": "string - The problem statement",
+      "type": "interactive",
+      "materials_needed": ["string array - List of required materials"],
+      "instructions": ["string array - Step by step instructions"],
+      "expected_outcome": "string - What students should observe/conclude",
+      "answer": "string - The expected answer",
+      "explanation": "string - Explanation of the concept"
+    }
+  ],
+  "vocabulary": {
+    "key": "string - Definition of key terms used"
+  }
+}`;
+
 // Science-specific format templates
 const SCIENCE_LAB_FORMAT = `{
   "title": "string (descriptive title of the worksheet)",
@@ -125,12 +147,13 @@ const READING_COMPREHENSION_FORMAT = `{
   "title": "string (descriptive title of the worksheet)",
   "grade_level": "string (the grade level)",
   "topic": "string (the topic area)",
-  "subject": "string (the subject)",
+  "subject": "Reading",
   "format": "comprehension",
   "passage": {
-    "text": "string (the reading passage)",
+    "text": "string (REQUIRED: the complete reading passage)",
     "type": "string (fiction/non-fiction/poetry)",
-    "lexile_level": "string (reading level)"
+    "lexile_level": "string (reading level)",
+    "target_words": ["string (key vocabulary words)"]
   },
   "problems": [
     {
@@ -147,10 +170,10 @@ const READING_LITERARY_ANALYSIS_FORMAT = `{
   "title": "string (descriptive title of the worksheet)",
   "grade_level": "string (the grade level)",
   "topic": "string (the topic area)",
-  "subject": "string (the subject)",
+  "subject": "Reading",
   "format": "literary_analysis",
   "passage": {
-    "text": "string (the reading passage)",
+    "text": "string (REQUIRED: the complete reading passage)",
     "type": "string (fiction/non-fiction/poetry)",
     "elements_focus": ["string (literary elements to analyze)"]
   },
@@ -170,11 +193,12 @@ const READING_VOCABULARY_FORMAT = `{
   "title": "string (descriptive title of the worksheet)",
   "grade_level": "string (the grade level)",
   "topic": "string (the topic area)",
-  "subject": "string (the subject)",
+  "subject": "Reading",
   "format": "vocabulary_context",
   "passage": {
-    "text": "string (the reading passage)",
-    "target_words": ["string (vocabulary words to study)"]
+    "text": "string (REQUIRED: the complete reading passage)",
+    "type": "string (fiction/non-fiction/poetry)",
+    "target_words": ["string (REQUIRED: vocabulary words to study)"]
   },
   "problems": [
     {
@@ -249,6 +273,9 @@ export async function POST(req: Request) {
               case 'interactive':
                 systemPrompt += `Design problems that involve hands-on activities and manipulatives. Return the response in this exact JSON format: ${MATH_INTERACTIVE_FORMAT}`;
                 break;
+              default:
+                systemPrompt += `Include answer spaces after each problem. Provide final answers at the end. Do not include step-by-step explanations. Return the response in this exact JSON format: ${MATH_STANDARD_FORMAT}`;
+                break;
             }
             break;
           
@@ -256,15 +283,27 @@ export async function POST(req: Request) {
             if (questionCount === 0) {
               systemPrompt += `Focus on providing a rich, grade-appropriate passage with clear structure and engaging content. `;
             }
-            switch (format) {
+            // Ensure format is set for reading worksheets
+            let readingFormat = format;
+            if (!format || format === 'worksheet') {
+              readingFormat = 'comprehension'; // Default to comprehension if no specific format
+            }
+
+            // Add specific instructions for reading passages
+            systemPrompt += `Create a grade-appropriate passage about ${topicArea}. The passage should be engaging and suitable for ${gradeLevel} students. `;
+            
+            switch (readingFormat) {
               case 'comprehension':
-                systemPrompt += `Create a reading comprehension worksheet with grade-appropriate passage and questions focusing on main ideas, details, and inferences. Return the response in this exact JSON format: ${READING_COMPREHENSION_FORMAT}`;
+                systemPrompt += `Create a reading comprehension worksheet with a passage about ${topicArea}. The passage should demonstrate clear author's purpose and include questions focusing on main ideas, details, and inferences. The passage MUST be included in the response. Return the response in this exact JSON format: ${READING_COMPREHENSION_FORMAT}`;
                 break;
               case 'literary_analysis':
-                systemPrompt += `Create a literary analysis worksheet focusing on key elements like character, plot, theme, and literary devices. Return the response in this exact JSON format: ${READING_LITERARY_ANALYSIS_FORMAT}`;
+                systemPrompt += `Create a literary analysis worksheet with a passage rich in literary elements. The passage MUST be included in the response. Return the response in this exact JSON format: ${READING_LITERARY_ANALYSIS_FORMAT}`;
                 break;
               case 'vocabulary_context':
-                systemPrompt += `Create a vocabulary-in-context worksheet that helps students understand and use new words from the text. Return the response in this exact JSON format: ${READING_VOCABULARY_FORMAT}`;
+                systemPrompt += `Create a vocabulary-in-context worksheet with a passage containing target vocabulary words. The passage MUST be included in the response. Return the response in this exact JSON format: ${READING_VOCABULARY_FORMAT}`;
+                break;
+              default:
+                systemPrompt += `Create a reading comprehension worksheet with a passage about ${topicArea}. The passage should demonstrate clear author's purpose and include questions focusing on main ideas, details, and inferences. The passage MUST be included in the response. Return the response in this exact JSON format: ${READING_COMPREHENSION_FORMAT}`;
                 break;
             }
             break;

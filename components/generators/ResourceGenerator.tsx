@@ -72,92 +72,153 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
     }
   }, [request]);
 
-  const transformResponse = (rawResponse: any) => {
-    // Extract common fields
-    const title = rawResponse.title || `${rawResponse.grade_level} ${rawResponse.topic} Worksheet`;
-    const gradeLevel = rawResponse.grade_level;
-    const subject = rawResponse.subject;
-    const topicArea = rawResponse.topic;
-    const format = rawResponse.format || 'standard';
-    const vocabulary = rawResponse.vocabulary || {};
-
-    // Initialize problems array
-    let problems: Array<{
-      question: string;
-      answer?: string;
-      type: string;
-      steps?: string[];
-      explanation?: string;
-      materials_needed?: string[];
-      instructions?: string[];
-      expected_outcome?: string;
-    }> = [];
-
-    // Transform problems based on format
-    if (Array.isArray(rawResponse.problems)) {
-      problems = rawResponse.problems.map(problem => {
-        switch (format) {
-          case 'standard':
-            return {
-              question: problem.problem,
-              answer: problem.answer,
-              type: 'short_answer'
-            };
-          case 'guided':
-            return {
-              question: problem.problem,
-              answer: problem.answer,
-              type: 'guided',
-              steps: problem.steps || [],
-              explanation: problem.explanation
-            };
-          case 'interactive':
-            return {
-              question: problem.problem,
-              type: 'interactive',
-              materials_needed: problem.materials_needed || [],
-              instructions: problem.instructions || [],
-              expected_outcome: problem.expected_outcome
-            };
-          default:
-            return {
-              question: problem.problem || problem.question || '',
-              answer: problem.answer || problem.solution || '',
-              type: 'short_answer'
-            };
-        }
-      });
-    }
-
+  const transformResponse = (response: any): WorksheetResource => {
     // Get format-specific instructions
-    let instructions = '';
-    switch (format) {
-      case 'standard':
-        instructions = "Show your work and write your answers in the spaces provided. Remember to include units where necessary.";
+    let instructions = 'Show your work and write your answers in the spaces provided.';
+    switch (response.format) {
+      case 'comprehension':
+        instructions = 'Read the passage carefully. Then, answer each question using evidence from the text to support your answers.';
+        break;
+      case 'literary_analysis':
+        instructions = 'Analyze the passage focusing on the literary elements. Support your analysis with specific evidence from the text.';
+        break;
+      case 'vocabulary_context':
+        instructions = 'Study each vocabulary word in context. Define the word, analyze its usage, and apply it in new contexts.';
+        break;
+      case 'lab_experiment':
+        instructions = 'Follow the lab procedure carefully. Record your observations, collect data, and answer analysis questions.';
+        break;
+      case 'observation_analysis':
+        instructions = 'Observe the phenomenon carefully. Record detailed observations and analyze the patterns you notice.';
+        break;
+      case 'concept_application':
+        instructions = 'Apply the scientific concept to each scenario. Explain your reasoning and support it with evidence.';
         break;
       case 'guided':
-        // No general instructions needed for guided format as each problem has its own steps
-        instructions = "";
+        instructions = 'Follow the step-by-step guidance for each problem. Show your work at each step.';
         break;
       case 'interactive':
-        instructions = "Follow the instructions carefully and gather all required materials before starting each activity.";
+        instructions = 'Use the provided materials to solve each problem. Follow the activity instructions carefully.';
         break;
       default:
-        instructions = "Show your work and write your answers in the spaces provided.";
+        if (response.subject === 'Math') {
+          instructions = 'Show your work and include units in your answers where applicable.';
+        } else {
+          instructions = 'Show your work and write your answers in the spaces provided.';
+        }
     }
 
-    // Return in the expected format
-    return {
-      title,
-      subject,
-      gradeLevel,
-      topicArea,
+    // Base transformation
+    const transformed: WorksheetResource = {
       type: 'worksheet',
-      format,
-      instructions,
-      problems,
-      vocabulary
+      title: response.title || '',
+      gradeLevel: response.grade_level || '',
+      subject: response.subject || '',
+      topicArea: response.topic || '',
+      format: response.subject === 'Reading' ? (response.format === 'worksheet' ? 'comprehension' : response.format) : (response.format || 'standard'),
+      instructions: response.instructions || instructions,
+      problems: [],
+      vocabulary: response.vocabulary || {}
     };
+
+    // Handle passage for reading formats
+    if (response.passage || response.subject === 'Reading') {
+      transformed.passage = {
+        text: response.passage?.text || 'No passage provided',
+        type: response.passage?.type || 'fiction',
+        lexile_level: response.passage?.lexile_level || '',
+        target_words: response.passage?.target_words || [],
+        elements_focus: response.passage?.elements_focus || []
+      };
+    }
+
+    // Handle different problem formats
+    if (response.problems) {
+      switch (response.format) {
+        case 'comprehension':
+          transformed.comprehensionProblems = response.problems.map((p: any) => ({
+            type: p.type || 'main_idea',
+            question: p.question || '',
+            answer: p.answer || '',
+            evidence_prompt: p.evidence_prompt || '',
+            skill_focus: p.skill_focus || ''
+          }));
+          break;
+
+        case 'literary_analysis':
+          transformed.literaryAnalysisProblems = response.problems.map((p: any) => ({
+            type: 'analysis',
+            element: p.element || '',
+            question: p.question || '',
+            guiding_questions: p.guiding_questions || [],
+            evidence_prompt: p.evidence_prompt || '',
+            response_format: p.response_format || ''
+          }));
+          break;
+
+        case 'vocabulary_context':
+          transformed.vocabularyProblems = response.problems.map((p: any) => ({
+            word: p.word || '',
+            context: p.context || '',
+            definition: p.definition || '',
+            questions: p.questions || [],
+            application: p.application || ''
+          }));
+          break;
+
+        case 'lab_experiment':
+          transformed.objective = response.objective || '';
+          transformed.safety_notes = response.safety_notes || '';
+          transformed.materials = response.materials || [];
+          transformed.labProblems = response.problems.map((p: any) => ({
+            type: 'experiment',
+            question: p.question || '',
+            hypothesis_prompt: p.hypothesis_prompt || '',
+            procedure: p.procedure || [],
+            data_collection: p.data_collection || { table_headers: [], rows: 0 },
+            analysis_questions: p.analysis_questions || [],
+            conclusion_prompt: p.conclusion_prompt || ''
+          }));
+          break;
+
+        case 'observation_analysis':
+          transformed.objective = response.objective || '';
+          transformed.observationProblems = response.problems.map((p: any) => ({
+            type: 'observation',
+            phenomenon: p.phenomenon || '',
+            background: p.background || '',
+            observation_prompts: p.observation_prompts || [],
+            data_recording: p.data_recording || { type: 'text', instructions: '' },
+            analysis_questions: p.analysis_questions || [],
+            connections: p.connections || []
+          }));
+          break;
+
+        case 'concept_application':
+          transformed.conceptProblems = response.problems.map((p: any) => ({
+            type: 'application',
+            scenario: p.scenario || '',
+            concept_connection: p.concept_connection || '',
+            questions: p.questions || [],
+            extension: p.extension || ''
+          }));
+          break;
+
+        default:
+          // Handle standard math problems
+          transformed.problems = response.problems.map((p: any) => ({
+            type: p.type || 'standard',
+            question: p.problem || p.question || '', // Try problem field first, then question field
+            answer: p.answer || '',
+            explanation: p.explanation || '',
+            steps: p.steps || [],
+            hints: p.hints || [],
+            visuals: p.visuals || []
+          }));
+      }
+    }
+
+    return transformed;
   };
 
   const generateResource = async () => {
@@ -613,111 +674,176 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
     if (!generatedResource) return null;
 
     return (
-      <div className="space-y-6 text-gray-800">
-        {/* Title and Subject Info */}
-        <div>
-          <h2 className="text-2xl font-bold">{generatedResource.title}</h2>
-          <div className="text-sm text-gray-600">
-            <span>{generatedResource.subject}</span>
-            <span className="mx-2">•</span>
-            <span>{generatedResource.gradeLevel}</span>
+      <div className="space-y-6 relative">
+        {/* Header with Back Button */}
+        <div className="flex items-start justify-between mb-6 pt-2">
+          <div className="flex items-center gap-3">
+            <Button variant="ghost" size="sm" onClick={() => setCurrentStep("settings")} className="p-0 h-auto">
+              <ChevronLeft className="w-4 h-4" />
+            </Button>
+            <div>
+              <h1 className="text-xl font-bold text-gray-900">📄 Resource Preview</h1>
+              <p className="text-sm text-gray-600">Review your generated {type}</p>
+            </div>
           </div>
+          <Button variant="outline" size="sm" onClick={() => setCurrentStep("settings")}>
+            <Edit className="w-4 h-4 mr-2" />
+            Edit
+          </Button>
         </div>
 
-        {/* Instructions */}
-        <div>
-          <h3 className="font-semibold mb-2">Instructions:</h3>
-          <p className="text-sm">{getFormatSpecificInstructions(generatedResource)}</p>
-        </div>
-
-        {/* Format Type */}
-        <div className="text-sm font-medium text-purple-600">
-          {capitalizeFirstLetter(generatedResource.format)} Format
-        </div>
-
-        {/* Reading Passage (if present) */}
-        {generatedResource.passage && (
-          <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-            <h3 className="font-semibold mb-2">Reading Passage:</h3>
-            <p className="text-sm whitespace-pre-wrap">{generatedResource.passage.text}</p>
-            {generatedResource.passage.type && (
-              <p className="text-xs text-gray-500 mt-2">
-                Type: {capitalizeFirstLetter(generatedResource.passage.type)}
-                {generatedResource.passage.lexile_level && ` • Lexile Level: ${generatedResource.passage.lexile_level}`}
-              </p>
-            )}
+        {/* Resource Preview */}
+        <div className="bg-white p-8 rounded-lg shadow-lg max-w-4xl mx-auto" ref={resourceRef}>
+          {/* Title */}
+          <div className="space-y-2">
+            <h2 className="text-2xl font-bold">{generatedResource.title}</h2>
+            <div className="text-gray-600">
+              <div>{generatedResource.subject}</div>
+              <div>{generatedResource.gradeLevel}</div>
+            </div>
           </div>
-        )}
 
-        {/* Problems */}
-        {generatedResource.problems && generatedResource.problems.length > 0 && (
-          <div className="space-y-4">
-            {generatedResource.problems.map((problem: any, index: number) => (
-              <div key={index} className="space-y-2">
-                <div className="font-medium">{index + 1}</div>
+          {/* Instructions */}
+          {generatedResource.instructions && (
+            <div className="space-y-2">
+              <h3 className="font-semibold">Instructions:</h3>
+              <p>{generatedResource.instructions}</p>
+            </div>
+          )}
+
+          {/* Display passage for reading formats */}
+          {generatedResource.passage && (
+            <div className="space-y-2 border-l-4 border-purple-500 pl-4 my-6 bg-gray-50 p-4 rounded-r-lg">
+              <h3 className="font-semibold">Reading Passage:</h3>
+              <p className="whitespace-pre-wrap text-gray-800">{generatedResource.passage.text}</p>
+            </div>
+          )}
+
+          {/* Problems section */}
+          <div className="space-y-6">
+            {generatedResource.problems?.map((problem, index) => (
+              <div key={index} className="space-y-3">
+                <div className="font-medium">{(index + 1)}. {problem.question.replace(/^\d+\.\s*/, '')}</div>
+                <div className="pl-4">
+                  <div className="border-b-2 border-gray-300 h-8 w-full" />
+                  {problem.steps && problem.steps.length > 0 && (
+                    <div className="mt-2 space-y-1">
+                      {problem.steps.map((step, stepIndex) => (
+                        <div key={stepIndex} className="text-sm text-gray-600">
+                          • {step}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+
+            {/* Comprehension problems */}
+            {generatedResource.comprehensionProblems?.map((problem, index) => (
+              <div key={index} className="space-y-3">
+                <div className="font-medium">{(index + 1)}. {problem.question.replace(/^\d+\.\s*/, '')}</div>
+                {problem.evidence_prompt && (
+                  <div className="text-sm text-gray-600 italic pl-4">
+                    {problem.evidence_prompt}
+                  </div>
+                )}
+                <div className="pl-4">
+                  <div className="border-b-2 border-gray-300 h-16 w-full" />
+                </div>
+              </div>
+            ))}
+
+            {/* Literary analysis problems */}
+            {generatedResource.literaryAnalysisProblems?.map((problem, index) => (
+              <div key={index} className="space-y-3">
+                <div className="font-medium">{(index + 1)}. Analyze: {problem.element.replace(/^\d+\.\s*/, '')}</div>
                 <div>{problem.question}</div>
-                {problem.options && (
+                {problem.guiding_questions && (
                   <div className="pl-4 space-y-1">
-                    {problem.options.map((option: string, optIndex: number) => (
-                      <div key={optIndex} className="flex items-start gap-2">
-                        <span>{String.fromCharCode(65 + optIndex)}.</span>
-                        <span>{option}</span>
+                    {problem.guiding_questions.map((q, qIndex) => (
+                      <div key={qIndex} className="text-sm text-gray-600">
+                        • {q}
                       </div>
                     ))}
                   </div>
                 )}
+                <div className="pl-4">
+                  <div className="border-b-2 border-gray-300 h-16 w-full" />
+                </div>
+              </div>
+            ))}
+
+            {/* Vocabulary problems */}
+            {generatedResource.vocabularyProblems?.map((problem, index) => (
+              <div key={index} className="space-y-3 border p-4 rounded-lg">
+                <div className="font-semibold text-lg">{problem.word}</div>
+                <div className="text-gray-600">Context: "{problem.context}"</div>
+                <div>Definition: {problem.definition}</div>
+                <div className="space-y-3">
+                  {problem.questions.map((q, qIndex) => (
+                    <div key={qIndex}>
+                      <div className="font-medium">{(qIndex + 1)}. {q.question.replace(/^\d+\.\s*/, '')}</div>
+                      <div className="pl-4 mt-2">
+                        <div className="border-b-2 border-gray-300 h-8 w-full" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-3">
+                  <div className="font-medium">Application:</div>
+                  <div className="text-sm text-gray-600">{problem.application}</div>
+                  <div className="pl-4 mt-2">
+                    <div className="border-b-2 border-gray-300 h-12 w-full" />
+                  </div>
+                </div>
               </div>
             ))}
           </div>
-        )}
+
+          {/* Show vocabulary section only for math and science subjects */}
+          {generatedResource.subject !== 'Reading' && 
+           generatedResource.vocabulary && 
+           Object.keys(generatedResource.vocabulary).length > 0 && (
+            <div className="mt-8">
+              <h3 className="font-semibold text-lg mb-4">Key Terms:</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {Object.entries(generatedResource.vocabulary).map(([term, definition], index) => (
+                  <div key={index} className="border p-3 rounded-lg">
+                    <div className="font-medium">{term}</div>
+                    <div className="text-sm text-gray-600">{definition}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex justify-between items-center mt-6">
+          <Button variant="outline" onClick={() => setCurrentStep("settings")}>
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            Back to Settings
+          </Button>
+          <Button 
+            onClick={handleDownloadPDF} 
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Generating PDF...
+              </>
+            ) : (
+              <>
+                <Download className="mr-2 h-4 w-4" />
+                Download PDF
+              </>
+            )}
+          </Button>
+        </div>
       </div>
     );
-  };
-
-  // Helper function to get format-specific instructions
-  const getFormatSpecificInstructions = (response: any) => {
-    const baseInstructions = response.instructions || "";
-    
-    switch (response.subject?.toLowerCase()) {
-      case 'reading':
-        switch (response.format) {
-          case 'comprehension':
-            return "Read the passage carefully. Then answer the questions using evidence from the text to support your answers.";
-          case 'literary_analysis':
-            return "Analyze the passage focusing on literary elements. Support your answers with specific examples from the text.";
-          case 'vocabulary_context':
-            return "Study how each word is used in the passage. Use context clues to understand their meanings and usage.";
-          default:
-            return baseInstructions;
-        }
-      
-      case 'science':
-        switch (response.format) {
-          case 'lab_experiment':
-            return "Follow the lab procedure carefully. Record your observations and data accurately. Answer analysis questions based on your findings.";
-          case 'observation_analysis':
-            return "Observe the phenomena carefully. Record detailed observations and analyze the patterns you notice.";
-          case 'concept_application':
-            return "Apply scientific concepts to real-world scenarios. Explain your reasoning clearly using scientific principles.";
-          default:
-            return baseInstructions;
-        }
-      
-      case 'math':
-        switch (response.format) {
-          case 'standard':
-            return "Solve each problem and show your work clearly in the space provided.";
-          case 'guided':
-            return "Follow the step-by-step hints. Show your work for each step of the solution process.";
-          case 'interactive':
-            return "Use the suggested tools and manipulatives to solve each problem. Record your solutions and explain your thinking.";
-          default:
-            return baseInstructions;
-        }
-      
-      default:
-        return baseInstructions;
-    }
   };
 
   return (
