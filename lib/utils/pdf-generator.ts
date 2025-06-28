@@ -11,7 +11,22 @@ export async function generateWorksheetPDF(resource: Resource): Promise<Buffer> 
   // Title
   doc.setFontSize(16);
   doc.text(resource.title, pageWidth / 2, yPosition, { align: 'center' });
-  yPosition += lineHeight * 2;
+  yPosition += lineHeight * 1.5;
+
+  // Name and Date fields - smaller and below title
+  doc.setFontSize(10);
+  // Calculate positions for two columns
+  const columnWidth = (pageWidth - margin * 2) / 2;
+  const nameX = margin;
+  const dateX = margin + columnWidth + 10; // Add 10 for spacing between columns
+  
+  doc.text('Name:', nameX, yPosition);
+  doc.line(nameX + 20, yPosition, nameX + columnWidth - 10, yPosition);
+  
+  doc.text('Date:', dateX, yPosition);
+  doc.line(dateX + 20, yPosition, dateX + columnWidth - 10, yPosition);
+  
+  yPosition += lineHeight * 1.5;
 
   // Metadata
   doc.setFontSize(12);
