@@ -4,9 +4,9 @@ import { Resource } from '@/lib/types/resource';
 
 export const runtime = 'nodejs'; // Required for @react-pdf/renderer
 
-export async function POST(req: NextRequest) {
+export async function POST(request: Request) {
   try {
-    const resource = await req.json() as Resource;
+    const resource = await request.json() as Resource;
     
     // Validate the resource
     if (!resource || !resource.title || !resource.problems) {
@@ -19,17 +19,20 @@ export async function POST(req: NextRequest) {
     // Generate PDF
     const pdfBuffer = await generateWorksheetPDF(resource);
 
-    // Return the PDF as a response
+    // Set response headers for PDF download
+    const headers = new Headers();
+    headers.set('Content-Type', 'application/pdf');
+    headers.set('Content-Disposition', `attachment; filename="${resource.title.replace(/[^a-z0-9]/gi, '_').toLowerCase()}.pdf"`);
+    headers.set('Content-Length', pdfBuffer.length.toString());
+
     return new NextResponse(pdfBuffer, {
-      headers: {
-        'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename="${resource.title.toLowerCase().replace(/\s+/g, '-')}.pdf"`,
-      },
+      status: 200,
+      headers
     });
   } catch (error) {
-    console.error('Error generating PDF:', error);
+    console.error('Error in PDF generation:', error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to generate PDF' },
+      { error: 'Failed to generate PDF' },
       { status: 500 }
     );
   }
