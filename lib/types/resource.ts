@@ -1,125 +1,104 @@
-export type ResourceType = 'worksheet' | 'quiz' | 'rubric' | 'lesson_plan' | 'exit_slip';
+export type ResourceType = 'worksheet' | 'quiz' | 'rubric' | 'lesson plan' | 'exit slip';
 
-export type Subject = 'math' | 'reading' | 'science' | 'general';
+export type QuestionType = 'multiple_choice' | 'true_false' | 'short_answer';
 
-export type DifficultyLevel = 'easy' | 'medium' | 'hard';
-
-export type GradeLevel = 
-  | 'K' 
-  | '1' | '2' | '3' | '4' | '5' 
-  | '6' | '7' | '8' 
-  | '9' | '10' | '11' | '12';
-
-export interface ResourceMetadata {
-  id: string;
+export interface BaseResource {
   title: string;
   description?: string;
-  gradeLevel: string;
   subject: string;
-  resourceType: ResourceType;
-  theme?: string;
-  difficulty: 'easy' | 'medium' | 'hard';
-  problemCount?: number;
-  topicArea?: string;
-  customInstructions?: string;
-  createdAt: Date;
-  updatedAt: Date;
+  gradeLevel: string;
+  topicArea: string;
+  createdAt: string;
 }
 
-export interface ResourceContent {
-  questions?: ResourceQuestion[];
-  rubricCriteria?: RubricCriterion[];
-  lessonObjectives?: string[];
-  materials?: string[];
-  procedures?: string[];
-  assessments?: string[];
-  exitPrompts?: string[];
+export interface WorksheetResource extends BaseResource {
+  type: 'worksheet';
+  format: 'standard' | 'guided' | 'interactive';
+  problems: {
+    question: string;
+    answer?: string;
+    options?: string[];
+    explanation?: string;
+    steps?: {
+      instruction: string;
+      hint?: string;
+    }[];
+    materials?: string[];
+    interactiveElements?: string[];
+  }[];
+  vocabulary?: {
+    [key: string]: string;
+  };
+  instructions?: string;
 }
 
-export interface ResourceQuestion {
-  id: string;
-  type: 'multiple_choice' | 'short_answer' | 'long_answer' | 'true_false' | 'matching';
-  question: string;
-  options?: string[];
-  correctAnswer?: string | string[];
-  explanation?: string;
-  points?: number;
+export interface QuizResource extends BaseResource {
+  type: 'quiz';
+  questions: {
+    type: QuestionType;
+    number: number;
+    question: string;
+    options?: string[];
+    correct?: string;
+    explanation?: string;
+    points: number;
+    rubric?: string[];
+  }[];
+  totalPoints: number;
 }
 
-export interface RubricCriterion {
-  id: string;
-  category: string;
-  description: string;
-  levels: RubricLevel[];
+export interface RubricResource extends BaseResource {
+  type: 'rubric';
+  criteria: {
+    name: string;
+    levels: {
+      level: string;
+      description: string;
+      points?: number;
+    }[];
+  }[];
 }
 
-export interface RubricLevel {
-  score: number | string;
-  description: string;
-  examples?: string[];
-  label?: string;
+export interface LessonPlanResource extends BaseResource {
+  type: 'lesson plan';
+  duration: string;
+  objectives: string[];
+  materials: string[];
+  activities: {
+    name: string;
+    duration: string;
+    description: string;
+  }[];
+  assessment: string;
 }
 
-export interface Resource {
-  metadata: ResourceMetadata;
-  content: ResourceContent;
+export interface ExitSlipResource extends BaseResource {
+  type: 'exit slip';
+  questions: {
+    question: string;
+    type: 'multiple_choice' | 'rating_scale' | 'open_response';
+    options?: string[];
+    points?: number;
+  }[];
 }
+
+export type Resource = 
+  | WorksheetResource 
+  | QuizResource 
+  | RubricResource 
+  | LessonPlanResource 
+  | ExitSlipResource;
 
 export interface ResourceGenerationOptions {
+  subject: string;
   gradeLevel: string;
-  subject: Subject;
   resourceType: ResourceType;
   theme?: string;
-  difficulty?: DifficultyLevel;
-  problemCount?: number;
-  topicArea?: string;
-  topic?: string;
-  customInstructions?: string;
-  // Quiz specific options
-  quizType?: 'vocabulary' | 'comprehension' | 'analysis' | 'mixed';
-  literatureTitle?: string;
-  literatureAuthor?: string;
-  // Content focus options
-  includeQuestions?: boolean;
-  includeVisuals?: boolean;
-  includeExperiments?: boolean;
-  includeDiagrams?: boolean;
+  difficulty?: string;
+  topicArea: string;
   includeVocabulary?: boolean;
-  readingLevel?: string;
-  genre?: string;
-  wordCount?: number;
-  focus?: string[];
   questionCount?: number;
-  visualComplexity?: 'simple' | 'moderate' | 'complex';
-  // Rubric specific options
-  rubricStyle?: '4-point' | '3-point' | 'checklist';
-  rubricCriteria?: string[];
-  // Question type options
+  focus?: string;
+  customInstructions?: string;
   selectedQuestionTypes?: string[];
-}
-
-export interface ResourceGenerationResult {
-  success: boolean;
-  resource?: Resource;
-  error?: string;
-  warnings?: string[];
-}
-
-export interface GeneratedResource {
-  title: string;
-  content: string;
-  metadata: {
-    gradeLevel: string;
-    subject: Subject;
-    resourceType: ResourceType;
-    generatedAt: string;
-    theme?: string;
-    difficulty?: DifficultyLevel;
-  };
-  sections: Array<{
-    type: string;
-    title?: string;
-    content: string;
-  }>;
-  decorations?: string[];
 } 

@@ -2,12 +2,11 @@ import { BaseAIContentGenerator, GenerationOptions, GenerationResult } from './b
 import { getPromptEnhancements } from './difficulty-scaling';
 import { DifficultyLevel, Subject } from '../../types/resource';
 import OpenAI from 'openai';
+import { createAIClient, validateEnvironment } from './config';
 
 export interface GeneralContentOptions {
   grade?: string;
-  difficulty?: DifficultyLevel;
   topic?: string;
-  includeVisuals?: boolean;
   numberOfQuestions?: number;
   customInstructions?: string;
   questionTypes?: string[];
@@ -35,8 +34,13 @@ export class GeneralContentGenerator extends BaseAIContentGenerator {
 
   constructor() {
     super();
-    this.model = 'gpt-3.5-turbo-1106';
-    this.openai = new OpenAI();
+    this.model = 'gpt-3.5-turbo';
+    validateEnvironment();
+    this.openai = createAIClient({
+      apiKey: process.env.OPENAI_API_KEY!,
+      maxRetries: 3,
+      timeout: 60000
+    });
   }
 
   async generateGeneralContent(options: GeneralContentOptions): Promise<GenerationResult> {
@@ -48,21 +52,18 @@ export class GeneralContentGenerator extends BaseAIContentGenerator {
       console.log('🔄 Making API request with model:', this.model);
       const completion = await this.openai.chat.completions.create({
         model: this.model,
-        response_format: { type: "json_object" },
         messages: [
           {
             role: "system",
-            content: "You are an expert educational content creator, specializing in creating engaging, grade-appropriate learning materials. You MUST follow the instructions exactly and return ONLY valid JSON."
+            content: "You are an expert educational content creator, specializing in creating engaging, grade-appropriate learning materials. Follow the instructions exactly and return ONLY valid JSON."
           },
           {
             role: "user",
             content: prompt
           }
         ],
-        temperature: 0.5,
-        max_tokens: 4000,
-        presence_penalty: 0.1,
-        frequency_penalty: 0.1
+        temperature: 0.7,
+        max_tokens: 2000
       });
 
       // Extract and validate the response
@@ -72,14 +73,7 @@ export class GeneralContentGenerator extends BaseAIContentGenerator {
       }
 
       try {
-        const parsedContent = JSON.parse(content);
-        // Validate the number of questions
-        if (Array.isArray(parsedContent.questions) && 
-            parsedContent.questions.length !== options.numberOfQuestions) {
-          console.warn(`⚠️ Generated ${parsedContent.questions.length} questions instead of ${options.numberOfQuestions}. Retrying...`);
-          return this.generateGeneralContent(options);
-        }
-        return parsedContent;
+        return JSON.parse(content);
       } catch (error) {
         console.error('Error parsing generated content:', error);
         return this.generateDefaultContent(options);
@@ -93,21 +87,24 @@ export class GeneralContentGenerator extends BaseAIContentGenerator {
   private async buildGeneralPrompt(options: GeneralContentOptions): Promise<string> {
     const {
       grade = '5',
-      difficulty = 'intermediate',
       topic = '',
-      includeVisuals = false,
       numberOfQuestions = 10,
       customInstructions = '',
       questionTypes = ['multiple_choice'],
       focus = []
     } = options;
 
-    // Get difficulty-based enhancements
-    const difficultyEnhancements = getPromptEnhancements(grade, 'general', difficulty);
-
     const prompt = `Generate a general knowledge ${topic ? `assessment about ${topic}` : 'assessment'} for grade ${grade} students.
 
-CRITICAL REQUIREMENTS:
+CRITICAL GRADE-LEVEL REQUIREMENTS:
+1. Content MUST be precisely calibrated for ${grade} students:
+   - Use vocabulary appropriate for ${grade} level
+   - Match cognitive development of ${grade} students
+   - Align with ${grade} curriculum standards
+   - Use examples and contexts familiar to ${grade} students
+2. Language and instructions MUST be clear and accessible for ${grade} readers
+
+ADDITIONAL REQUIREMENTS:
 1. You MUST generate EXACTLY ${numberOfQuestions} questions.
 2. You MUST ONLY use the following question types: ${questionTypes.join(', ')}.
 3. Each question MUST be in the specified format(s).
@@ -125,14 +122,11 @@ CRITICAL REQUIREMENTS:
 6. For short answer questions:
    - Clearly indicate expected response length
    - Include scoring rubric points
-7. Questions should be grade-appropriate (${grade})
-8. Difficulty level should be ${difficulty}
-9. IMPORTANT: DO NOT mix question types. Only use the types specified in requirement #2.
-10. If only one question type is specified, ALL questions must be of that type.
+7. IMPORTANT: DO NOT mix question types. Only use the types specified in requirement #2.
+8. If only one question type is specified, ALL questions must be of that type.
 
 ${focus.length > 0 ? `Focus areas to cover: ${focus.join(', ')}\n` : ''}
 ${customInstructions ? `Additional instructions: ${customInstructions}\n` : ''}
-${difficultyEnhancements}
 
 Return the response in this exact JSON format:
 {

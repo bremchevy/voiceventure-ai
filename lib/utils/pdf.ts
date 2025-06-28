@@ -67,8 +67,18 @@ const PDF_STYLES = `
 
   .pdf-content .answer-space {
     min-height: 100px !important;
-    border-bottom: 1px solid #000 !important;
-    margin-top: 12px !important;
+    border-bottom: 2px solid #666 !important;
+    margin-top: 16px !important;
+    margin-bottom: 24px !important;
+    width: 100% !important;
+  }
+
+  .pdf-content .short-answer-space {
+    min-height: 120px !important;
+    border-bottom: 2px solid #666 !important;
+    margin-top: 16px !important;
+    margin-bottom: 24px !important;
+    width: 100% !important;
   }
 
   .pdf-content .metadata {

@@ -46,4 +46,20 @@ export const readingWorksheetTemplate: Template = {
     bodyStyle: 'line-height: 1.6;',
     accentColor: '#f59e0b',
   }
+};
+
+export const exitSlipTemplate: Template = {
+  id: 'exit-slip',
+  name: 'Exit Slip / Bell Ringer',
+  description: 'Template for exit slips and bell ringer activities',
+  subject: 'general',
+  type: 'exit_slip',
+  grade: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+  styles: {
+    fontFamily: 'Arial, sans-serif',
+    fontSize: '14px',
+    headerStyle: 'font-size: 24px; font-weight: bold; text-align: center;',
+    bodyStyle: 'line-height: 1.6;',
+    accentColor: '#8b5cf6', // Purple accent for exit slips/bell ringers
+  }
 }; 

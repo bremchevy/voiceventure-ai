@@ -60,7 +60,7 @@ export class BaseAIContentGenerator {
         messages: [
           {
             role: "system",
-            content: "You are an expert educational content creator. Always return valid JSON responses that exactly match the requested format and number of items. Never return partial or incomplete responses."
+            content: "You are an expert educational content creator with deep understanding of grade-level standards and developmental stages. Your primary focus is creating content that precisely matches the specified grade level's cognitive abilities, vocabulary, and comprehension level. Always ensure content strictly adheres to grade-level appropriateness before considering difficulty adjustments. Return valid JSON responses that exactly match the requested format and number of items. Never return partial or incomplete responses."
           },
           {
             role: "user",

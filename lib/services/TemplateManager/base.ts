@@ -1,5 +1,5 @@
 import { Template, TemplateRenderOptions, TemplateSection, TemplateStyles } from './types';
-import { mathWorksheetTemplate, scienceWorksheetTemplate, readingWorksheetTemplate } from './templates';
+import { mathWorksheetTemplate, scienceWorksheetTemplate, readingWorksheetTemplate, exitSlipTemplate } from './templates';
 
 export class TemplateManager {
   private templates: Map<string, Template> = new Map();
@@ -16,6 +16,7 @@ export class TemplateManager {
     this.registerTemplate(mathWorksheetTemplate);
     this.registerTemplate(scienceWorksheetTemplate);
     this.registerTemplate(readingWorksheetTemplate);
+    this.registerTemplate(exitSlipTemplate);
     
     // Register any additional templates
     templates.forEach(template => this.registerTemplate(template));
@@ -108,6 +109,8 @@ export class TemplateManager {
         display: flex;
         justify-content: space-between;
         margin-top: 10px;
+        font-size: 18px;
+        line-height: 2;
       }
       .instructions {
         margin-bottom: 30px;
@@ -121,89 +124,165 @@ export class TemplateManager {
         ${styles.bodyStyle}
       }
       .problem {
-        margin-bottom: 20px;
+        margin-bottom: 30px;
         padding: 15px;
         background-color: #f8f9fa;
         border-radius: 8px;
+        font-size: 18px;
+        line-height: 2;
       }
       .problem-number {
         background-color: ${styles.accentColor};
         color: white;
-        width: 24px;
-        height: 24px;
+        width: 30px;
+        height: 30px;
         display: inline-flex;
         align-items: center;
         justify-content: center;
         border-radius: 50%;
-        margin-right: 10px;
+        margin-right: 15px;
+        font-size: 18px;
       }
       .problem-content {
         display: inline-block;
-        font-family: monospace;
-        font-size: 16px;
+        font-size: 18px;
       }
       .problem-visual {
-        margin-top: 10px;
+        margin: 15px 0;
         color: #666;
+        font-size: 24px;
+      }
+      .picture-cue {
+        display: inline-block;
+        margin: 0 5px;
+        padding: 5px;
+        background-color: #f0f0f0;
+        border-radius: 4px;
+        font-size: 24px;
+      }
+      .kindergarten-passage {
+        font-size: 24px;
+        line-height: 2.5;
+        margin: 30px 0;
+      }
+      .kindergarten-passage .line {
+        display: flex;
+        align-items: center;
+        margin-bottom: 20px;
+      }
+      .kindergarten-options {
+        display: flex;
+        gap: 30px;
+        margin-top: 15px;
+        justify-content: center;
+      }
+      .kindergarten-option {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 24px;
+        padding: 10px 20px;
+        border: 2px solid #ddd;
+        border-radius: 8px;
+        cursor: pointer;
+      }
+      .kindergarten-option:hover {
+        background-color: #f8f9fa;
       }
       .answer-line {
         margin-top: 10px;
         border-bottom: 1px solid #ccc;
         padding: 5px 0;
       }
-    `;
-  }
-
-  private renderDecorations(decorations: string[]): string {
-    if (!decorations.length) return '';
-    const decorationElements = decorations.map(d => `<span class="decoration">${d}</span>`).join('');
-    return `<div class="decorations">${decorationElements}</div>`;
+    }`;
   }
 
   private renderContent(template: Template, data: any): string {
-    // Header
+    const isKindergarten = data.grade?.toLowerCase() === 'k' || data.grade?.toLowerCase() === 'kindergarten';
+
     const header = `
       <div class="header">
-        <h1>${data.title || 'Worksheet'}</h1>
+        <h1>${data.title || template.defaultTitle}</h1>
         <div class="student-info">
-          <span>Name: ________________</span>
-          <span>Date: ________________</span>
+          <div>Name: _____________________</div>
+          <div>Date: _____________________</div>
         </div>
       </div>
     `;
 
-    // Instructions
-    const instructions = `
-      <div class="instructions">
-        <h2>📝 Instructions:</h2>
-        <p>${data.instructions || ''}</p>
-      </div>
-    `;
+    if (isKindergarten) {
+      const passage = data.passage.split('\n').map(line => {
+        return `<div class="line">${line}</div>`;
+      }).join('');
 
-    // Problems
-    const problems = (data.problems || []).map((problem: any, index: number) => `
-      <div class="problem">
-        <span class="problem-number">${index + 1}</span>
-        <div class="problem-content">
-          <div>${problem.question}</div>
-          ${problem.visual ? `<div class="problem-visual">${problem.visual}</div>` : ''}
-          ${problem.steps ? `
-            <div class="problem-steps">
-              <p><strong>Steps:</strong></p>
-              <ol>${problem.steps.map((step: string) => `<li>${step}</li>`).join('')}</ol>
+      const questions = data.questions.map((q: any, index: number) => {
+        const options = q.options.map((opt: string) => {
+          return `<div class="kindergarten-option">${opt}</div>`;
+        }).join('');
+
+        return `
+          <div class="problem">
+            <span class="problem-number">${index + 1}</span>
+            <div class="problem-content">
+              ${q.question}
+              <div class="kindergarten-options">
+                ${options}
+              </div>
             </div>
-          ` : ''}
-          <div class="answer-line">Answer: ________________</div>
+          </div>
+        `;
+      }).join('');
+
+      return `
+        ${header}
+        <div class="kindergarten-passage">
+          ${passage}
         </div>
-      </div>
-    `).join('');
+        <div class="problems-container">
+          ${questions}
+        </div>
+      `;
+    }
+
+    // Regular content rendering for other grades
+    const content = template.sections.map((section: TemplateSection) => {
+      switch (section.type) {
+        case 'instructions':
+          return `
+            <div class="instructions">
+              <h2>${section.title}</h2>
+              <p>${section.content}</p>
+            </div>
+          `;
+        case 'problems':
+          return `
+            <div class="problems-container">
+              ${data.questions.map((q: any, index: number) => `
+                <div class="problem">
+                  <span class="problem-number">${index + 1}</span>
+                  <div class="problem-content">
+                    ${q.question}
+                    ${q.type !== 'true_false' ? '<div class="answer-line"></div>' : ''}
+                    ${q.options ? `
+                      <div class="options">
+                        ${q.options.map((opt: string) => `
+                          <div class="option">${opt}</div>
+                        `).join('')}
+                      </div>
+                    ` : ''}
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          `;
+        default:
+          return '';
+      }
+    }).join('');
 
     return `
       ${header}
-      ${instructions}
-      <div class="problems-container">
-        ${problems}
-      </div>
+      ${content}
     `;
   }
-} 
+}

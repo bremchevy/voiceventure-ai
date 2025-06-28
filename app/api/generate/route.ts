@@ -1,83 +1,104 @@
 import { NextResponse } from 'next/server';
-import { AIResourceGenerator } from '@/lib/services/AIResourceGenerator';
-import type { ResourceGenerationOptions } from '@/lib/types/resource';
-import { validateEnvironment } from '@/lib/services/AIContentGenerator/config';
+import OpenAI from 'openai';
+import { getErrorMessage } from '@/lib/utils/errors';
 
-export const runtime = 'edge';
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
-// Helper function to determine difficulty based on grade level
-function determineDifficulty(gradeLevel: string): 'easy' | 'medium' | 'hard' {
-  const grade = parseInt(gradeLevel);
-  if (grade <= 2) return 'easy';
-  if (grade <= 4) return 'medium';
-  return 'hard';
-}
-
-// Helper function to determine visual aids based on grade level
-function determineVisualAids(gradeLevel: string) {
-  const grade = parseInt(gradeLevel);
-  return {
-    includeVisuals: grade <= 3, // More visuals for lower grades
-    includeDiagrams: grade >= 3, // Diagrams for higher grades
-    includeExperiments: grade >= 4, // Experiments for higher grades
-    visualComplexity: grade <= 2 ? 'simple' : grade <= 4 ? 'moderate' : 'complex'
-  };
-}
-
-export async function POST(request: Request) {
+export async function POST(req: Request) {
   try {
-    // Validate environment first
-    validateEnvironment();
-    
-    const options = await request.json();
-    console.log('📝 Received generation request:', options);
+    const {
+      subject,
+      gradeLevel,
+      resourceType,
+      theme,
+      difficulty,
+      topicArea,
+      includeVocabulary,
+      questionCount = 10,
+      focus,
+      customInstructions,
+      selectedQuestionTypes = ['multiple_choice'],
+      format
+    } = await req.json();
 
-    if (!options.subject || !options.gradeLevel || !options.resourceType) {
-      console.error('❌ Missing required fields:', { 
-        subject: options.subject, 
-        gradeLevel: options.gradeLevel, 
-        resourceType: options.resourceType 
-      });
+    // Validate required fields
+    if (!subject || !gradeLevel || !resourceType || !topicArea) {
       return NextResponse.json(
-        { error: 'Missing required fields: subject, gradeLevel, or resourceType' },
+        { error: 'Missing required fields' },
         { status: 400 }
       );
     }
 
-    // Extract grade number from grade level string
-    const gradeNumber = parseInt(options.gradeLevel.match(/\d+/)?.[0] || '0');
-    
-    // Determine difficulty and visual aids based on grade level
-    const difficulty = determineDifficulty(gradeNumber.toString());
-    const visualAids = determineVisualAids(gradeNumber.toString());
+    // Build the system prompt based on resource type
+    let systemPrompt = `You are an expert ${subject} teacher specializing in creating educational resources for ${gradeLevel} students. `;
+    systemPrompt += `Create a ${resourceType} about ${topicArea} at a ${difficulty || 'moderate'} difficulty level. `;
 
-    // Merge the determined settings with the original options
-    const enhancedOptions = {
-      ...options,
-      difficulty,
-      ...visualAids,
-    };
+    if (customInstructions) {
+      systemPrompt += `Additional instructions: ${customInstructions}. `;
+    }
 
-    console.log('🎯 Enhanced generation options:', enhancedOptions);
+    // Add resource-specific instructions
+    switch (resourceType.toLowerCase()) {
+      case 'worksheet':
+        systemPrompt += `Generate a worksheet with ${questionCount} problems. `;
+        if (includeVocabulary) {
+          systemPrompt += 'Include relevant vocabulary terms and definitions. ';
+        }
+        // Add format-specific instructions for worksheets
+        switch (format) {
+          case 'standard':
+            systemPrompt += 'Include answer spaces after each problem. Provide final answers at the end. Do not include step-by-step explanations. ';
+            break;
+          case 'guided':
+            systemPrompt += 'Include step-by-step hints and explanations for each problem. Break down complex problems into smaller steps. Provide detailed explanations for each step. ';
+            break;
+          case 'interactive':
+            systemPrompt += 'Design problems that involve hands-on activities, drawing, or manipulatives. Focus on engaging, interactive elements. Do not include direct answers or explanations. ';
+            break;
+        }
+        break;
+      case 'quiz':
+        systemPrompt += `Create a quiz with ${questionCount} questions using these types: ${selectedQuestionTypes.join(', ')}. `;
+        break;
+      case 'rubric':
+        systemPrompt += 'Create a detailed rubric with clear criteria and performance levels. ';
+        break;
+      case 'lesson plan':
+        systemPrompt += 'Design a comprehensive lesson plan with objectives, activities, and assessment strategies. ';
+        break;
+      case 'exit slip':
+        systemPrompt += 'Create exit slip questions to assess student understanding. ';
+        break;
+    }
 
-    const generator = new AIResourceGenerator();
-    const result = await generator.generateResource(enhancedOptions);
+    systemPrompt += 'Format the response as a JSON object with appropriate structure for the resource type.';
 
-    // Log success and return result
-    console.log('✅ Content generated successfully');
-    console.log('✨ Resource generated successfully, preparing to stream');
-    console.log('📦 Resource structure:', { 
-      hasContent: !!result.content, 
-      hasMetadata: !!result.metadata, 
-      contentLength: result.content?.length || 0,
-      sections: result.sections?.length || 0
+    const completion = await openai.chat.completions.create({
+      model: "gpt-3.5-turbo",
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: `Create a ${resourceType} for ${subject} (${gradeLevel}) about ${topicArea}` }
+      ],
+      temperature: 0.7,
+      response_format: { type: "json_object" }
     });
 
-    return NextResponse.json(result);
+    const content = completion.choices[0]?.message?.content;
+
+    if (!content) {
+      throw new Error('No content generated');
+    }
+
+    // Parse and validate the response
+    const parsedContent = JSON.parse(content);
+
+    return NextResponse.json(parsedContent);
   } catch (error) {
-    console.error('❌ Error generating resource:', error);
+    console.error('Error in generate route:', error);
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to generate resource' },
+      { error: getErrorMessage(error) },
       { status: 500 }
     );
   }

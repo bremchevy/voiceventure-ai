@@ -44,19 +44,47 @@ export class ReadingContentGenerator extends BaseAIContentGenerator {
 
   private validateResponse(response: any, options: ReadingContentOptions): boolean {
     if (!response.title || !response.passage || !response.questions) {
+      console.log('❌ Validation failed: Missing required fields');
       return false;
     }
 
     if (!Array.isArray(response.questions)) {
+      console.log('❌ Validation failed: Questions is not an array');
       return false;
     }
 
     const expectedQuestions = options.numberOfQuestions || 10;
-    if (!Array.isArray(response.questions) || response.questions.length !== expectedQuestions) {
+    if (response.questions.length !== expectedQuestions) {
+      console.log(`❌ Validation failed: Expected ${expectedQuestions} questions, got ${response.questions.length}`);
       return false;
     }
 
-    // Validate each question has required fields
+    // Special validation for kindergarten
+    const isKindergarten = options.grade?.toLowerCase() === 'k' || options.grade?.toLowerCase() === 'kindergarten';
+    if (isKindergarten) {
+      // For kindergarten, we're more lenient with validation
+      const validQuestions = response.questions.every((q: any) => 
+        q.question && 
+        q.type && 
+        (q.type === 'multiple_choice' || q.type === 'true_false')
+      );
+
+      if (!validQuestions) {
+        console.log('❌ Validation failed: Invalid kindergarten question format');
+        return false;
+      }
+
+      // Validate passage is appropriate for kindergarten
+      const passageLines = response.passage.split('\n').filter(Boolean);
+      if (passageLines.length > 5) {
+        console.log('❌ Validation failed: Kindergarten passage too long');
+        return false;
+      }
+
+      return true;
+    }
+
+    // Regular validation for other grades
     const validQuestions = response.questions.every((q: any) => 
       q.question && 
       q.type && 
@@ -65,11 +93,12 @@ export class ReadingContentGenerator extends BaseAIContentGenerator {
     );
 
     if (!validQuestions) {
+      console.log('❌ Validation failed: Invalid question format');
       return false;
     }
 
-    // Validate passage is not empty
     if (!response.passage.trim()) {
+      console.log('❌ Validation failed: Empty passage');
       return false;
     }
 
@@ -80,7 +109,7 @@ export class ReadingContentGenerator extends BaseAIContentGenerator {
     const {
       grade = '5',
       difficulty = 'intermediate',
-      topic,
+      topic = '',
       includeVocabulary = true,
       includeComprehension = true,
       numberOfQuestions = 5,
@@ -89,6 +118,47 @@ export class ReadingContentGenerator extends BaseAIContentGenerator {
       genre,
       focus = []
     } = options;
+
+    const isKindergarten = grade.toLowerCase() === 'k' || grade.toLowerCase() === 'kindergarten';
+
+    if (isKindergarten) {
+      return `Generate a kindergarten-level reading activity about ${topic || 'basic concepts'}.
+
+CRITICAL REQUIREMENTS:
+1. The passage MUST:
+   - Be 3-5 simple sentences MAXIMUM
+   - Use ONLY basic sight words
+   - Have one sentence per line
+   - Use repetitive patterns
+   - Focus on ${topic} at a very basic level
+
+2. Generate EXACTLY ${numberOfQuestions} questions that:
+   - Are yes/no only
+   - Use simple language
+   - Focus on basic comprehension
+
+Return the response in this exact JSON format:
+{
+  "title": "Simple, engaging title",
+  "passage": "Very simple passage",
+  "questions": [
+    {
+      "type": "multiple_choice",
+      "question": "Simple question",
+      "options": ["Yes", "No"],
+      "correct": "Yes or No"
+    }
+  ],
+  "vocabulary": [
+    {
+      "word": "Simple word from the passage",
+      "definition": "Very basic 3-4 word definition"
+    }
+  ]
+}
+
+${customInstructions ? `\nAdditional Instructions:\n${customInstructions}` : ''}`;
+    }
 
     // Enforce maximum question limit
     const limitedQuestions = Math.min(numberOfQuestions, this.MAX_QUESTIONS);
@@ -118,36 +188,7 @@ Language Requirements:
 - Focus on concrete objects and immediate experiences
 - Use present tense only
 - Avoid any complex words or contractions
-
-Visual Support:
-- MUST include picture support for EVERY noun mentioned
-- Use [picture:word] format for each key noun
-- Include visual cues for actions [running] [jumping]
-- Place one picture cue per line
-
-Question Format:
-- Maximum 3 questions total
-- Questions MUST be:
-  * 70% picture-based ("Point to the [object]")
-  * 30% simple yes/no
-- NO written answer requirements
-- All questions must be answerable by:
-  * Pointing to a picture
-  * Saying yes/no
-  * Showing a number with fingers (1-5 only)
-
-Assessment Focus:
-- Print awareness (left-to-right progression)
-- One-to-one correspondence
-- Picture-word association
-- Basic sight word recognition
-- Simple sequencing (first, next, last)
-
-Response Format:
-- Questions must be read aloud by teacher
-- Answers should be demonstrable through actions
-- Include teacher prompts in brackets [Ask student to point to...]
-- No written responses required`;
+`;
       }
       
       // Early Elementary (Grades 1-2)
@@ -497,24 +538,52 @@ ${customInstructions ? `\nAdditional Instructions:\n${customInstructions}` : ''}
   }
 
   private generateDefaultContent(options: ReadingContentOptions): ReadingGenerationResult {
-    const { numberOfQuestions = 10, topic = 'general reading', readingLevel = 'grade 5' } = options;
+    const isKindergarten = options.grade?.toLowerCase() === 'k' || options.grade?.toLowerCase() === 'kindergarten';
+
+    if (isKindergarten) {
+      return {
+        title: "My Friend",
+        passage: `I see a friend.
+I see them being kind.
+They share their toys.
+They help others.
+They make me smile.`,
+        questions: Array(options.numberOfQuestions || 3).fill(null).map((_, i) => ({
+          type: 'multiple_choice',
+          question: `Is this friend being ${i === 0 ? 'kind' : i === 1 ? 'helpful' : 'nice'}?`,
+          options: ['Yes', 'No'],
+          answer: 'Yes',
+        })),
+        vocabulary: [
+          {
+            word: 'kind',
+            definition: 'being nice to others'
+          },
+          {
+            word: 'share',
+            definition: 'let others use your things'
+          }
+        ],
+        learningObjectives: [
+          'Understand what makes a good friend',
+          'Learn about kindness',
+          'Practice reading simple sentences'
+        ]
+      };
+    }
     
     return {
-      title: `${readingLevel} Reading Comprehension: ${topic}`,
-      passage: `This is a default reading passage about ${topic}. The actual content generation failed, but this placeholder ensures the worksheet can still be created. Please try generating again or modify your requirements if the issue persists.`,
-      questions: Array(numberOfQuestions).fill(null).map((_, i) => ({
-        question: `Question ${i + 1}: What did you learn from the passage about ${topic}?`,
-        type: 'short_answer',
-        answer: 'Answer will vary based on student response.',
-        explanation: 'Look for evidence from the text to support the answer.'
-      })),
-      vocabulary: [
+      title: this.generateDefaultTitle(options),
+      passage: this.generateDefaultPassage(options),
+      questions: this.generateDefaultQuestions(options),
+      vocabulary: options.includeVocabulary ? [
         {
-          word: 'comprehension',
-          definition: 'The ability to understand something.',
-          context: 'Used in reading comprehension exercises.'
+          word: 'example',
+          definition: 'a thing characteristic of its kind',
+          context: 'This is an example of default content.'
         }
-      ]
+      ] : undefined,
+      learningObjectives: this.generateDefaultObjectives(options)
     };
   }
 
