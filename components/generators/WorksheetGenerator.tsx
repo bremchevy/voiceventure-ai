@@ -113,22 +113,22 @@ export function WorksheetGenerator({ onBack, onComplete, request }: BaseGenerato
     Science: {
       worksheet: [
         {
-          id: "lab_experiment",
+          id: "science_context",
           icon: "🔬",
           name: "Science Context",
-          desc: "Topic-based questions with varying complexity levels"
+          desc: "Comprehensive topic explanation with varying complexity questions"
         },
         {
-          id: "observation_analysis",
-          icon: "🔬",
-          name: "Observation & Analysis",
-          desc: "Scientific observations, diagrams, and explanations"
+          id: "analysis_focus",
+          icon: "📊",
+          name: "Analysis Focus",
+          desc: "Key points analysis with analytical questions"
         }
       ],
       quiz: [
         { id: "short_answer", icon: "✍️", name: "Short Answer", desc: "Brief written responses" },
-        { id: "true_false", icon: "✅", name: "True/False", desc: "Simple true or false questions" },
-        { id: "mixed", icon: "🔄", name: "Mixed Format", desc: "Combination of different question types" }
+        { id: "true_false", icon: "✅", name: "True/False", desc: "Simple true or false statements" },
+        { id: "multiple_choice", icon: "📝", name: "Multiple Choice", desc: "Multiple choice questions" }
       ],
       exit_slip: [
         { id: "multiple_choice", icon: "🔘", name: "Multiple Choice", desc: "Quick check with options" },

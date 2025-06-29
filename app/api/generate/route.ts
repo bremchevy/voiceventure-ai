@@ -74,48 +74,56 @@ const SCIENCE_LAB_FORMAT = `{
   "title": "string (descriptive title of the worksheet)",
   "grade_level": "string (the grade level)",
   "topic": "string (the topic area)",
-  "subject": "string (the subject)",
+  "subject": "Science",
   "format": "lab_experiment",
-  "objective": "string (what students will learn)",
-  "safety_notes": "string (safety precautions if any)",
-  "materials": ["string (material 1)", "string (material 2)"],
+  "content": {
+    "introduction": "string (comprehensive introduction to the topic)",
+    "main_components": "string (detailed explanation of key components and processes)",
+    "importance": "string (significance and real-world applications)",
+    "causes_effects": "string (relationships and dependencies)",
+    "additional_info": "string (interesting facts, misconceptions, and recent discoveries)"
+  },
   "problems": [
     {
-      "type": "experiment",
-      "question": "string (research question)",
-      "hypothesis_prompt": "string (guide for forming hypothesis)",
-      "procedure": ["string (step 1)", "string (step 2)"],
-      "data_collection": {
-        "table_headers": ["string (column 1)", "string (column 2)"],
-        "rows": number (number of measurements needed)
-      },
-      "analysis_questions": ["string (question 1)", "string (question 2)"],
-      "conclusion_prompt": "string (guide for forming conclusion)"
+      "type": "topic_based",
+      "question": "string (question based on the content)",
+      "complexity": "string (basic/intermediate/advanced)",
+      "answer": "string (correct answer)",
+      "explanation": "string (detailed explanation linking back to content)",
+      "focus_area": "string (specific aspect of topic being tested)"
     }
-  ]
+  ],
+  "key_terms": {
+    "term": "string (definition and context)"
+  }
 }`;
 
 const SCIENCE_OBSERVATION_FORMAT = `{
   "title": "string (descriptive title of the worksheet)",
   "grade_level": "string (the grade level)",
   "topic": "string (the topic area)",
-  "subject": "string (the subject)",
+  "subject": "Science",
   "format": "observation_analysis",
-  "objective": "string (what students will learn)",
+  "content": {
+    "key_points": ["string (main points about the topic)"],
+    "analysis_focus": "string (specific aspects to analyze)",
+    "data_patterns": "string (patterns or trends to observe)",
+    "critical_aspects": "string (important elements to consider)",
+    "implications": "string (broader implications and applications)"
+  },
   "problems": [
     {
-      "type": "observation",
-      "phenomenon": "string (what to observe)",
-      "background": "string (relevant scientific context)",
-      "observation_prompts": ["string (what to look for/record)"],
-      "data_recording": {
-        "type": "string (diagram/table/text)",
-        "instructions": "string (how to record observations)"
-      },
-      "analysis_questions": ["string (question for analysis)"],
-      "connections": ["string (real-world connections)"]
+      "type": "analysis",
+      "scenario": "string (specific situation or data to analyze)",
+      "question": "string (analysis question)",
+      "thinking_points": ["string (guiding points for analysis)"],
+      "expected_analysis": "string (what students should consider)",
+      "complexity": "string (basic/intermediate/advanced)"
     }
-  ]
+  ],
+  "key_terms": {
+    "term": "string (definition and context)"
+  }
 }`;
 
 const SCIENCE_CONCEPT_FORMAT = `{
@@ -317,18 +325,120 @@ export async function POST(req: Request) {
             break;
           
           case 'science':
-            if (questionCount === 0) {
-              systemPrompt += `Focus on providing detailed procedures, observation guidelines, or concept explanations. `;
-            }
             switch (format) {
+              case 'science_context':
               case 'lab_experiment':
-                systemPrompt += `Create a laboratory experiment worksheet with clear procedures, safety guidelines, and data collection. Include exactly ${questionCount} analysis questions. Return the response in this exact JSON format: ${SCIENCE_LAB_FORMAT}`;
+                if (questionCount === 0) {
+                  systemPrompt += `Create a comprehensive explanation about ${topicArea}. Return the response in this exact JSON format:
+{
+  "title": "${topicArea} Overview",
+  "grade_level": "${gradeLevel}",
+  "topic": "${topicArea}",
+  "subject": "Science",
+  "format": "science_context",
+  "instructions": "Read through the content carefully. Pay attention to key concepts and their relationships. Take notes on important points.",
+  "content": {
+    "introduction": "Provide a thorough explanation of ${topicArea}",
+    "main_components": "Detail the key elements and their relationships",
+    "importance": "Explain the significance in science and daily life",
+    "causes_effects": "Explore factors and relationships",
+    "additional_info": "Share interesting facts and discoveries"
+  }
+}`;
+                } else {
+                  systemPrompt += `Create a comprehensive explanation about ${topicArea} with ${questionCount} questions. Return the response in this exact JSON format:
+{
+  "title": "${topicArea} Study",
+  "grade_level": "${gradeLevel}",
+  "topic": "${topicArea}",
+  "subject": "Science",
+  "format": "science_context",
+  "instructions": "Read through the content carefully before answering questions. Each question builds on the content provided. Support your answers with specific details from the text.",
+  "content": {
+    "introduction": "Provide a thorough explanation of ${topicArea}",
+    "main_components": "Detail the key elements and their relationships",
+    "importance": "Explain the significance in science and daily life",
+    "causes_effects": "Explore factors and relationships",
+    "additional_info": "Share interesting facts and discoveries"
+  },
+  "problems": [
+    {
+      "type": "topic_based",
+      "question": "Question about ${topicArea}",
+      "complexity": "basic/intermediate/advanced",
+      "answer": "The correct answer",
+      "explanation": "Detailed explanation linking back to content",
+      "focus_area": "Specific aspect of topic being tested"
+    }
+  ]
+}`;
+                }
                 break;
+              case 'analysis_focus':
               case 'observation_analysis':
-                systemPrompt += `Create an observation-based worksheet focusing on scientific phenomena and data recording. Include exactly ${questionCount} observation and analysis prompts. Return the response in this exact JSON format: ${SCIENCE_OBSERVATION_FORMAT}`;
+                if (questionCount === 0) {
+                  systemPrompt += `Create an analytical breakdown of ${topicArea}. Return the response in this exact JSON format:
+{
+  "title": "${topicArea} Analysis",
+  "grade_level": "${gradeLevel}",
+  "topic": "${topicArea}",
+  "subject": "Science",
+  "format": "analysis_focus",
+  "instructions": "Study the key points and patterns carefully. Focus on understanding relationships between different aspects. Consider how each element connects to the broader topic.",
+  "content": {
+    "key_points": ["Essential concept 1", "Essential concept 2"],
+    "analysis_focus": "Specific aspects to examine",
+    "data_patterns": "Notable trends and correlations",
+    "critical_aspects": "Key factors to consider",
+    "implications": "Broader impacts and applications"
+  }
+}`;
+                } else {
+                  systemPrompt += `Create an analytical breakdown of ${topicArea} with ${questionCount} analytical questions. Return the response in this exact JSON format:
+{
+  "title": "${topicArea} Analysis",
+  "grade_level": "${gradeLevel}",
+  "topic": "${topicArea}",
+  "subject": "Science",
+  "format": "analysis_focus",
+  "instructions": "First, study the content carefully. Then, for each question: 1) Read the scenario, 2) Consider all thinking points, 3) Develop a thorough analysis based on the content and your understanding.",
+  "content": {
+    "key_points": ["Essential concept 1", "Essential concept 2"],
+    "analysis_focus": "Specific aspects to examine",
+    "data_patterns": "Notable trends and correlations",
+    "critical_aspects": "Key factors to consider",
+    "implications": "Broader impacts and applications"
+  },
+  "problems": [
+    {
+      "type": "analysis",
+      "scenario": "A specific situation or data to analyze",
+      "question": "Analysis question about ${topicArea}",
+      "thinking_points": ["Point 1 to consider", "Point 2 to consider"],
+      "expected_analysis": "What students should consider in their analysis",
+      "complexity": "basic/intermediate/advanced"
+    }
+  ]
+}`;
+                }
                 break;
-              case 'concept_application':
-                systemPrompt += `Create a worksheet that helps students apply scientific concepts to real-world scenarios. Include exactly ${questionCount} application problems. Return the response in this exact JSON format: ${SCIENCE_CONCEPT_FORMAT}`;
+              default:
+                systemPrompt += `Create a comprehensive explanation about ${topicArea}. Return the response in this exact JSON format:
+{
+  "title": "${topicArea} Overview",
+  "grade_level": "${gradeLevel}",
+  "topic": "${topicArea}",
+  "subject": "Science",
+  "format": "science_context",
+  "instructions": "Read through the content carefully. Pay attention to key concepts and their relationships. Take notes on important points.",
+  "content": {
+    "introduction": "Provide a thorough explanation of ${topicArea}",
+    "main_components": "Detail the key elements and their relationships",
+    "importance": "Explain the significance in science and daily life",
+    "causes_effects": "Explore factors and relationships",
+    "additional_info": "Share interesting facts and discoveries"
+  }
+}`;
                 break;
             }
             break;
@@ -349,14 +459,21 @@ export async function POST(req: Request) {
         break;
     }
 
+    // Create the completion
     const completion = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
+      model: 'gpt-3.5-turbo',
       messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: `Create a ${resourceType} for ${subject} (${gradeLevel}) about ${topicArea}` }
+        {
+          role: 'system',
+          content: systemPrompt
+        },
+        {
+          role: 'user',
+          content: `Generate a ${resourceType} about ${topicArea} following the exact JSON format specified above.`
+        }
       ],
-      temperature: 0.7,
-      response_format: { type: "json_object" }
+      response_format: { type: "json_object" },
+      temperature: 0.7
     });
 
     const content = completion.choices[0]?.message?.content;
@@ -376,4 +493,4 @@ export async function POST(req: Request) {
       { status: 500 }
     );
   }
-}
+} 

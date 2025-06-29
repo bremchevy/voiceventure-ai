@@ -132,6 +132,33 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
       };
     }
 
+    // Handle science content-only format
+    if (response.subject === 'Science' && response.content) {
+      if (response.format === 'science_context' || response.format === 'lab_experiment') {
+        transformed.scienceContent = {
+          explanation: response.content.introduction || '',
+          concepts: [
+            response.content.main_components || '',
+            response.content.importance || '',
+            response.content.causes_effects || ''
+          ].filter(Boolean),
+          applications: [response.content.additional_info || ''].filter(Boolean),
+          key_terms: response.key_terms || {}
+        };
+      } else if (response.format === 'analysis_focus' || response.format === 'observation_analysis') {
+        transformed.scienceContent = {
+          explanation: response.content.key_points?.join('\n\n') || '',
+          concepts: [
+            response.content.analysis_focus || '',
+            response.content.data_patterns || '',
+            response.content.critical_aspects || ''
+          ].filter(Boolean),
+          applications: [response.content.implications || ''].filter(Boolean),
+          key_terms: response.key_terms || {}
+        };
+      }
+    }
+
     // Handle different problem formats
     if (response.problems) {
       switch (response.format) {
@@ -142,17 +169,6 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
             answer: p.answer || '',
             evidence_prompt: p.evidence_prompt || '',
             skill_focus: p.skill_focus || ''
-          }));
-          break;
-
-        case 'literary_analysis':
-          transformed.literaryAnalysisProblems = response.problems.map((p: any) => ({
-            type: 'analysis',
-            element: p.element || '',
-            question: p.question || '',
-            guiding_questions: p.guiding_questions || [],
-            evidence_prompt: p.evidence_prompt || '',
-            response_format: p.response_format || ''
           }));
           break;
 
@@ -167,48 +183,59 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
           break;
 
         case 'lab_experiment':
-          transformed.objective = response.objective || '';
-          transformed.safety_notes = response.safety_notes || '';
-          transformed.materials = response.materials || [];
-          transformed.labProblems = response.problems.map((p: any) => ({
-            type: 'experiment',
+          // Only set science content if not already set
+          if (!transformed.scienceContent) {
+            transformed.scienceContent = {
+              explanation: response.content?.introduction || '',
+              concepts: [
+                response.content?.main_components || '',
+                response.content?.importance || '',
+                response.content?.causes_effects || ''
+              ].filter(Boolean),
+              applications: [response.content?.additional_info || ''].filter(Boolean),
+              key_terms: response.key_terms || {}
+            };
+          }
+          // Handle the questions
+          transformed.problems = response.problems.map((p: any) => ({
+            type: p.type || 'topic_based',
             question: p.question || '',
-            hypothesis_prompt: p.hypothesis_prompt || '',
-            procedure: p.procedure || [],
-            data_collection: p.data_collection || { table_headers: [], rows: 0 },
-            analysis_questions: p.analysis_questions || [],
-            conclusion_prompt: p.conclusion_prompt || ''
+            complexity: p.complexity || 'intermediate',
+            answer: p.answer || '',
+            explanation: p.explanation || '',
+            focus_area: p.focus_area || ''
           }));
           break;
 
         case 'observation_analysis':
-          transformed.objective = response.objective || '';
-          transformed.observationProblems = response.problems.map((p: any) => ({
-            type: 'observation',
-            phenomenon: p.phenomenon || '',
-            background: p.background || '',
-            observation_prompts: p.observation_prompts || [],
-            data_recording: p.data_recording || { type: 'text', instructions: '' },
-            analysis_questions: p.analysis_questions || [],
-            connections: p.connections || []
-          }));
-          break;
-
-        case 'concept_application':
-          transformed.conceptProblems = response.problems.map((p: any) => ({
-            type: 'application',
+          // Only set science content if not already set
+          if (!transformed.scienceContent) {
+            transformed.scienceContent = {
+              explanation: response.content?.key_points?.join('\n\n') || '',
+              concepts: [
+                response.content?.analysis_focus || '',
+                response.content?.data_patterns || '',
+                response.content?.critical_aspects || ''
+              ].filter(Boolean),
+              applications: [response.content?.implications || ''].filter(Boolean),
+              key_terms: response.key_terms || {}
+            };
+          }
+          transformed.problems = response.problems.map((p: any) => ({
+            type: p.type || 'analysis',
+            question: p.question || '',
             scenario: p.scenario || '',
-            concept_connection: p.concept_connection || '',
-            questions: p.questions || [],
-            extension: p.extension || ''
+            thinking_points: p.thinking_points || [],
+            expected_analysis: p.expected_analysis || '',
+            complexity: p.complexity || 'intermediate'
           }));
           break;
 
         default:
-          // Handle standard math problems
+          // Handle standard problems
           transformed.problems = response.problems.map((p: any) => ({
             type: p.type || 'standard',
-            question: p.problem || p.question || '', // Try problem field first, then question field
+            question: p.problem || p.question || '',
             answer: p.answer || '',
             explanation: p.explanation || '',
             steps: p.steps || [],
@@ -719,18 +746,51 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
             </div>
           )}
 
+          {/* Display science content */}
+          {generatedResource.scienceContent && (
+            <div className="space-y-2 border-l-4 border-purple-500 pl-4 my-6 bg-gray-50 p-4 rounded-r-lg">
+              <h3 className="font-semibold">Content:</h3>
+              <div className="space-y-4">
+                <p className="whitespace-pre-wrap text-gray-800">{generatedResource.scienceContent.explanation}</p>
+                {generatedResource.scienceContent.concepts?.length > 0 && (
+                  <div className="mt-4">
+                    <h4 className="font-medium text-gray-700">Key Concepts:</h4>
+                    <ul className="list-disc pl-5 space-y-1 text-gray-600">
+                      {generatedResource.scienceContent.concepts.map((concept, idx) => (
+                        <li key={idx}>{concept}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {generatedResource.scienceContent.applications?.length > 0 && (
+                  <div className="mt-4">
+                    <h4 className="font-medium text-gray-700">Applications:</h4>
+                    <ul className="list-disc pl-5 space-y-1 text-gray-600">
+                      {generatedResource.scienceContent.applications.map((app, idx) => (
+                        <li key={idx}>{app}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Problems section */}
           <div className="space-y-6">
             {generatedResource.problems?.map((problem, index) => (
               <div key={index} className="space-y-3">
                 <div className="font-medium">{(index + 1)}. {problem.question.replace(/^\d+\.\s*/, '')}</div>
+                {problem.complexity && (
+                  <div className="text-sm text-gray-500 italic">Complexity: {problem.complexity}</div>
+                )}
                 <div className="pl-4">
                   <div className="border-b-2 border-gray-300 h-8 w-full" />
-                  {problem.steps && problem.steps.length > 0 && (
+                  {problem.hints && problem.hints.length > 0 && (
                     <div className="mt-2 space-y-1">
-                      {problem.steps.map((step, stepIndex) => (
-                        <div key={stepIndex} className="text-sm text-gray-600">
-                          • {step}
+                      {problem.hints.map((hint, hintIndex) => (
+                        <div key={hintIndex} className="text-sm text-gray-600">
+                          • {hint}
                         </div>
                       ))}
                     </div>
@@ -842,6 +902,85 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
             )}
           </Button>
         </div>
+      </div>
+    );
+  };
+
+  const renderScienceExperiment = (problem: any) => {
+    return (
+      <div className="space-y-6">
+        {problem.content ? (
+          // Render structured content when available
+          <div className="bg-white p-6 rounded-lg shadow space-y-6">
+            {problem.content.introduction && (
+              <div>
+                <h3 className="text-xl font-semibold mb-3">Introduction</h3>
+                <p className="text-gray-700 whitespace-pre-wrap">{problem.content.introduction}</p>
+              </div>
+            )}
+            {problem.content.main_components && (
+              <div>
+                <h3 className="text-xl font-semibold mb-3">Main Components and Processes</h3>
+                <p className="text-gray-700 whitespace-pre-wrap">{problem.content.main_components}</p>
+              </div>
+            )}
+            {problem.content.importance && (
+              <div>
+                <h3 className="text-xl font-semibold mb-3">Importance and Applications</h3>
+                <p className="text-gray-700 whitespace-pre-wrap">{problem.content.importance}</p>
+              </div>
+            )}
+            {problem.content.causes_effects && (
+              <div>
+                <h3 className="text-xl font-semibold mb-3">Causes and Effects</h3>
+                <p className="text-gray-700 whitespace-pre-wrap">{problem.content.causes_effects}</p>
+              </div>
+            )}
+            {problem.content.additional_info && (
+              <div>
+                <h3 className="text-xl font-semibold mb-3">Additional Information</h3>
+                <p className="text-gray-700 whitespace-pre-wrap">{problem.content.additional_info}</p>
+              </div>
+            )}
+          </div>
+        ) : (
+          // Fallback for legacy format
+          <div className="bg-white p-6 rounded-lg shadow">
+            {problem.type === 'experiment' && (
+              <>
+                <div className="mb-6">
+                  <h3 className="text-xl font-semibold mb-3">Question</h3>
+                  <p className="text-gray-700">{problem.question}</p>
+                </div>
+                {problem.hypothesis_prompt && (
+                  <div className="mb-6">
+                    <h3 className="text-xl font-semibold mb-3">Hypothesis</h3>
+                    <p className="text-gray-700">{problem.hypothesis_prompt}</p>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
+        
+        {/* Questions Section */}
+        {problem.questions && problem.questions.length > 0 && (
+          <div className="bg-white p-6 rounded-lg shadow mt-6">
+            <h3 className="text-xl font-semibold mb-4">Questions</h3>
+            <ol className="list-decimal list-inside space-y-4">
+              {problem.questions.map((q: any, index: number) => (
+                <li key={index} className="text-gray-700">
+                  {q.question}
+                  {q.complexity && (
+                    <span className="text-sm text-gray-500 ml-2">
+                      (Complexity: {q.complexity})
+                    </span>
+                  )}
+                </li>
+              ))}
+            </ol>
+          </div>
+        )}
       </div>
     );
   };
