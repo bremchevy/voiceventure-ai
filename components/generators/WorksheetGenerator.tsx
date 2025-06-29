@@ -151,10 +151,10 @@ export function WorksheetGenerator({ onBack, onComplete, request }: BaseGenerato
   const renderSpecificSettings = () => (
     <div className="space-y-6">
       {/* Resource Format Selection */}
-    <div>
+      <div>
         <label className="block text-sm font-medium text-gray-700 mb-3">Format</label>
         <div className="grid grid-cols-1 gap-3">
-          {resourceFormats[settings.subject]?.worksheet?.map((format: ResourceFormat) => (
+          {resourceFormats[settings.subject]?.[settings.resourceType]?.map((format: ResourceFormat) => (
           <button
               key={format.id}
               onClick={() => setSettings((prev) => ({ ...prev, format: format.id }))}

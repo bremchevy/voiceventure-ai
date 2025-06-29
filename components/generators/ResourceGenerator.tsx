@@ -507,7 +507,13 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-3">Resource Type</label>
         <div className="grid grid-cols-1 gap-3">
-          {resourceTypes.map((resType) => (
+          {[
+            { type: "worksheet", icon: "📝", title: "Worksheet", desc: "Traditional practice with problems and answers" },
+            { type: "quiz", icon: "🧠", title: "Quiz", desc: "Assessment with various question types" },
+            { type: "rubric", icon: "📋", title: "Rubric", desc: "Evaluation criteria and scoring guide" },
+            { type: "lesson_plan", icon: "📚", title: "Lesson Plan", desc: "Structured teaching guide with objectives" },
+            { type: "exit_slip", icon: "🚪", title: "Exit Slip", desc: "Quick end-of-lesson assessment" }
+          ].map((resType) => (
             <button
               key={resType.type}
               onClick={() => setSettings((prev) => ({ ...prev, resourceType: resType.type }))}
@@ -520,7 +526,7 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
               <div className="flex items-center gap-2">
                 <span>{resType.icon}</span>
                 <div>
-                  <div className="font-medium capitalize">{resType.type.replace('_', ' ')}</div>
+                  <div className="font-medium">{resType.title}</div>
                   <div className="text-xs text-gray-500">{resType.desc}</div>
                 </div>
               </div>
