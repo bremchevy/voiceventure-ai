@@ -12,6 +12,8 @@ export interface VoiceFormPopulationState {
   suggestedCorrections?: Record<string, string>;
   errors: string[];
   warnings: string[];
+  detectedFormat?: string;
+  confidence: number;
 }
 
 export interface VoiceFormPopulationOptions {
@@ -40,24 +42,33 @@ export function useVoiceFormPopulation(options: VoiceFormPopulationOptions = {})
     lastTranscript: null,
     requiresConfirmation: false,
     errors: [],
-    warnings: []
+    warnings: [],
+    confidence: 0
   });
 
   // Initialize services
   const commandProcessor = new CommandProcessor();
   const formPopulator = new FormPopulator(initialFields);
-  const { startRecording, stopRecording, isRecording, transcript } = useVoiceRecording();
+  const { startRecording, stopRecording, isRecording, transcription } = useVoiceRecording();
 
   // Process voice command and populate form
   const processCommand = useCallback(async (transcript: string) => {
+    console.log('🎤 Processing voice command:', transcript);
+    
     try {
       setState(prev => ({ ...prev, isProcessing: true }));
 
       // Process the command
       const nlpResult: NLPResult = commandProcessor.processCommand(transcript);
+      console.log('🔍 NLP Result:', nlpResult);
+
+      // Extract format from specifications
+      const format = nlpResult.specifications.format;
+      console.log('📄 Detected format:', format);
 
       // Populate the form
       const populationResult = formPopulator.populateForm(nlpResult);
+      console.log('📝 Form population result:', populationResult);
 
       // Update state with results
       setState(prev => ({
@@ -68,36 +79,70 @@ export function useVoiceFormPopulation(options: VoiceFormPopulationOptions = {})
         requiresConfirmation: populationResult.requiresConfirmation,
         suggestedCorrections: populationResult.suggestedCorrections,
         errors: populationResult.validation.errors.map(e => e.message),
-        warnings: populationResult.validation.warnings.map(w => w.message)
+        warnings: populationResult.validation.warnings.map(w => w.message),
+        detectedFormat: format,
+        confidence: nlpResult.confidence
       }));
+
+      // If we have a format, update the form
+      if (format) {
+        console.log('📄 Updating format field:', format);
+        updateField('format', format);
+      }
+
+      // If we have a question count, update problemCount
+      if (nlpResult.specifications.questionCount) {
+        console.log('❓ Updating problem count:', nlpResult.specifications.questionCount);
+        updateField('problemCount', nlpResult.specifications.questionCount);
+      }
 
       // Notify completion
       onPopulationComplete?.(populationResult);
 
     } catch (error) {
+      console.error('❌ Error processing voice command:', error);
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
       setState(prev => ({
         ...prev,
         isProcessing: false,
-        errors: [...prev.errors, error.message]
+        errors: [...prev.errors, errorMessage]
       }));
-      onError?.(error);
+      if (error instanceof Error) {
+        onError?.(error);
+      }
     }
   }, [commandProcessor, formPopulator, onPopulationComplete, onError]);
 
   // Start listening for voice commands
   const startListening = useCallback(async () => {
     try {
-      setState(prev => ({ ...prev, isListening: true, errors: [], warnings: [] }));
+      // Reset form state before starting new voice command
+      formPopulator.resetForm();
+      setState(prev => ({ 
+        ...prev, 
+        isListening: true, 
+        errors: [], 
+        warnings: [],
+        formState: formPopulator.getFormState(),
+        lastTranscript: null,
+        requiresConfirmation: false,
+        suggestedCorrections: undefined,
+        detectedFormat: undefined,
+        confidence: 0
+      }));
       await startRecording();
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
       setState(prev => ({
         ...prev,
         isListening: false,
-        errors: [...prev.errors, error.message]
+        errors: [...prev.errors, errorMessage]
       }));
-      onError?.(error);
+      if (error instanceof Error) {
+        onError?.(error);
+      }
     }
-  }, [startRecording, onError]);
+  }, [startRecording, onError, formPopulator]);
 
   // Stop listening and process the command
   const stopListening = useCallback(async () => {
@@ -105,21 +150,24 @@ export function useVoiceFormPopulation(options: VoiceFormPopulationOptions = {})
       await stopRecording();
       setState(prev => ({ ...prev, isListening: false }));
     } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
       setState(prev => ({
         ...prev,
         isListening: false,
-        errors: [...prev.errors, error.message]
+        errors: [...prev.errors, errorMessage]
       }));
-      onError?.(error);
+      if (error instanceof Error) {
+        onError?.(error);
+      }
     }
   }, [stopRecording, onError]);
 
   // Process transcript when it changes
   useEffect(() => {
-    if (transcript && !isRecording) {
-      processCommand(transcript);
+    if (transcription && !isRecording) {
+      processCommand(transcription);
     }
-  }, [transcript, isRecording, processCommand]);
+  }, [transcription, isRecording, processCommand]);
 
   // Reset form state
   const resetForm = useCallback(() => {
@@ -131,7 +179,9 @@ export function useVoiceFormPopulation(options: VoiceFormPopulationOptions = {})
       requiresConfirmation: false,
       suggestedCorrections: undefined,
       errors: [],
-      warnings: []
+      warnings: [],
+      detectedFormat: undefined,
+      confidence: 0
     }));
   }, [formPopulator]);
 
@@ -171,6 +221,8 @@ export function useVoiceFormPopulation(options: VoiceFormPopulationOptions = {})
     requiresConfirmation: state.requiresConfirmation,
     suggestedCorrections: state.suggestedCorrections,
     errors: state.errors,
-    warnings: state.warnings
+    warnings: state.warnings,
+    detectedFormat: state.detectedFormat,
+    confidence: state.confidence
   };
 } 

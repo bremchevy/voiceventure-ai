@@ -1,19 +1,25 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, ChangeEvent } from 'react';
 import { useVoiceFormPopulation } from '@/lib/hooks/useVoiceFormPopulation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select } from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
+import { Textarea } from '@/components/ui/textarea';
 
 interface VoiceResourceFormProps {
   onSubmit?: (formData: any) => void;
   className?: string;
+}
+
+interface SelectOption {
+  value: string;
+  label: string;
 }
 
 export function VoiceResourceForm({ onSubmit, className }: VoiceResourceFormProps) {
@@ -29,26 +35,28 @@ export function VoiceResourceForm({ onSubmit, className }: VoiceResourceFormProp
     requiresConfirmation,
     suggestedCorrections,
     errors,
-    warnings
+    warnings,
+    detectedFormat,
+    confidence
   } = useVoiceFormPopulation({
     initialFields: {
       gradeLevel: '',
       subject: '',
-      resourceType: 'worksheet',
-      theme: '',
-      difficulty: 'medium',
-      problemCount: 10,
+      resourceType: '',
+      format: '',
+      difficulty: '',
+      problemCount: '',
       topicArea: '',
       customInstructions: '',
-      includeQuestions: true,
-      includeVisuals: true,
+      includeQuestions: false,
+      includeVisuals: false,
       includeExperiments: false,
       includeDiagrams: false,
       includeVocabulary: false,
-      readingLevel: 'intermediate',
-      genre: 'fiction',
-      wordCount: 300,
-      focus: ['comprehension']
+      readingLevel: '',
+      genre: '',
+      wordCount: '',
+      focus: []
     }
   });
 
@@ -57,26 +65,59 @@ export function VoiceResourceForm({ onSubmit, className }: VoiceResourceFormProp
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formState.isValid) return;
-
-    try {
+    if (onSubmit && formState.isValid) {
       setIsSubmitting(true);
-      await onSubmit?.(formState.fields);
-    } finally {
-      setIsSubmitting(false);
+      try {
+        await onSubmit(formState.fields);
+      } finally {
+        setIsSubmitting(false);
+      }
     }
   };
 
   // Handle voice command button
-  const handleVoiceCommand = async () => {
+  const handleVoiceCommand = () => {
     if (isListening) {
-      await stopListening();
+      stopListening();
     } else {
-      await startListening();
+      startListening();
     }
   };
 
-  // Add subject-specific options
+  // Get valid formats for current resource type
+  const getFormatsForType = (type: string): SelectOption[] => {
+    const formatMap: Record<string, SelectOption[]> = {
+      worksheet: [
+        { value: 'standard', label: 'Standard' },
+        { value: 'guided', label: 'Guided Practice' },
+        { value: 'interactive', label: 'Interactive' }
+      ],
+      quiz: [
+        { value: 'multiple_choice', label: 'Multiple Choice' },
+        { value: 'true_false', label: 'True/False' },
+        { value: 'short_answer', label: 'Short Answer' }
+      ],
+      rubric: [
+        { value: '4_point', label: '4-Point Scale' },
+        { value: '3_point', label: '3-Point Scale' },
+        { value: 'checklist', label: 'Checklist' }
+      ],
+      lesson_plan: [
+        { value: 'full_lesson', label: 'Full Lesson' },
+        { value: 'mini_lesson', label: 'Mini-Lesson' },
+        { value: 'activity', label: 'Activity' }
+      ],
+      exit_slip: [
+        { value: 'multiple_choice', label: 'Multiple Choice' },
+        { value: 'open_response', label: 'Open Response' },
+        { value: 'rating_scale', label: 'Rating Scale' }
+      ]
+    };
+
+    return formatMap[type] || [];
+  };
+
+  // Enhanced subject-specific options
   const renderSubjectOptions = () => {
     if (!formState.fields.subject?.value) return null;
 
@@ -85,88 +126,71 @@ export function VoiceResourceForm({ onSubmit, className }: VoiceResourceFormProp
         return (
           <>
             <div className="space-y-2">
-              <Label htmlFor="genre">Genre</Label>
-              <Select
-                id="genre"
-                value={formState.fields.genre?.value || 'fiction'}
-                onChange={(e) => updateField('genre', e.target.value)}
-              >
-                <option value="fiction">Fiction</option>
-                <option value="non-fiction">Non-Fiction</option>
-                <option value="poetry">Poetry</option>
-                <option value="biography">Biography</option>
+              <Label>Genre</Label>
+              <Select value={formState.fields.genre?.value || ''} onValueChange={(value) => updateField('genre', value)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select Genre" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="fiction">Fiction</SelectItem>
+                  <SelectItem value="non-fiction">Non-Fiction</SelectItem>
+                  <SelectItem value="poetry">Poetry</SelectItem>
+                  <SelectItem value="biography">Biography</SelectItem>
+                  <SelectItem value="informational">Informational Text</SelectItem>
+                  <SelectItem value="narrative">Narrative</SelectItem>
+                </SelectContent>
               </Select>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="readingLevel">Reading Level</Label>
-              <Select
-                id="readingLevel"
-                value={formState.fields.readingLevel?.value || 'intermediate'}
-                onChange={(e) => updateField('readingLevel', e.target.value)}
-              >
-                <option value="beginner">Beginner</option>
-                <option value="intermediate">Intermediate</option>
-                <option value="advanced">Advanced</option>
+              <Label>Reading Level</Label>
+              <Select value={formState.fields.readingLevel?.value || ''} onValueChange={(value) => updateField('readingLevel', value)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select Reading Level" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="beginner">Beginner</SelectItem>
+                  <SelectItem value="intermediate">Intermediate</SelectItem>
+                  <SelectItem value="advanced">Advanced</SelectItem>
+                </SelectContent>
               </Select>
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="wordCount">Word Count</Label>
+              <Label>Word Count</Label>
               <Input
-                id="wordCount"
                 type="number"
                 min={100}
                 max={1000}
                 value={formState.fields.wordCount?.value || 300}
-                onChange={(e) => updateField('wordCount', parseInt(e.target.value))}
+                onChange={(e: ChangeEvent<HTMLInputElement>) => updateField('wordCount', parseInt(e.target.value))}
               />
             </div>
 
             <div className="space-y-2">
               <Label>Focus Areas</Label>
               <div className="space-y-2">
-                {['comprehension', 'vocabulary', 'analysis', 'inference'].map((focus) => (
-                  <div key={focus} className="flex items-center">
-                    <input
-                      type="checkbox"
-                      id={focus}
-                      checked={formState.fields.focus?.value?.includes(focus)}
-                      onChange={(e) => {
-                        const currentFocus = formState.fields.focus?.value || [];
-                        updateField('focus', 
-                          e.target.checked 
-                            ? [...currentFocus, focus]
-                            : currentFocus.filter(f => f !== focus)
-                        );
-                      }}
-                      className="mr-2"
-                    />
-                    <Label htmlFor={focus}>{focus.charAt(0).toUpperCase() + focus.slice(1)}</Label>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </>
-        );
-
-      case 'science':
-        return (
-          <>
-            <div className="space-y-2">
-              <Label>Include Features</Label>
-              <div className="space-y-2">
                 {[
-                  { id: 'includeExperiments', label: 'Experiments' },
-                  { id: 'includeDiagrams', label: 'Diagrams' },
-                  { id: 'includeQuestions', label: 'Questions' }
+                  { id: 'comprehension', label: 'Reading Comprehension' },
+                  { id: 'vocabulary', label: 'Vocabulary' },
+                  { id: 'analysis', label: 'Text Analysis' },
+                  { id: 'inference', label: 'Making Inferences' },
+                  { id: 'main_idea', label: 'Main Idea' },
+                  { id: 'details', label: 'Supporting Details' }
                 ].map(({ id, label }) => (
                   <div key={id} className="flex items-center">
                     <input
                       type="checkbox"
                       id={id}
-                      checked={formState.fields[id]?.value || false}
-                      onChange={(e) => updateField(id, e.target.checked)}
+                      checked={formState.fields.focus?.value?.includes(id)}
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                        const currentFocus = formState.fields.focus?.value || [];
+                        updateField('focus', 
+                          e.target.checked 
+                            ? [...currentFocus, id]
+                            : currentFocus.filter((f: string) => f !== id)
+                        );
+                      }}
                       className="mr-2"
                     />
                     <Label htmlFor={id}>{label}</Label>
@@ -185,7 +209,40 @@ export function VoiceResourceForm({ onSubmit, className }: VoiceResourceFormProp
               <div className="space-y-2">
                 {[
                   { id: 'includeVisuals', label: 'Visual Aids' },
-                  { id: 'includeQuestions', label: 'Word Problems' }
+                  { id: 'includeWordProblems', label: 'Word Problems' },
+                  { id: 'includeExamples', label: 'Example Problems' },
+                  { id: 'includeStepByStep', label: 'Step-by-Step Solutions' },
+                  { id: 'includeChallenge', label: 'Challenge Problems' }
+                ].map(({ id, label }) => (
+                  <div key={id} className="flex items-center">
+                    <input
+                      type="checkbox"
+                      id={id}
+                      checked={formState.fields[id]?.value || false}
+                      onChange={(e) => updateField(id, e.target.checked)}
+                      className="mr-2"
+                    />
+                    <Label htmlFor={id}>{label}</Label>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </>
+        );
+
+      case 'science':
+        return (
+          <>
+            <div className="space-y-2">
+              <Label>Include Features</Label>
+              <div className="space-y-2">
+                {[
+                  { id: 'includeExperiments', label: 'Experiments' },
+                  { id: 'includeDiagrams', label: 'Diagrams' },
+                  { id: 'includeQuestions', label: 'Questions' },
+                  { id: 'includeObservations', label: 'Observations' },
+                  { id: 'includeHypothesis', label: 'Hypothesis Formation' },
+                  { id: 'includeDataAnalysis', label: 'Data Analysis' }
                 ].map(({ id, label }) => (
                   <div key={id} className="flex items-center">
                     <input
@@ -212,153 +269,21 @@ export function VoiceResourceForm({ onSubmit, className }: VoiceResourceFormProp
     <Card className={cn('p-6 space-y-6', className)}>
       {/* Voice Command Section */}
       <div className="space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
           <Button
+            type="button"
             onClick={handleVoiceCommand}
-            variant={isListening ? 'destructive' : 'default'}
-            className="w-full"
-            disabled={isProcessing}
+            className={cn(
+              "relative",
+              isListening && "animate-pulse"
+            )}
           >
-            {isListening ? 'Stop Recording' : 'Start Voice Command'}
+            {isListening ? "Stop Recording" : "Start Recording"}
           </Button>
+          {isProcessing && <Spinner />}
         </div>
 
-        {isProcessing && (
-          <div className="flex items-center justify-center p-4">
-            <Spinner className="w-8 h-8" />
-            <span className="ml-3">Processing voice command...</span>
-          </div>
-        )}
-
-        {lastTranscript && (
-          <Alert>
-            <AlertDescription>
-              Transcript: {lastTranscript}
-            </AlertDescription>
-          </Alert>
-        )}
-      </div>
-
-      {/* Form Fields */}
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {/* Grade Level */}
-        <div className="space-y-2">
-          <Label htmlFor="gradeLevel">Grade Level</Label>
-          <Select
-            id="gradeLevel"
-            value={formState.fields.gradeLevel?.value || ''}
-            onChange={(e) => updateField('gradeLevel', e.target.value)}
-          >
-            <option value="">Select Grade Level</option>
-            <option value="Kindergarten">Kindergarten</option>
-            <option value="1st Grade">1st Grade</option>
-            <option value="2nd Grade">2nd Grade</option>
-            <option value="3rd Grade">3rd Grade</option>
-            <option value="4th Grade">4th Grade</option>
-            <option value="5th Grade">5th Grade</option>
-          </Select>
-        </div>
-
-        {/* Subject */}
-        <div className="space-y-2">
-          <Label htmlFor="subject">Subject</Label>
-          <Select
-            id="subject"
-            value={formState.fields.subject?.value || ''}
-            onChange={(e) => updateField('subject', e.target.value)}
-          >
-            <option value="">Select Subject</option>
-            <option value="Math">Math</option>
-            <option value="Reading">Reading</option>
-            <option value="Science">Science</option>
-            <option value="History">History</option>
-          </Select>
-        </div>
-
-        {/* Add subject-specific options */}
-        {renderSubjectOptions()}
-
-        {/* Resource Type */}
-        <div className="space-y-2">
-          <Label htmlFor="resourceType">Resource Type</Label>
-          <Select
-            id="resourceType"
-            value={formState.fields.resourceType?.value || 'worksheet'}
-            onChange={(e) => updateField('resourceType', e.target.value)}
-          >
-            <option value="worksheet">Worksheet</option>
-            <option value="quiz">Quiz</option>
-            <option value="rubric">Rubric</option>
-            <option value="lesson_plan">Lesson Plan</option>
-            <option value="exit_slip">Exit Slip</option>
-          </Select>
-        </div>
-
-        {/* Theme */}
-        <div className="space-y-2">
-          <Label htmlFor="theme">Theme (Optional)</Label>
-          <Select
-            id="theme"
-            value={formState.fields.theme?.value || ''}
-            onChange={(e) => updateField('theme', e.target.value)}
-          >
-            <option value="">No Theme</option>
-            <option value="Halloween">Halloween</option>
-            <option value="Winter">Winter</option>
-            <option value="Spring">Spring</option>
-          </Select>
-        </div>
-
-        {/* Difficulty */}
-        <div className="space-y-2">
-          <Label htmlFor="difficulty">Difficulty</Label>
-          <Select
-            id="difficulty"
-            value={formState.fields.difficulty?.value || 'medium'}
-            onChange={(e) => updateField('difficulty', e.target.value)}
-          >
-            <option value="easy">Easy</option>
-            <option value="medium">Medium</option>
-            <option value="hard">Hard</option>
-          </Select>
-        </div>
-
-        {/* Problem Count */}
-        <div className="space-y-2">
-          <Label htmlFor="problemCount">Number of Problems</Label>
-          <Input
-            id="problemCount"
-            type="number"
-            min={1}
-            max={50}
-            value={formState.fields.problemCount?.value || 10}
-            onChange={(e) => updateField('problemCount', parseInt(e.target.value))}
-          />
-        </div>
-
-        {/* Topic Area */}
-        <div className="space-y-2">
-          <Label htmlFor="topicArea">Topic Area (Optional)</Label>
-          <Input
-            id="topicArea"
-            value={formState.fields.topicArea?.value || ''}
-            onChange={(e) => updateField('topicArea', e.target.value)}
-            placeholder="e.g., Addition, Fractions, etc."
-          />
-        </div>
-
-        {/* Custom Instructions */}
-        <div className="space-y-2">
-          <Label htmlFor="customInstructions">Custom Instructions (Optional)</Label>
-          <Input
-            id="customInstructions"
-            value={formState.fields.customInstructions?.value || ''}
-            onChange={(e) => updateField('customInstructions', e.target.value)}
-            placeholder="Any specific requirements or notes"
-          />
-        </div>
-
-        {/* Error Messages */}
+        {/* Validation Messages */}
         {errors.length > 0 && (
           <Alert variant="destructive">
             <AlertDescription>
@@ -371,7 +296,6 @@ export function VoiceResourceForm({ onSubmit, className }: VoiceResourceFormProp
           </Alert>
         )}
 
-        {/* Warning Messages */}
         {warnings.length > 0 && (
           <Alert>
             <AlertDescription>
@@ -383,6 +307,135 @@ export function VoiceResourceForm({ onSubmit, className }: VoiceResourceFormProp
             </AlertDescription>
           </Alert>
         )}
+
+        {/* Last Transcript */}
+        {lastTranscript && (
+          <Alert>
+            <AlertDescription>
+              <strong>Last voice input:</strong> {lastTranscript}
+            </AlertDescription>
+          </Alert>
+        )}
+      </div>
+
+      {/* Form Fields */}
+      <form onSubmit={handleSubmit} className="space-y-6">
+        {/* Grade Level */}
+        <div className="space-y-2">
+          <Label>Grade Level</Label>
+          <Select value={formState.fields.gradeLevel?.value || ''} onValueChange={(value) => updateField('gradeLevel', value)}>
+            <SelectTrigger>
+              <SelectValue placeholder="Select Grade Level" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="k">Kindergarten</SelectItem>
+              <SelectItem value="1">1st Grade</SelectItem>
+              <SelectItem value="2">2nd Grade</SelectItem>
+              <SelectItem value="3">3rd Grade</SelectItem>
+              <SelectItem value="4">4th Grade</SelectItem>
+              <SelectItem value="5">5th Grade</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Subject */}
+        <div className="space-y-2">
+          <Label>Subject</Label>
+          <Select value={formState.fields.subject?.value || ''} onValueChange={(value) => updateField('subject', value)}>
+            <SelectTrigger>
+              <SelectValue placeholder="Select Subject" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="math">Math</SelectItem>
+              <SelectItem value="reading">Reading</SelectItem>
+              <SelectItem value="science">Science</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Resource Type */}
+        <div className="space-y-2">
+          <Label>Resource Type</Label>
+          <Select value={formState.fields.resourceType?.value || ''} onValueChange={(value) => updateField('resourceType', value)}>
+            <SelectTrigger>
+              <SelectValue placeholder="Select Resource Type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="worksheet">Worksheet</SelectItem>
+              <SelectItem value="quiz">Quiz</SelectItem>
+              <SelectItem value="lesson_plan">Lesson Plan</SelectItem>
+              <SelectItem value="rubric">Rubric</SelectItem>
+              <SelectItem value="exit_slip">Exit Slip</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Format Selection */}
+        {formState.fields.resourceType?.value && (
+          <div className="space-y-2">
+            <Label>Format</Label>
+            <Select value={formState.fields.format?.value || ''} onValueChange={(value) => updateField('format', value)}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select Format" />
+              </SelectTrigger>
+              <SelectContent>
+                {getFormatsForType(formState.fields.resourceType.value).map(({ value, label }) => (
+                  <SelectItem key={value} value={value}>{label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+
+        {/* Add subject-specific options */}
+        {renderSubjectOptions()}
+
+        {/* Difficulty */}
+        <div className="space-y-2">
+          <Label>Difficulty</Label>
+          <Select value={formState.fields.difficulty?.value || 'medium'} onValueChange={(value) => updateField('difficulty', value)}>
+            <SelectTrigger>
+              <SelectValue placeholder="Select Difficulty" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="easy">Easy</SelectItem>
+              <SelectItem value="medium">Medium</SelectItem>
+              <SelectItem value="hard">Hard</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Problem Count */}
+        <div className="space-y-2">
+          <Label>Number of Problems</Label>
+          <Input
+            type="number"
+            min={1}
+            max={50}
+            value={formState.fields.problemCount?.value || 10}
+            onChange={(e: ChangeEvent<HTMLInputElement>) => updateField('problemCount', parseInt(e.target.value))}
+          />
+        </div>
+
+        {/* Topic Area */}
+        <div className="space-y-2">
+          <Label>Topic Area</Label>
+          <Input
+            value={formState.fields.topicArea?.value || ''}
+            onChange={(e: ChangeEvent<HTMLInputElement>) => updateField('topicArea', e.target.value)}
+            placeholder="e.g., Addition, Fractions, etc."
+          />
+        </div>
+
+        {/* Custom Instructions */}
+        <div className="space-y-2">
+          <Label>Custom Instructions</Label>
+          <Textarea
+            value={formState.fields.customInstructions?.value || ''}
+            onChange={(e) => updateField('customInstructions', e.target.value)}
+            placeholder="Any specific requirements or notes"
+          />
+        </div>
 
         {/* Suggested Corrections */}
         {suggestedCorrections && Object.keys(suggestedCorrections).length > 0 && (
@@ -406,7 +459,7 @@ export function VoiceResourceForm({ onSubmit, className }: VoiceResourceFormProp
         <div className="flex space-x-4">
           <Button
             type="submit"
-            disabled={!formState.isValid || isSubmitting}
+            disabled={!formState.isValid || isSubmitting || errors.length > 0}
             className="flex-1"
           >
             {isSubmitting ? (

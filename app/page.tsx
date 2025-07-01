@@ -23,10 +23,12 @@ import {
 } from "lucide-react"
 import AIAssistant from "@/components/ai-assistant"
 import SubstituteBookingSystem from "@/components/substitute-booking-system"
-import WorksheetGenerator from "@/components/worksheet-generator"
+import { WorksheetGenerator } from "@/components/generators/WorksheetGenerator"
+import { QuizGenerator } from "@/components/generators/QuizGenerator"
 import { ProfileView } from '@/components/profile/profile-view'
 import { cn } from "@/lib/utils"
 import VoiceAssistantOverlay from '@/components/voice-assistant-overlay'
+import { CommandProcessor } from "@/lib/services/CommandProcessor"
 
 interface CreationStatus {
   isActive: boolean
@@ -45,12 +47,25 @@ interface VoiceResponse {
 // Add this interface to extend the Window type
 declare global {
   interface Window {
-    worksheetTimer: number | null
     SpeechRecognition: new () => SpeechRecognition
     webkitSpeechRecognition: new () => SpeechRecognition
     AudioContext: typeof AudioContext
     webkitAudioContext: typeof AudioContext
+    worksheetTimer: number | null;
   }
+
+  interface WindowEventMap {
+    beforeinstallprompt: BeforeInstallPromptEvent;
+  }
+}
+
+interface BeforeInstallPromptEvent extends Event {
+  readonly platforms: string[];
+  readonly userChoice: Promise<{
+    outcome: 'accepted' | 'dismissed';
+    platform: string;
+  }>;
+  prompt(): Promise<void>;
 }
 
 // Add SpeechRecognition type
@@ -81,17 +96,6 @@ interface SpeechRecognition extends EventTarget {
   abort: () => void
 }
 
-interface BeforeInstallPromptEvent extends Event {
-  prompt: () => Promise<void>
-  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>
-}
-
-// Add type declarations at the top after imports
-interface SpeechRecognitionErrorEvent extends Event {
-  error: string
-  message?: string
-}
-
 interface NotificationOptions {
   title: string
   body: string
@@ -116,7 +120,7 @@ export default function VoiceVentureAI() {
   const [assistantMessage, setAssistantMessage] = useState<string | null>(null)
 
   // Add these state variables after the existing useState declarations
-  const [deferredPrompt, setDeferredPrompt] = useState(null)
+  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null)
   const [showInstallPrompt, setShowInstallPrompt] = useState(false)
   const [notificationPermission, setNotificationPermission] = useState("default")
   const [isOnline, setIsOnline] = useState(typeof navigator !== "undefined" ? navigator.onLine : true)
@@ -124,7 +128,9 @@ export default function VoiceVentureAI() {
   const [offlineContent, setOfflineContent] = useState([])
   const [currentView, setCurrentView] = useState<"main" | "substitute">("main")
   const [showWorksheetGenerator, setShowWorksheetGenerator] = useState(false)
+  const [showQuizGenerator, setShowQuizGenerator] = useState(false)
   const [worksheetRequest, setWorksheetRequest] = useState("")
+  const [quizRequest, setQuizRequest] = useState("")
   const [showResult, setShowResult] = useState(false)
 
   // NEW: Add state for rotating examples
@@ -296,17 +302,30 @@ export default function VoiceVentureAI() {
   // PWA Install Detection
   useEffect(() => {
     const handleBeforeInstallPrompt = (e: BeforeInstallPromptEvent) => {
-      e.preventDefault()
-      deferredPrompt.current = e
-      setShowInstallPrompt(true)
-    }
+      e.preventDefault();
+      setDeferredPrompt(e);
+      setShowInstallPrompt(true);
+    };
 
-    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt)
+    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
 
     return () => {
-      window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt)
+      window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+    };
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (deferredPrompt) {
+      await deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === "accepted") {
+        setShowInstallPrompt(false);
+        setSuccessNotification("📱 VoiceVenture AI installed! Access from your home screen.");
+        setTimeout(() => setSuccessNotification(null), 3000);
+      }
+      setDeferredPrompt(null);
     }
-  }, [])
+  };
 
   // Online/Offline Detection
   useEffect(() => {
@@ -332,19 +351,6 @@ export default function VoiceVentureAI() {
   }, [])
 
   // PWA Helper Functions
-  const handleInstallClick = async () => {
-    if (deferredPrompt) {
-      deferredPrompt.prompt()
-      const { outcome } = await deferredPrompt.userChoice
-      if (outcome === "accepted") {
-        setShowInstallPrompt(false)
-        setSuccessNotification("📱 VoiceVenture AI installed! Access from your home screen.")
-        setTimeout(() => setSuccessNotification(null), 3000)
-      }
-      setDeferredPrompt(null)
-    }
-  }
-
   const requestNotificationPermission = async () => {
     if ("Notification" in window) {
       const permission = await Notification.requestPermission()
@@ -562,22 +568,15 @@ export default function VoiceVentureAI() {
     }
 
     // Subject detection (enhanced)
-    const subjectPatterns = [
-      { pattern: /\b(math|mathematics|arithmetic|algebra|geometry|calculus)\b/i, subject: "Math" },
-      { pattern: /\b(reading|comprehension|literacy|english|language\s+arts|ela)\b/i, subject: "Reading" },
-      { pattern: /\b(science|biology|chemistry|physics|earth\s+science)\b/i, subject: "Science" },
-      { pattern: /\b(history|social\s+studies|geography|civics)\b/i, subject: "History" },
-      { pattern: /\b(art|drawing|painting|creative)\b/i, subject: "Art" },
-      { pattern: /\b(music|singing|instruments)\b/i, subject: "Music" },
-      { pattern: /\b(pe|physical\s+education|gym|sports)\b/i, subject: "Physical Education" },
-    ]
-
-    for (const { pattern, subject } of subjectPatterns) {
-      if (pattern.test(text)) {
-        info.subject = subject
-        console.log(`📚 Subject detected: "${info.subject}" from pattern: ${pattern}`)
-        break
-      }
+    console.log('🔍 Starting subject detection in analyzeTranscript');
+    const commandProcessor = new CommandProcessor();
+    const { subject, confidence } = commandProcessor.parseSubject(text);
+    
+    if (subject && confidence >= 0.7) {
+      info.subject = subject;
+      console.log(`📚 Subject detected in analyzeTranscript: "${info.subject}" with confidence: ${confidence}`);
+    } else {
+      console.log('⚠️ No subject detected in analyzeTranscript or confidence too low');
     }
 
     // Enhanced theme detection - check for multiple keywords and variations
@@ -636,15 +635,20 @@ export default function VoiceVentureAI() {
 
     const lowerText = text.toLowerCase()
 
+    // Process the command using CommandProcessor
+    const commandProcessor = new CommandProcessor();
+    const processedCommand = commandProcessor.processCommand(text);
+    console.log("Processed command:", processedCommand);
+
     // ENHANCED: Check for any educational resource creation request
     const isEducationalResource =
-      lowerText.includes("worksheet") ||
-      lowerText.includes("quiz") ||
-      lowerText.includes("lesson") ||
-      lowerText.includes("rubric") ||
-      lowerText.includes("bell ringer") ||
-      lowerText.includes("choice board") ||
-      lowerText.includes("sub plan") ||
+      processedCommand.resourceType === 'quiz' ||
+      processedCommand.resourceType === 'worksheet' ||
+      processedCommand.resourceType === 'lesson_plan' ||
+      processedCommand.resourceType === 'rubric' ||
+      processedCommand.resourceType === 'bell_ringer' ||
+      processedCommand.resourceType === 'choice_board' ||
+      processedCommand.resourceType === 'sub_plan' ||
       lowerText.includes("math problems") ||
       lowerText.includes("addition") ||
       lowerText.includes("subtraction") ||
@@ -654,42 +658,39 @@ export default function VoiceVentureAI() {
         (lowerText.includes("math") || lowerText.includes("worksheet") || lowerText.includes("activity")))
 
     if (isEducationalResource) {
-      // NEW: Enhanced response based on detected category
-      const categoryResponses = {
-        worksheet: "I'll create a worksheet based on what you said",
-        quiz: "I'll create a quiz based on your request",
-        bell_ringer: "I'll create a bell ringer activity for you",
-        choice_board: "I'll create a choice board with activity options",
-        lesson_plan: "I'll create a comprehensive lesson plan",
-        rubric: "I'll create a grading rubric for you",
-        sub_plan: "I'll create substitute teacher plans",
-        exit_ticket: "I'll create an exit ticket activity",
-      }
+      // Store the structured data
+      const structuredData = {
+        text,
+        subject: processedCommand.subject,
+        grade: processedCommand.gradeLevel,
+        resourceType: processedCommand.resourceType || 'worksheet', // Default to worksheet if not specified
+        specifications: processedCommand.specifications
+      };
 
-      const responseText = resourceInfo
-        ? `${categoryResponses[resourceInfo.category] || categoryResponses.worksheet}: "${text}"`
-        : `I'll create a worksheet based on what you said: "${text}"`
+      // NEW: Enhanced response based on detected resource type
+      const resourceType = processedCommand.resourceType || 'worksheet';
+      const responseText = `I'll create a ${resourceType} based on what you said: "${text}"`;
 
       // Show confirmation before redirecting to appropriate generator
       setVoiceResponse({
         text: responseText,
         actions: [
           {
-            label:
-              resourceInfo?.category === "worksheet"
-                ? "Create Worksheet Now"
-                : `Create ${resourceInfo?.description || "Resource"} Now`,
+            label: `Create ${resourceType.charAt(0).toUpperCase() + resourceType.slice(1)} Now`,
             onClick: () => {
-              // For now, all educational resources go to worksheet generator
-              // In the future, different categories could have their own generators
-              setWorksheetRequest(text)
-              setShowWorksheetGenerator(true)
+              if (resourceType === 'quiz') {
+                setQuizRequest(JSON.stringify(structuredData));
+                setShowQuizGenerator(true);
+              } else {
+                setWorksheetRequest(JSON.stringify(structuredData));
+                setShowWorksheetGenerator(true);
+              }
             },
           },
           {
             label: "Add More Details",
             onClick: () => {
-              setContextHint(`Please provide more details for your ${resourceInfo?.description || "resource"}`)
+              setContextHint(`Please provide more details for your ${resourceType}`)
               startListening()
             },
           },
@@ -702,15 +703,6 @@ export default function VoiceVentureAI() {
           },
         ],
       })
-
-      // Auto-proceed after 3 seconds if no interaction
-      const timer = setTimeout(() => {
-        setWorksheetRequest(text)
-        setShowWorksheetGenerator(true)
-      }, 3000)
-
-      // Store the timer ID so we can clear it if needed
-      window.worksheetTimer = timer
 
       return
     }
@@ -834,7 +826,7 @@ Your complete IEP draft will be ready in 30 seconds!`
         {
           label: "📄 View Full IEP Draft",
           onClick: () => {
-            setSuccessNotification("📄 Opening complete IEP draft with all sections...")
+            setSuccessNotification("�� Opening complete IEP draft with all sections...")
             setTimeout(() => setSuccessNotification(null), 3000)
           },
         },
@@ -1522,8 +1514,11 @@ ${solution}`)
     analyzeTranscript(message)
   }
 
-  // Handle Smart Suggestion from AI Assistant
-  const handleSmartSuggestionFromAssistant = (category: string) => {
+  // Add this type before the responses object
+  type ResponseCategory = 'create_worksheet' | 'lesson_plan' | 'quiz_generator' | 'activity_ideas' | 
+    'create_sell' | 'find_resources' | 'my_store' | 'find_substitute' | 'create_iep';
+
+  const handleSmartSuggestionFromAssistant = (category: ResponseCategory) => {
     console.log(`Smart suggestion from assistant: ${category}`)
 
     const responses = {
@@ -1784,7 +1779,20 @@ ${solution}`)
     }
   }
 
-  if (showWorksheetGenerator) {
+  // Render the appropriate view
+  if (currentView === "substitute") {
+    return (
+      <>
+        <SubstituteBookingSystem
+          onBack={() => setCurrentView("main")}
+          onComplete={() => {
+            setCurrentView("main")
+            setSuccessNotification("✅ Substitute request submitted successfully!")
+          }}
+        />
+      </>
+    )
+  } else if (showWorksheetGenerator) {
     return (
       <>
         <WorksheetGenerator
@@ -1796,6 +1804,23 @@ ${solution}`)
           }}
           onBack={() => {
             setShowWorksheetGenerator(false)
+            setTranscript("")
+          }}
+        />
+      </>
+    )
+  } else if (showQuizGenerator) {
+    return (
+      <>
+        <QuizGenerator
+          request={quizRequest}
+          onComplete={(quiz) => {
+            console.log("Quiz completed:", quiz)
+            setShowQuizGenerator(false)
+            setShowResult(true)
+          }}
+          onBack={() => {
+            setShowQuizGenerator(false)
             setTranscript("")
           }}
         />

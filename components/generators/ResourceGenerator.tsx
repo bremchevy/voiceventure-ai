@@ -4,7 +4,7 @@ import { ChevronLeft, Download, Edit, Store, CheckCircle, Sparkles, ArrowLeft, C
 import { generatePDF } from "@/lib/utils/pdf";
 import { toast } from "@/components/ui/use-toast";
 import { BaseGeneratorProps, BaseGeneratorSettings, themeEmojis, suggestedTopics, isFormat1, isFormat2, isFormat3 } from '@/lib/types/generator-types';
-import { Resource } from '@/lib/types/resource';
+import { Resource, WorksheetResource, QuizResource } from '@/lib/types/resource';
 import { generateWorksheetPDF } from '@/lib/utils/pdf-generator';
 
 interface ResourceGeneratorProps<T extends BaseGeneratorSettings, R extends Resource> extends BaseGeneratorProps {
@@ -72,7 +72,99 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
     }
   }, [request]);
 
-  const transformResponse = (response: any): WorksheetResource => {
+  const transformResponse = (response: any): R => {
+    // Check if this is a quiz response
+    if (type === 'quiz' || response.quiz) {
+      const quizData = response.quiz || response;
+      
+      // Transform the questions format
+      const transformedQuestions = quizData.questions.map((q: any) => {
+        // Convert options object to array if needed
+        let optionsArray: string[] = [];
+        if (q.options) {
+          if (Array.isArray(q.options)) {
+            optionsArray = q.options;
+          } else if (typeof q.options === 'object') {
+            // Handle options in object format (e.g., {a: "option1", b: "option2", ...})
+            optionsArray = [
+              q.options.a || q.options['1'] || '',
+              q.options.b || q.options['2'] || '',
+              q.options.c || q.options['3'] || '',
+              q.options.d || q.options['4'] || ''
+            ].filter(Boolean);
+          }
+        }
+
+        // Handle different question formats
+        if (q.type === 'multiple_choice' || optionsArray.length > 0 || q.answer?.match(/^[a-d]$/i)) {
+          // Multiple choice format
+          return {
+            type: 'multiple_choice',
+            question: q.question,
+            options: optionsArray.length > 0 ? optionsArray : 
+                    ['Option A', 'Option B', 'Option C', 'Option D'], // Default options if none provided
+            correctAnswer: q.correct_answer || 
+                         (q.answer && optionsArray[q.answer.toLowerCase().charCodeAt(0) - 97]) || 
+                         q.answer,
+            answer: q.answer || q.correct_answer,
+            explanation: q.explanation || `The correct answer is ${q.correct_answer || q.answer}`,
+            cognitiveLevel: q.cognitive_level || "recall",
+            points: q.points || 1
+          };
+        } else if (q.answer === 'True' || q.answer === 'False' || q.type === 'true_false') {
+          // True/False format
+          return {
+            type: 'true_false',
+            question: q.question,
+            options: ['True', 'False'],
+            correctAnswer: q.answer || q.correct_answer,
+            answer: q.answer || q.correct_answer,
+            explanation: q.explanation || `The correct answer is ${q.answer || q.correct_answer}`,
+            cognitiveLevel: q.cognitive_level || "recall",
+            points: q.points || 1
+          };
+        } else {
+          // Short answer format
+          return {
+            type: 'short_answer',
+            question: q.question,
+            options: [],
+            correctAnswer: q.answer || q.correct_answer,
+            answer: q.answer || q.correct_answer,
+            explanation: q.explanation || `The correct answer is ${q.answer || q.correct_answer}`,
+            cognitiveLevel: q.cognitive_level || "recall",
+            points: q.points || 1
+          };
+        }
+      });
+
+      const quizResource: QuizResource = {
+        resourceType: 'quiz',
+        title: quizData.title || quizData.subject || "Quiz",
+        subject: quizData.subject || settings.subject || "General",
+        grade_level: quizData.grade_level || settings.grade || "",
+        topic: settings.topicArea || "General",
+        format: settings.format || "multiple_choice",
+        questions: transformedQuestions,
+        estimatedTime: quizData.estimated_time || `${transformedQuestions.length * 2} minutes`,
+        totalPoints: quizData.total_points || transformedQuestions.length,
+        instructions: quizData.instructions || "Answer each question to the best of your ability.",
+        metadata: quizData.metadata || {
+          complexityLevel: 5,
+          languageLevel: 5,
+          cognitiveDistribution: {
+            recall: 0.6,
+            comprehension: 0.3,
+            application: 0.1,
+            analysis: 0
+          }
+        }
+      };
+
+      return quizResource as R;
+    }
+
+    // Handle worksheet response
     // Get format-specific instructions
     let instructions = 'Show your work and write your answers in the spaces provided.';
     switch (response.format) {
@@ -108,13 +200,13 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
         }
     }
 
-    // Base transformation
-    const transformed: WorksheetResource = {
-      type: 'worksheet',
+    // Base transformation for worksheet
+    const worksheetResource: WorksheetResource = {
+      resourceType: 'worksheet',
       title: response.title || '',
-      gradeLevel: response.grade_level || '',
+      grade_level: response.grade_level || '',
       subject: response.subject || '',
-      topicArea: response.topic || '',
+      topic: response.topic || '',
       format: response.subject === 'Reading' ? (response.format === 'worksheet' ? 'comprehension' : response.format) : (response.format || 'standard'),
       instructions: response.instructions || instructions,
       problems: [],
@@ -123,7 +215,7 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
 
     // Handle passage for reading formats
     if (response.passage || response.subject === 'Reading') {
-      transformed.passage = {
+      worksheetResource.passage = {
         text: response.passage?.text || 'No passage provided',
         type: response.passage?.type || 'fiction',
         lexile_level: response.passage?.lexile_level || '',
@@ -135,7 +227,7 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
     // Handle science content-only format
     if (response.subject === 'Science' && response.content) {
       if (response.format === 'science_context' || response.format === 'lab_experiment') {
-        transformed.scienceContent = {
+        worksheetResource.scienceContent = {
           explanation: response.content.introduction || '',
           concepts: [
             response.content.main_components || '',
@@ -146,7 +238,7 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
           key_terms: response.key_terms || {}
         };
       } else if (response.format === 'analysis_focus' || response.format === 'observation_analysis') {
-        transformed.scienceContent = {
+        worksheetResource.scienceContent = {
           explanation: response.content.key_points?.join('\n\n') || '',
           concepts: [
             response.content.analysis_focus || '',
@@ -163,7 +255,7 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
     if (response.problems) {
       switch (response.format) {
         case 'comprehension':
-          transformed.comprehensionProblems = response.problems.map((p: any) => ({
+          worksheetResource.comprehensionProblems = response.problems.map((p: any) => ({
             type: p.type || 'main_idea',
             question: p.question || '',
             answer: p.answer || '',
@@ -173,7 +265,7 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
           break;
 
         case 'vocabulary_context':
-          transformed.vocabularyProblems = response.problems.map((p: any) => ({
+          worksheetResource.vocabularyProblems = response.problems.map((p: any) => ({
             word: p.word || '',
             context: p.context || '',
             definition: p.definition || '',
@@ -184,8 +276,8 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
 
         case 'lab_experiment':
           // Only set science content if not already set
-          if (!transformed.scienceContent) {
-            transformed.scienceContent = {
+          if (!worksheetResource.scienceContent) {
+            worksheetResource.scienceContent = {
               explanation: response.content?.introduction || '',
               concepts: [
                 response.content?.main_components || '',
@@ -197,7 +289,7 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
             };
           }
           // Handle the questions
-          transformed.problems = response.problems.map((p: any) => ({
+          worksheetResource.problems = response.problems.map((p: any) => ({
             type: p.type || 'topic_based',
             question: p.question || '',
             complexity: p.complexity || 'intermediate',
@@ -209,8 +301,8 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
 
         case 'observation_analysis':
           // Only set science content if not already set
-          if (!transformed.scienceContent) {
-            transformed.scienceContent = {
+          if (!worksheetResource.scienceContent) {
+            worksheetResource.scienceContent = {
               explanation: response.content?.key_points?.join('\n\n') || '',
               concepts: [
                 response.content?.analysis_focus || '',
@@ -221,7 +313,7 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
               key_terms: response.key_terms || {}
             };
           }
-          transformed.problems = response.problems.map((p: any) => ({
+          worksheetResource.problems = response.problems.map((p: any) => ({
             type: p.type || 'analysis',
             question: p.question || '',
             scenario: p.scenario || '',
@@ -233,7 +325,7 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
 
         default:
           // Handle standard problems
-          transformed.problems = response.problems.map((p: any) => ({
+          worksheetResource.problems = response.problems.map((p: any) => ({
             type: p.type || 'standard',
             question: p.problem || p.question || '',
             answer: p.answer || '',
@@ -245,7 +337,7 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
       }
     }
 
-    return transformed;
+    return worksheetResource as R;
   };
 
   const generateResource = async () => {
@@ -261,9 +353,9 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
         gradeLevel: settings.grade,
         resourceType: type.replace('_', ' '),
         theme: settings.theme,
-        difficulty: settings.difficulty,
+        difficulty: ('difficulty' in settings) ? settings.difficulty : undefined,
         topicArea: settings.topicArea,
-        includeVocabulary: settings.includeVocabulary || false,
+        includeVocabulary: ('includeVocabulary' in settings) ? settings.includeVocabulary : false,
         questionCount: ('problemCount' in settings) ? settings.problemCount : (settings.questionCount || 10),
         customInstructions: settings.customInstructions || '',
         selectedQuestionTypes: settings.selectedQuestionTypes,
@@ -300,10 +392,19 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
         const transformedResponse = transformResponse(rawResponse);
         console.log('Transformed response:', transformedResponse);
 
-        // Validate the transformed response
-        if (!transformedResponse.title || !transformedResponse.subject || !transformedResponse.gradeLevel) {
-          console.error('Missing required fields in transformed response:', transformedResponse);
-          throw new Error('Generated resource missing required fields after transformation');
+        // Validate the transformed response based on resource type
+        if (type === 'quiz') {
+          const quizResponse = transformedResponse as QuizResource;
+          if (!quizResponse.title || !quizResponse.questions || !quizResponse.questions.length) {
+            console.error('Missing required fields in transformed quiz response:', transformedResponse);
+            throw new Error('Generated quiz missing required fields after transformation');
+          }
+        } else {
+          const worksheetResponse = transformedResponse as WorksheetResource;
+          if (!worksheetResponse.title || !worksheetResponse.subject || !worksheetResponse.grade_level) {
+            console.error('Missing required fields in transformed worksheet response:', transformedResponse);
+            throw new Error('Generated worksheet missing required fields after transformation');
+          }
         }
         
         // Step 4: Finalizing
@@ -728,185 +829,225 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
         {/* Resource Preview */}
         <div className="bg-white p-8 rounded-lg shadow-lg max-w-4xl mx-auto" ref={resourceRef}>
           {/* Title */}
-          <div className="space-y-2">
+          <div className="space-y-2 mb-6">
             <h2 className="text-2xl font-bold">{generatedResource.title}</h2>
             <div className="text-gray-600">
               <div>{generatedResource.subject}</div>
-              <div>{generatedResource.gradeLevel}</div>
+              <div>{generatedResource.grade_level}</div>
             </div>
           </div>
 
           {/* Instructions */}
           {generatedResource.instructions && (
-            <div className="space-y-2">
+            <div className="space-y-2 mb-6">
               <h3 className="font-semibold">Instructions:</h3>
               <p>{generatedResource.instructions}</p>
             </div>
           )}
 
-          {/* Display passage for reading formats */}
-          {generatedResource.passage && (
-            <div className="space-y-2 border-l-4 border-purple-500 pl-4 my-6 bg-gray-50 p-4 rounded-r-lg">
-              <h3 className="font-semibold">Text:</h3>
-              <p className="whitespace-pre-wrap text-gray-800">{generatedResource.passage.text}</p>
-            </div>
-          )}
-
-          {/* Display science content */}
-          {generatedResource.scienceContent && (
-            <div className="space-y-2 border-l-4 border-purple-500 pl-4 my-6 bg-gray-50 p-4 rounded-r-lg">
-              <h3 className="font-semibold">Content:</h3>
-              <div className="space-y-4">
-                <p className="whitespace-pre-wrap text-gray-800">{generatedResource.scienceContent.explanation}</p>
-                {generatedResource.scienceContent.concepts?.length > 0 && (
-                  <div className="mt-4">
-                    <h4 className="font-medium text-gray-700">Key Concepts:</h4>
-                    <ul className="list-disc pl-5 space-y-1 text-gray-600">
-                      {generatedResource.scienceContent.concepts.map((concept, idx) => (
-                        <li key={idx}>{concept}</li>
-                      ))}
-                    </ul>
+          {/* Quiz Questions */}
+          {type === 'quiz' && (generatedResource as QuizResource).questions && (
+            <div className="space-y-6">
+              {(generatedResource as QuizResource).questions.map((question, index) => (
+                <div key={index} className="p-4 bg-gray-50 rounded-lg space-y-4">
+                  <div className="font-medium">
+                    {index + 1}. {question.question}
                   </div>
-                )}
-                {generatedResource.scienceContent.applications?.length > 0 && (
-                  <div className="mt-4">
-                    <h4 className="font-medium text-gray-700">Applications:</h4>
-                    <ul className="list-disc pl-5 space-y-1 text-gray-600">
-                      {generatedResource.scienceContent.applications.map((app, idx) => (
-                        <li key={idx}>{app}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Problems section */}
-          <div className="space-y-6">
-            {generatedResource.problems?.map((problem, index) => (
-              <div key={index} className="space-y-3">
-                <div className="font-medium">{(index + 1)}. {problem.question.replace(/^\d+\.\s*/, '')}</div>
-                {problem.complexity && (
-                  <div className="text-sm text-gray-500 italic">Complexity: {problem.complexity}</div>
-                )}
-                <div className="pl-4">
-                  <div className="border-b-2 border-gray-300 h-8 w-full" />
-                  {problem.hints && problem.hints.length > 0 && (
-                    <div className="mt-2 space-y-1">
-                      {problem.hints.map((hint, hintIndex) => (
-                        <div key={hintIndex} className="text-sm text-gray-600">
-                          • {hint}
+                  
+                  {/* Multiple Choice Options */}
+                  {question.type === 'multiple_choice' && (
+                    <div className="pl-6 space-y-2">
+                      {['A', 'B', 'C', 'D'].map((letter, optIndex) => (
+                        <div key={optIndex} className="flex items-center gap-2">
+                          <div className="w-6 h-6 rounded-full border-2 border-gray-300 flex items-center justify-center text-sm">
+                            {letter}
+                          </div>
+                          <span>{question.options?.[optIndex] || `Option ${letter}`}</span>
                         </div>
                       ))}
                     </div>
                   )}
-                </div>
-              </div>
-            ))}
-
-            {/* Comprehension problems */}
-            {generatedResource.comprehensionProblems?.map((problem, index) => (
-              <div key={index} className="space-y-3">
-                <div className="font-medium">{(index + 1)}. {problem.question.replace(/^\d+\.\s*/, '')}</div>
-                {problem.evidence_prompt && (
-                  <div className="text-sm text-gray-600 italic pl-4">
-                    {problem.evidence_prompt}
-                  </div>
-                )}
-                <div className="pl-4">
-                  <div className="border-b-2 border-gray-300 h-16 w-full" />
-                </div>
-              </div>
-            ))}
-
-            {/* Literary analysis problems */}
-            {generatedResource.literaryAnalysisProblems?.map((problem, index) => (
-              <div key={index} className="space-y-3">
-                <div className="font-medium">{(index + 1)}. Analyze: {problem.element.replace(/^\d+\.\s*/, '')}</div>
-                <div>{problem.question}</div>
-                {problem.guiding_questions && (
-                  <div className="pl-4 space-y-1">
-                    {problem.guiding_questions.map((q, qIndex) => (
-                      <div key={qIndex} className="text-sm text-gray-600">
-                        • {q}
+                  
+                  {/* True/False Options */}
+                  {question.type === 'true_false' && (
+                    <div className="pl-6 space-y-2">
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-full border-2 border-gray-300 flex items-center justify-center text-sm">
+                          T
+                        </div>
+                        <span>True</span>
                       </div>
-                    ))}
-                  </div>
-                )}
-                <div className="pl-4">
-                  <div className="border-b-2 border-gray-300 h-16 w-full" />
+                      <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-full border-2 border-gray-300 flex items-center justify-center text-sm">
+                          F
+                        </div>
+                        <span>False</span>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Short Answer Space */}
+                  {question.type === 'short_answer' && (
+                    <div className="pl-6">
+                      <div className="border-b-2 border-gray-300 h-8 w-full" />
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
+          )}
 
-            {/* Vocabulary problems */}
-            {generatedResource.vocabularyProblems?.map((problem, index) => (
-              <div key={index} className="space-y-3 border p-4 rounded-lg">
-                <div className="font-semibold text-lg">{problem.word}</div>
-                <div className="text-gray-600">Context: "{problem.context}"</div>
-                <div>Definition: {problem.definition}</div>
-                <div className="space-y-3">
-                  {problem.questions.map((q, qIndex) => (
-                    <div key={qIndex}>
-                      <div className="font-medium">{(qIndex + 1)}. {q.question.replace(/^\d+\.\s*/, '')}</div>
-                      <div className="pl-4 mt-2">
+          {/* Worksheet Content */}
+          {type === 'worksheet' && (
+            <>
+              {/* Display passage for reading formats */}
+              {(generatedResource as WorksheetResource).passage && (
+                <div className="space-y-2 border-l-4 border-purple-500 pl-4 my-6 bg-gray-50 p-4 rounded-r-lg">
+                  <h3 className="font-semibold">Text:</h3>
+                  <p className="whitespace-pre-wrap text-gray-800">{(generatedResource as WorksheetResource).passage.text}</p>
+                </div>
+              )}
+
+              {/* Display science content */}
+              {(generatedResource as WorksheetResource).scienceContent && (
+                <div className="space-y-2 border-l-4 border-purple-500 pl-4 my-6 bg-gray-50 p-4 rounded-r-lg">
+                  <h3 className="font-semibold">Content:</h3>
+                  <div className="space-y-4">
+                    <p className="whitespace-pre-wrap text-gray-800">{(generatedResource as WorksheetResource).scienceContent?.explanation}</p>
+                    {(generatedResource as WorksheetResource).scienceContent?.concepts?.length > 0 && (
+                      <div className="mt-4">
+                        <h4 className="font-medium text-gray-700">Key Concepts:</h4>
+                        <ul className="list-disc pl-5 space-y-1 text-gray-600">
+                          {(generatedResource as WorksheetResource).scienceContent?.concepts.map((concept, idx) => (
+                            <li key={idx}>{concept}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Worksheet Problems section */}
+              {(generatedResource as WorksheetResource).problems && (
+                <div className="space-y-6">
+                  {(generatedResource as WorksheetResource).problems?.map((problem, index) => (
+                    <div key={index} className="space-y-3">
+                      <div className="font-medium">{(index + 1)}. {problem.question.replace(/^\d+\.\s*/, '')}</div>
+                      {problem.complexity && (
+                        <div className="text-sm text-gray-500 italic">Complexity: {problem.complexity}</div>
+                      )}
+                      <div className="pl-4">
                         <div className="border-b-2 border-gray-300 h-8 w-full" />
+                        {problem.hints && problem.hints.length > 0 && (
+                          <div className="mt-2 space-y-1">
+                            {problem.hints.map((hint, hintIndex) => (
+                              <div key={hintIndex} className="text-sm text-gray-600">
+                                • {hint}
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
                   ))}
                 </div>
-                <div className="mt-3">
-                  <div className="font-medium">Application:</div>
-                  <div className="text-sm text-gray-600">{problem.application}</div>
-                  <div className="pl-4 mt-2">
-                    <div className="border-b-2 border-gray-300 h-12 w-full" />
-                  </div>
+              )}
+
+              {/* Comprehension Problems section */}
+              {(generatedResource as WorksheetResource).comprehensionProblems && (
+                <div className="space-y-6 mt-6">
+                  {(generatedResource as WorksheetResource).comprehensionProblems.map((problem, index) => (
+                    <div key={index} className="space-y-3">
+                      <div className="font-medium">{(index + 1)}. {problem.question.replace(/^\d+\.\s*/, '')}</div>
+                      {problem.evidence_prompt && (
+                        <div className="text-sm text-gray-600 italic pl-4 mb-2">
+                          {problem.evidence_prompt}
+                        </div>
+                      )}
+                      <div className="pl-4">
+                        <div className="border-b-2 border-gray-300 h-16 w-full" />
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              </div>
-            ))}
-          </div>
+              )}
 
-          {/* Show vocabulary section only for math and science subjects */}
-          {generatedResource.subject !== 'Reading' && 
-           generatedResource.vocabulary && 
-           Object.keys(generatedResource.vocabulary).length > 0 && (
-            <div className="mt-8">
-              <h3 className="font-semibold text-lg mb-4">Key Terms:</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {Object.entries(generatedResource.vocabulary).map(([term, definition], index) => (
-                  <div key={index} className="border p-3 rounded-lg">
-                    <div className="font-medium">{term}</div>
-                    <div className="text-sm text-gray-600">{definition}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
+              {/* Literary Analysis Problems section */}
+              {(generatedResource as WorksheetResource).literaryAnalysisProblems && (
+                <div className="space-y-6 mt-6">
+                  {(generatedResource as WorksheetResource).literaryAnalysisProblems.map((problem, index) => (
+                    <div key={index} className="space-y-3">
+                      <div className="font-medium">{(index + 1)}. Analyze: {problem.element}</div>
+                      <div>{problem.question}</div>
+                      {problem.guiding_questions && (
+                        <div className="pl-4 space-y-1 mb-2">
+                          {problem.guiding_questions.map((q, qIndex) => (
+                            <div key={qIndex} className="text-sm text-gray-600">
+                              • {q}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <div className="pl-4">
+                        <div className="border-b-2 border-gray-300 h-16 w-full" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Vocabulary Problems section */}
+              {(generatedResource as WorksheetResource).vocabularyProblems && (
+                <div className="space-y-6 mt-6">
+                  {(generatedResource as WorksheetResource).vocabularyProblems.map((problem, index) => (
+                    <div key={index} className="space-y-3 border p-4 rounded-lg">
+                      <div className="font-semibold text-lg">{problem.word}</div>
+                      <div className="text-gray-600">Context: "{problem.context}"</div>
+                      <div>Definition: {problem.definition}</div>
+                      <div className="space-y-3">
+                        {problem.questions.map((q, qIndex) => (
+                          <div key={qIndex}>
+                            <div className="font-medium">{(qIndex + 1)}. {q.question.replace(/^\d+\.\s*/, '')}</div>
+                            <div className="pl-4 mt-2">
+                              <div className="border-b-2 border-gray-300 h-8 w-full" />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="mt-3">
+                        <div className="font-medium">Application:</div>
+                        <div className="text-sm text-gray-600">{problem.application}</div>
+                        <div className="pl-4 mt-2">
+                          <div className="border-b-2 border-gray-300 h-12 w-full" />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </>
           )}
-        </div>
 
-        {/* Action Buttons */}
-        <div className="flex justify-between items-center mt-6">
-          <Button variant="outline" onClick={() => setCurrentStep("settings")}>
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Back to Settings
-          </Button>
-          <Button 
-            onClick={handleDownloadPDF} 
-            disabled={isLoading}
-          >
-            {isLoading ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Generating PDF...
-              </>
-            ) : (
-              <>
-                <Download className="mr-2 h-4 w-4" />
-                Download PDF
-              </>
-            )}
-          </Button>
+          {/* Action Buttons */}
+          <div className="flex justify-end gap-3 mt-8">
+            <Button variant="outline" onClick={() => setCurrentStep("settings")}>
+              Edit
+            </Button>
+            <Button onClick={handleDownloadPDF} disabled={isLoading}>
+              {isLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Generating PDF...
+                </>
+              ) : (
+                <>
+                  <Download className="w-4 h-4 mr-2" />
+                  Download PDF
+                </>
+              )}
+            </Button>
+          </div>
         </div>
       </div>
     );

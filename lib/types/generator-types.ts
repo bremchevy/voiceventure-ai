@@ -12,16 +12,17 @@ export interface BaseGeneratorSettings {
   theme: 'Halloween' | 'Winter' | 'Spring' | 'General';
   topicArea: string;
   customInstructions?: string;
-  resourceType?: 'worksheet' | 'quiz' | 'exit_slip' | 'lesson_plan' | 'rubric';
+  resourceType?: ResourceType;
   questionCount?: number;
   selectedQuestionTypes?: string[];
-  format?: string;
+  format?: Format;
 }
 
-export interface WorksheetSettings extends BaseGeneratorSettings {
+export interface WorksheetSettings extends Omit<BaseGeneratorSettings, 'theme'> {
+  theme: 'Halloween' | 'Winter' | 'Spring' | 'General';
   problemCount: number;
-  resourceType: 'worksheet' | 'quiz' | 'exit_slip' | 'lesson_plan' | 'rubric';
-  format: string;
+  resourceType: ResourceType;
+  format: Format;
 }
 
 export interface QuizSettings extends BaseGeneratorSettings {
@@ -105,14 +106,14 @@ export const suggestedTopics: Record<string, Record<string, string[]>> = {
       "Basic Algebra"
     ],
     quiz: [
-      "Number Operations",
-      "Fraction Operations",
-      "Geometry Concepts",
-      "Measurement Units",
-      "Problem Solving",
-      "Math Facts",
-      "Mental Math",
-      "Math Vocabulary"
+      "Number Operations & Properties",
+      "Fractions & Decimals",
+      "Geometry & Measurements",
+      "Problem Solving Strategies",
+      "Mental Math & Estimation",
+      "Algebra Basics",
+      "Data & Statistics",
+      "Patterns & Sequences"
     ],
     lesson_plan: [
       "Introduction to Fractions",
@@ -145,12 +146,14 @@ export const suggestedTopics: Record<string, Record<string, string[]>> = {
       "Compare and Contrast"
     ],
     quiz: [
-      "Story Comprehension",
-      "Vocabulary Check",
-      "Reading Strategies",
-      "Literary Elements",
-      "Character Traits",
-      "Reading Fluency"
+      "Parts of Speech",
+      "Punctuation Rules",
+      "Sentence Structure",
+      "Common Vocabulary",
+      "Word Relationships",
+      "Prefixes & Suffixes",
+      "Grammar Rules",
+      "Language Conventions"
     ],
     lesson_plan: [
       "Reading Strategies",
@@ -182,12 +185,14 @@ export const suggestedTopics: Record<string, Record<string, string[]>> = {
       "Earth's Resources"
     ],
     quiz: [
-      "Scientific Method",
-      "Earth Science Basics",
-      "Life Science Topics",
-      "Physical Science",
+      "Earth & Space Systems",
+      "Living Things & Ecosystems",
+      "Matter & Energy",
+      "Forces & Motion",
+      "Weather & Climate",
+      "Human Body Systems",
       "Environmental Science",
-      "Space Science"
+      "Scientific Method"
     ],
     lesson_plan: [
       "Scientific Investigation",
@@ -287,30 +292,99 @@ export type Subject = 'Math' | 'Reading' | 'Science';
 export type ResourceType = 'worksheet' | 'quiz' | 'exit_slip' | 'lesson_plan' | 'rubric';
 
 // Math formats
-export type MathFormat = 'standard' | 'guided' | 'interactive';
+export type MathFormat = 
+  | 'standard' 
+  | 'guided' 
+  | 'interactive'
+  | 'problem_solving'
+  | 'calculation'
+  | 'word_problems'
+  | 'showing_work'
+  | 'mathematical_reasoning'
+  | 'concept_introduction'
+  | 'skill_practice'
+  | 'problem_based'
+  | 'quick_calculation'
+  | 'concept_check'
+  | 'reflection';
 
 // Reading formats
-export type ReadingFormat = 'comprehension' | 'literary_analysis' | 'vocabulary_context';
+export type ReadingFormat = 
+  | 'comprehension'
+  | 'literary_analysis'
+  | 'vocabulary_context'
+  | 'reading_comprehension'
+  | 'vocabulary'
+  | 'grammar'
+  | 'writing'
+  | 'analysis'
+  | 'guided_reading'
+  | 'literature_study'
+  | 'skill_focused'
+  | 'summary'
+  | 'main_idea'
+  | 'reflection';
 
 // Science formats
-export type ScienceFormat = 'lab_experiment' | 'observation_analysis' | 'concept_application';
+export type ScienceFormat = 
+  | 'lab_experiment'
+  | 'observation_analysis'
+  | 'concept_application'
+  | 'concept_check'
+  | 'lab_analysis'
+  | 'scientific_method'
+  | 'lab_report'
+  | 'scientific_process'
+  | 'experimental_design'
+  | 'inquiry_based'
+  | 'experimental'
+  | 'observation'
+  | 'observation_summary'
+  | 'hypothesis_check'
+  | 'concept_review';
 
 // Combined format type
-export type Format = MathFormat | ReadingFormat | ScienceFormat;
+export type Format = 
+  // Worksheet formats
+  | 'standard' 
+  | 'guided' 
+  | 'interactive'
+  // Reading formats
+  | 'comprehension'
+  | 'vocabulary_context'
+  | 'literary_analysis'
+  // Science formats
+  | 'science_context'
+  | 'analysis_focus'
+  | 'lab_experiment'
+  // Quiz formats
+  | 'multiple_choice'
+  | 'true_false'
+  | 'short_answer'
+  // Other resource formats
+  | 'full_lesson'
+  | 'mini_lesson'
+  | 'activity'
+  | '4_point'
+  | '3_point'
+  | 'checklist'
+  | 'open_response'
+  | 'rating_scale';
 
-export interface WorksheetSettings {
-  grade: string;
-  subject: Subject;
-  theme: string;
-  problemCount: number;
-  topicArea: string;
-  resourceType: ResourceType;
-  format: Format;
-  customInstructions?: string;
-}
+// Remove duplicate declarations:
+// export interface WorksheetSettings {
+//   grade: string;
+//   subject: Subject;
+//   theme: string;
+//   problemCount: number;
+//   topicArea: string;
+//   resourceType: ResourceType;
+//   format: Format;
+//   customInstructions?: string;
+// }
 
-export interface BaseGeneratorProps {
-  onBack: () => void;
-  onComplete: (resource: any) => void;
-  request?: string;
-} 
+// export interface BaseGeneratorProps {
+//   onBack: () => void;
+//   onComplete: (resource: any) => void;
+//   request?: string;
+// } 

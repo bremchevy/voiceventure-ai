@@ -11,6 +11,7 @@ export interface BaseResource {
   subject: Subject;
   topic: string;
   format: Format;
+  instructions?: string;
 }
 
 // Math-specific types
@@ -120,18 +121,35 @@ export interface WorksheetResource extends BaseResource {
   labProblems?: LabExperimentProblem[];
   observationProblems?: ObservationProblem[];
   conceptProblems?: ConceptApplicationProblem[];
+  scienceContent?: ScienceContent;
+  vocabulary?: Record<string, string>;
 }
 
 // Quiz resource type
 export interface QuizResource extends BaseResource {
   resourceType: 'quiz';
   questions: {
-    type: string;
+    type: QuestionType;
     question: string;
     options?: string[];
+    correctAnswer?: string;
     answer: string;
     explanation?: string;
+    cognitiveLevel?: string;
+    points?: number;
   }[];
+  estimatedTime?: string;
+  totalPoints?: number;
+  metadata?: {
+    complexityLevel: number;
+    languageLevel: number;
+    cognitiveDistribution: {
+      recall: number;
+      comprehension: number;
+      application: number;
+      analysis: number;
+    };
+  };
 }
 
 // Exit slip resource type
@@ -194,76 +212,9 @@ export interface ResourceGenerationOptions {
   selectedQuestionTypes?: string[];
 }
 
-export interface Resource {
-  type: string;
-  title: string;
-  grade_level: string;
-  subject: string;
-  topic?: string;
-  format?: string;
-  instructions?: string;
-}
-
 export interface ScienceContent {
   explanation: string;
   concepts: string[];
   applications: string[];
   key_terms?: Record<string, string>;
-}
-
-export interface WorksheetResource extends Resource {
-  problems?: Array<{
-    type: string;
-    question: string;
-    answer?: string;
-    explanation?: string;
-    complexity?: string;
-    focus_area?: string;
-    scenario?: string;
-    thinking_points?: string[];
-    expected_analysis?: string;
-    steps?: string[];
-    hints?: string[];
-    visuals?: string[];
-  }>;
-  passage?: {
-    text: string;
-    type: string;
-    lexile_level?: string;
-    target_words?: string[];
-    elements_focus?: string[];
-  };
-  scienceContent?: ScienceContent;
-  comprehensionProblems?: Array<{
-    type: string;
-    question: string;
-    answer: string;
-    evidence_prompt?: string;
-    skill_focus?: string;
-  }>;
-  vocabularyProblems?: Array<{
-    word: string;
-    context: string;
-    definition: string;
-    questions: Array<{
-      type: string;
-      question: string;
-      answer: string;
-    }>;
-    application: string;
-  }>;
-  objective?: string;
-  observationProblems?: Array<{
-    type: string;
-    phenomenon: string;
-    background: string;
-    observation_prompts: string[];
-    data_recording: {
-      type: string;
-      instructions: string;
-    };
-    analysis_questions: string[];
-    connections: string[];
-  }>;
-  vocabulary?: Record<string, string>;
 } 

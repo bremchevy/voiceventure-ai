@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { BaseGeneratorProps, WorksheetSettings } from '@/lib/types/generator-types';
+import { useState, useEffect } from 'react';
+import { BaseGeneratorProps, WorksheetSettings, Format } from '@/lib/types/generator-types';
 import { WorksheetResource } from '@/lib/types/resource';
 import { ResourceGenerator } from './ResourceGenerator';
 import { Label } from '@/components/ui/label';
@@ -29,6 +29,113 @@ export function WorksheetGenerator({ onBack, onComplete, request }: BaseGenerato
     resourceType: "worksheet",
     format: "standard"
   });
+
+  // Helper function to determine the best format based on content
+  const inferBestFormat = (text: string, subject: string, resourceType: string): Format => {
+    if (!text) return 'standard';
+    
+    const lowerText = text.toLowerCase();
+
+    // Handle quiz formats specifically
+    if (resourceType === 'quiz') {
+      if (/\b(multiple|choice|options|mcq)\b/i.test(lowerText)) {
+        return 'multiple_choice';
+      }
+      if (/\b(true|false|yes|no)\b/i.test(lowerText)) {
+        return 'true_false';
+      }
+      return 'short_answer'; // New default for quizzes
+    }
+    
+    // Handle worksheet formats by subject
+    if (subject === 'Reading') {
+      if (/\b(main\s*idea|comprehension|understand|summary|summarize|detail|inference)\b/i.test(lowerText)) {
+        return 'comprehension';
+      }
+      if (/\b(vocabulary|word|definition|meaning|context|spell)\b/i.test(lowerText)) {
+        return 'vocabulary_context';
+      }
+      return 'comprehension';
+    }
+    
+    if (subject === 'Math') {
+      if (/\b(step|guide|help|explain|show|work|process)\b/i.test(lowerText)) {
+        return 'guided';
+      }
+      if (/\b(interact|hands[\s-]on|manipulative|activity|game)\b/i.test(lowerText)) {
+        return 'interactive';
+      }
+      return 'standard';
+    }
+    
+    if (subject === 'Science') {
+      if (/\b(lab|experiment|procedure|method|equipment|materials)\b/i.test(lowerText)) {
+        return 'science_context';
+      }
+      if (/\b(observe|observation|record|data|collect|measure)\b/i.test(lowerText)) {
+        return 'analysis_focus';
+      }
+      return 'science_context';
+    }
+    
+    return 'standard';
+  };
+
+  // Parse initial request if provided
+  useEffect(() => {
+    if (request) {
+      try {
+        const parsedRequest = JSON.parse(request);
+        const subject = parsedRequest.subject || 'Math';
+        const resourceType = parsedRequest.resourceType || 'worksheet';
+        const bestFormat = inferBestFormat(parsedRequest.text, subject, resourceType);
+        
+        setSettings(prev => ({
+          ...prev,
+          grade: parsedRequest.grade || prev.grade,
+          subject: subject,
+          resourceType: resourceType,
+          theme: parsedRequest.specifications?.theme || prev.theme,
+          topicArea: parsedRequest.specifications?.topicArea || prev.topicArea,
+          problemCount: parsedRequest.specifications?.questionCount || prev.problemCount,
+          format: bestFormat,
+          customInstructions: prev.customInstructions,
+          questionCount: prev.questionCount,
+          selectedQuestionTypes: prev.selectedQuestionTypes
+        }));
+      } catch (e) {
+        console.error('Error parsing request:', e);
+        setSettings(prev => ({
+          ...prev,
+          topicArea: request
+        }));
+      }
+    }
+  }, [request]);
+
+  // Handle problem count change
+  const handleProblemCountChange = (value: number[]) => {
+    setSettings(prev => ({
+      ...prev,
+      problemCount: value[0]
+    }));
+  };
+
+  // Handle format change
+  const handleFormatChange = (value: Format) => {
+    setSettings(prev => ({
+      ...prev,
+      format: value
+    }));
+  };
+
+  // Handle theme change
+  const handleThemeChange = (value: WorksheetSettings['theme']) => {
+    setSettings(prev => ({
+      ...prev,
+      theme: value
+    }));
+  };
 
   // Subject-specific formats
   const resourceFormats: ResourceFormats = {
@@ -157,7 +264,7 @@ export function WorksheetGenerator({ onBack, onComplete, request }: BaseGenerato
           {resourceFormats[settings.subject]?.[settings.resourceType]?.map((format: ResourceFormat) => (
           <button
               key={format.id}
-              onClick={() => setSettings((prev) => ({ ...prev, format: format.id }))}
+              onClick={() => handleFormatChange(format.id as Format)}
               className={`p-3 rounded-lg border-2 text-sm font-medium transition-all text-left flex items-center justify-between ${
                 settings.format === format.id
                 ? "border-purple-500 bg-purple-50 text-purple-700"
@@ -187,7 +294,7 @@ export function WorksheetGenerator({ onBack, onComplete, request }: BaseGenerato
         </div>
         <Slider
           value={[settings.problemCount]}
-          onValueChange={(value) => setSettings(prev => ({ ...prev, problemCount: value[0] }))}
+          onValueChange={handleProblemCountChange}
           max={20}
           min={0}
           step={1}
