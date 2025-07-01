@@ -32,6 +32,18 @@ const BackArrow = ({
   </button>
 );
 
+// Add these type definitions at the top of the file
+interface RubricLevel {
+  score: string;
+  description: string;
+}
+
+interface RubricCriterion {
+  name: string;
+  description: string;
+  levels: RubricLevel[];
+}
+
 export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Resource>({
   type,
   settings,
@@ -73,6 +85,158 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
   }, [request]);
 
   const transformResponse = (response: any): R => {
+    // Handle rubric response
+    if (type === 'rubric') {
+      let criteria = [];
+      console.log('Raw response before transformation:', response);
+
+      try {
+        // Auto-generate criteria if no criteria in response
+        if ((!response.ObjectCriteria || !Array.isArray(response.ObjectCriteria) || response.ObjectCriteria.length === 0) &&
+            (!response.criteria || !Object.keys(response.criteria).length)) {
+          
+          // Default criteria based on common assessment areas
+          const defaultCriteria = [
+            {
+              name: 'Content',
+              description: `Understanding and presentation of ${settings.topicArea} content`,
+              levels: [
+                'Demonstrates comprehensive understanding and presents content with exceptional clarity and depth',
+                'Shows good understanding and presents content clearly with some detail',
+                'Demonstrates basic understanding with limited presentation of content',
+                'Shows minimal understanding with unclear or incomplete content presentation'
+              ]
+            },
+            {
+              name: 'Organization',
+              description: 'Structure and flow of the presentation',
+              levels: [
+                'Exceptionally well-organized with clear structure, logical flow, and effective transitions',
+                'Well-organized with good structure and generally smooth transitions',
+                'Basic organization present but structure or transitions need improvement',
+                'Lacks clear organization, structure unclear or confusing'
+              ]
+            },
+            {
+              name: 'Critical Thinking',
+              description: `Analysis and evaluation of ${settings.topicArea} concepts`,
+              levels: [
+                'Shows exceptional analytical skills with insightful evaluation and connections',
+                'Demonstrates good analysis with clear evaluation and some connections',
+                'Shows basic analysis with limited evaluation',
+                'Minimal analysis or evaluation present'
+              ]
+            },
+            {
+              name: 'Communication',
+              description: 'Clarity and effectiveness of communication',
+              levels: [
+                'Communicates ideas with exceptional clarity, precision, and engagement',
+                'Communicates ideas clearly and effectively most of the time',
+                'Communication is generally understandable but lacks consistency',
+                'Communication is unclear or ineffective'
+              ]
+            }
+          ];
+
+          // Transform default criteria into expected format
+          criteria = defaultCriteria.map(criterion => ({
+            name: criterion.name,
+            description: criterion.description,
+            levels: criterion.levels.map((desc, index) => ({
+              score: (4 - index).toString(),
+              description: desc
+            }))
+          }));
+        }
+        // Handle existing criteria from response
+        else if (response.ObjectCriteria && Array.isArray(response.ObjectCriteria)) {
+          criteria = response.ObjectCriteria.map((criterion: any) => {
+            // Handle both array formats for performance levels
+            const performanceLevels = criterion.PerformanceLevels || criterion['Performance Levels'] || [];
+            
+            const levels = Array.isArray(performanceLevels) ? performanceLevels.map((level: any, index: number) => {
+              // Handle object format with level, description, points
+              if (typeof level === 'object' && level !== null) {
+                return {
+                  score: (level.points || level.level || (4 - index)).toString(),
+                  description: level.description || level.level_description || 'No description available'
+                };
+              }
+              // Handle string format
+              return {
+                score: (4 - index).toString(),
+                description: level || 'No description available'
+              };
+            }) : [];
+            
+            return {
+              name: criterion.Criterion || '',
+              description: criterion.Description || '',
+              levels: levels.sort((a, b) => Number(b.score) - Number(a.score))
+            };
+          });
+        }
+        else if (response.criteria && typeof response.criteria === 'object') {
+          criteria = Object.entries(response.criteria).map(([name, data]: [string, any]) => {
+            const levels = Object.entries(data.levels || {}).map(([score, description]) => ({
+              score: score.toString(),
+              description: description as string
+            }));
+            
+            return {
+        name,
+        description: data.description || '',
+              levels: levels.sort((a, b) => Number(b.score) - Number(a.score))
+            };
+          });
+        }
+
+        // Additional validation and cleanup
+        criteria = criteria
+          .filter((criterion: RubricCriterion) => 
+            criterion.name && // Must have a name
+            criterion.levels && 
+            Array.isArray(criterion.levels) && 
+            criterion.levels.length > 0 // Must have at least one level
+          )
+          .map((criterion: RubricCriterion) => ({
+            ...criterion,
+            description: criterion.description || `Criteria for ${criterion.name}`,
+            levels: criterion.levels.map((level: RubricLevel) => ({
+              ...level,
+              description: level.description || 'No description available'
+        }))
+      }));
+
+        console.log('Transformed criteria:', criteria);
+
+        // Final validation
+        if (!Array.isArray(criteria) || criteria.length === 0) {
+          console.error('Criteria array is empty or invalid:', criteria);
+          console.error('Original response:', response);
+          throw new Error('No valid criteria found in the response');
+        }
+
+        const rubricResource = {
+          resourceType: 'rubric' as const,
+            title: response['Rubric Name'] || response.Rubric || response['Rubric Title'] || response.title || `${settings.topicArea} Rubric`,
+          subject: settings.subject,
+          grade_level: settings.grade,
+          topic: settings.topicArea,
+          format: settings.format || '4_point',
+          criteria
+        };
+
+        console.log('Final transformed rubric:', rubricResource);
+      return rubricResource as unknown as R;
+      } catch (error) {
+        console.error('Error transforming rubric response:', error);
+        console.error('Raw response that caused error:', response);
+        throw new Error('Failed to transform rubric response: ' + (error instanceof Error ? error.message : 'Unknown error'));
+      }
+    }
+
     // Check if this is a quiz response
     if (type === 'quiz' || response.quiz) {
       const quizData = response.quiz || response;
@@ -399,7 +563,18 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
             console.error('Missing required fields in transformed quiz response:', transformedResponse);
             throw new Error('Generated quiz missing required fields after transformation');
           }
-        } else {
+        } else if (type === 'rubric') {
+          const rubricResponse = transformedResponse as any;
+          if (!rubricResponse.title || !rubricResponse.criteria) {
+            console.error('Missing required fields in transformed rubric response:', transformedResponse);
+            throw new Error('Generated rubric missing required fields after transformation');
+          }
+          // Check if criteria is an array and has at least one item
+          if (!Array.isArray(rubricResponse.criteria) || rubricResponse.criteria.length === 0) {
+            console.error('Invalid or empty criteria in rubric response:', transformedResponse);
+            throw new Error('Generated rubric has no criteria');
+          }
+        } else if (type === 'worksheet') {
           const worksheetResponse = transformedResponse as WorksheetResource;
           if (!worksheetResponse.title || !worksheetResponse.subject || !worksheetResponse.grade_level) {
             console.error('Missing required fields in transformed worksheet response:', transformedResponse);
@@ -599,41 +774,6 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
             >
               <span className="text-lg">{theme.emoji}</span>
               {theme.name}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Resource Type Selection */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-3">Resource Type</label>
-        <div className="grid grid-cols-1 gap-3">
-          {[
-            { type: "worksheet", icon: "📝", title: "Worksheet", desc: "Traditional practice with problems and answers" },
-            { type: "quiz", icon: "🧠", title: "Quiz", desc: "Assessment with various question types" },
-            { type: "rubric", icon: "📋", title: "Rubric", desc: "Evaluation criteria and scoring guide" },
-            { type: "lesson_plan", icon: "📚", title: "Lesson Plan", desc: "Structured teaching guide with objectives" },
-            { type: "exit_slip", icon: "🚪", title: "Exit Slip", desc: "Quick end-of-lesson assessment" }
-          ].map((resType) => (
-            <button
-              key={resType.type}
-              onClick={() => setSettings((prev) => ({ ...prev, resourceType: resType.type }))}
-              className={`p-3 rounded-lg border-2 text-sm font-medium transition-all text-left flex items-center justify-between ${
-                settings.resourceType === resType.type
-                  ? "border-purple-500 bg-purple-50 text-purple-700"
-                  : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
-              }`}
-            >
-              <div className="flex items-center gap-2">
-                <span>{resType.icon}</span>
-                <div>
-                  <div className="font-medium">{resType.title}</div>
-                  <div className="text-xs text-gray-500">{resType.desc}</div>
-                </div>
-              </div>
-              {settings.resourceType === resType.type && (
-                <span className="text-purple-600">✓</span>
-              )}
             </button>
           ))}
         </div>
@@ -897,14 +1037,102 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
             </div>
           )}
 
+          {/* Rubric Content */}
+          {type === 'rubric' && (
+            <div className="space-y-4">
+              {/* Rubric Format Header */}
+              <div className="flex items-center gap-2 mb-4 bg-purple-50 p-4 rounded-lg border border-purple-100">
+                <span className="text-2xl">{
+                  settings.format === 'checklist' ? '✅' :
+                  settings.format === '3_point' ? '🎯' : '📊'
+                }</span>
+                <div>
+                  <h3 className="font-semibold text-purple-900">
+                    {settings.format === 'checklist' ? 'Checklist Format' :
+                     settings.format === '3_point' ? '3-Point Scale' : '4-Point Scale'}
+                  </h3>
+                  <p className="text-sm text-purple-700">
+                    {settings.format === 'checklist' ? 'Yes/No Criteria' :
+                     settings.format === '3_point' ? 'Exceeds, Meets, Below Expectations' :
+                     'Excellent, Good, Satisfactory, Needs Improvement'}
+                  </p>
+                </div>
+              </div>
+
+              {(generatedResource as any).criteria?.map((criterion: any, index: number) => (
+                <div key={index} className="mb-6 bg-white rounded-lg overflow-hidden border border-gray-200">
+                  {/* Criterion header */}
+                  <div className="bg-gray-50 p-4 border-b border-gray-200">
+                    <h3 className="font-semibold text-gray-900">{criterion.name}</h3>
+                    <p className="text-sm text-gray-600 mt-1">{criterion.description}</p>
+                  </div>
+                  {/* Performance levels stacked vertically */}
+                  <div className="divide-y divide-gray-100">
+                    {settings.format === 'checklist' ? (
+                      // Checklist Format
+                      <div className="p-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-lg border-2 border-gray-300"></div>
+                          <div className="text-gray-700">Yes/Complete</div>
+                        </div>
+                        <div className="mt-2 text-gray-600 pl-11">
+                          {criterion.levels[0]?.description || 'Criteria met successfully'}
+                        </div>
+                        <div className="flex items-center gap-3 mt-4">
+                          <div className="w-8 h-8 rounded-lg border-2 border-gray-300"></div>
+                          <div className="text-gray-700">No/Incomplete</div>
+                        </div>
+                        <div className="mt-2 text-gray-600 pl-11">
+                          {criterion.levels[1]?.description || 'Criteria not met'}
+                        </div>
+                      </div>
+                    ) : settings.format === '3_point' ? (
+                      // 3-Point Scale
+                      ['Exceeds', 'Meets', 'Below'].map((label, idx) => (
+                        <div key={idx} className="p-4">
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center">
+                              <span className="font-semibold text-purple-700">{3 - idx}</span>
+                            </div>
+                            <div className="font-medium text-gray-700">{label} Expectations</div>
+                          </div>
+                          <div className="text-gray-600 pl-10">
+                            {criterion.levels.find((l: any) => l.score === (3 - idx).toString())?.description || 
+                             <span className="text-gray-400 italic">No description available</span>}
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      // 4-Point Scale
+                      ['Excellent', 'Good', 'Satisfactory', 'Needs Improvement'].map((label, idx) => (
+                        <div key={idx} className="p-4">
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center">
+                              <span className="font-semibold text-purple-700">{4 - idx}</span>
+                            </div>
+                            <div className="font-medium text-gray-700">{label}</div>
+                          </div>
+                          <div className="text-gray-600 pl-10">
+                            {criterion.levels.find((l: any) => l.score === (4 - idx).toString())?.description || 
+                             <span className="text-gray-400 italic">No description available</span>}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
           {/* Worksheet Content */}
           {type === 'worksheet' && (
             <>
               {/* Display passage for reading formats */}
-              {(generatedResource as WorksheetResource).passage && (
+              {(generatedResource as WorksheetResource).passage?.text && (
                 <div className="space-y-2 border-l-4 border-purple-500 pl-4 my-6 bg-gray-50 p-4 rounded-r-lg">
                   <h3 className="font-semibold">Text:</h3>
-                  <p className="whitespace-pre-wrap text-gray-800">{(generatedResource as WorksheetResource).passage.text}</p>
+                  <p className="whitespace-pre-wrap text-gray-800">{(generatedResource as WorksheetResource).passage?.text}</p>
                 </div>
               )}
 
@@ -913,12 +1141,12 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
                 <div className="space-y-2 border-l-4 border-purple-500 pl-4 my-6 bg-gray-50 p-4 rounded-r-lg">
                   <h3 className="font-semibold">Content:</h3>
                   <div className="space-y-4">
-                    <p className="whitespace-pre-wrap text-gray-800">{(generatedResource as WorksheetResource).scienceContent?.explanation}</p>
-                    {(generatedResource as WorksheetResource).scienceContent?.concepts?.length > 0 && (
+                    <p className="whitespace-pre-wrap text-gray-800">{(generatedResource as WorksheetResource).scienceContent?.explanation ?? ''}</p>
+                    {((generatedResource as WorksheetResource).scienceContent?.concepts ?? []).length > 0 && (
                       <div className="mt-4">
                         <h4 className="font-medium text-gray-700">Key Concepts:</h4>
                         <ul className="list-disc pl-5 space-y-1 text-gray-600">
-                          {(generatedResource as WorksheetResource).scienceContent?.concepts.map((concept, idx) => (
+                          {(generatedResource as WorksheetResource).scienceContent?.concepts?.map((concept, idx) => (
                             <li key={idx}>{concept}</li>
                           ))}
                         </ul>
@@ -929,35 +1157,96 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
               )}
 
               {/* Worksheet Problems section */}
-              {(generatedResource as WorksheetResource).problems && (
-                <div className="space-y-6">
-                  {(generatedResource as WorksheetResource).problems?.map((problem, index) => (
-                    <div key={index} className="space-y-3">
-                      <div className="font-medium">{(index + 1)}. {problem.question.replace(/^\d+\.\s*/, '')}</div>
-                      {problem.complexity && (
-                        <div className="text-sm text-gray-500 italic">Complexity: {problem.complexity}</div>
-                      )}
-                      <div className="pl-4">
-                        <div className="border-b-2 border-gray-300 h-8 w-full" />
-                        {problem.hints && problem.hints.length > 0 && (
-                          <div className="mt-2 space-y-1">
-                            {problem.hints.map((hint, hintIndex) => (
-                              <div key={hintIndex} className="text-sm text-gray-600">
-                                • {hint}
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
+              {(generatedResource as WorksheetResource)?.problems && (generatedResource as WorksheetResource).problems.length > 0 && (
+                <>
+                  {/* Format Header */}
+                  <div className="flex items-center gap-2 mb-6 bg-blue-50 p-4 rounded-lg border border-blue-100">
+                    <span className="text-2xl">
+                      {settings.format === 'guided' ? '📖' : '📝'}
+                    </span>
+                    <div>
+                      <h3 className="font-semibold text-blue-900">
+                        {settings.format === 'guided' ? 'Guided Practice' : 'Standard Practice'}
+                      </h3>
+                      <p className="text-sm text-blue-700">
+                        {settings.format === 'guided' ? 'Step-by-step problem solving with hints' : 
+                         'Traditional worksheet with problems and answer spaces'}
+                      </p>
                     </div>
-                  ))}
-                </div>
+                  </div>
+
+                  <div className="space-y-8">
+                    {(generatedResource as WorksheetResource).problems.map((problem, index) => (
+                      <div key={index} className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+                        {/* Problem Header */}
+                        <div className="bg-gray-50 p-4 border-b border-gray-200">
+                          <div className="flex items-center justify-between">
+                            <span className="font-semibold text-gray-900">Problem {index + 1}</span>
+                            {(problem as any).complexity && (
+                              <span className="text-sm text-gray-600">
+                                Complexity: {(problem as any).complexity}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Problem Content */}
+                        <div className="p-4">
+                          {settings.format === 'guided' ? (
+                            // Guided Practice Format
+                            <div className="space-y-4">
+                              <div className="font-medium text-gray-800">{problem.question}</div>
+                              {problem.steps && problem.steps.length > 0 && (
+                                <div className="space-y-3 mt-4">
+                                  {problem.steps.map((step: string, stepIdx: number) => (
+                                    <div key={stepIdx} className="flex gap-3">
+                                      <div className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-100 flex items-center justify-center">
+                                        <span className="text-sm text-blue-700">{stepIdx + 1}</span>
+                                      </div>
+                                      <div>
+                                        <p className="text-gray-700">{step}</p>
+                                        <div className="mt-2 border-b-2 border-gray-200 h-8"></div>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                              {problem.hints && problem.hints.length > 0 && (
+                                <div className="mt-4 bg-yellow-50 p-3 rounded-lg">
+                                  <div className="font-medium text-yellow-800 mb-2">💡 Helpful Hints:</div>
+                                  <ul className="list-disc list-inside space-y-1">
+                                    {problem.hints.map((hint: string, hintIdx: number) => (
+                                      <li key={hintIdx} className="text-sm text-yellow-700">{hint}</li>
+                                    ))}
+                                  </ul>
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            // Standard Format
+                            <div className="space-y-4">
+                              <div className="font-medium text-gray-800">{problem.question}</div>
+                              <div className="mt-4 border-t-2 border-gray-200 pt-4">
+                                <div className="text-sm text-gray-500 mb-2">Show your work:</div>
+                                <div className="border-b-2 border-gray-300 h-24"></div>
+                              </div>
+                              <div className="flex items-center gap-2 mt-4">
+                                <span className="text-sm font-medium text-gray-700">Answer:</span>
+                                <div className="flex-1">
+                                  <div className="border-b-2 border-gray-300 h-8"></div>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </>
               )}
 
               {/* Comprehension Problems section */}
-              {(generatedResource as WorksheetResource).comprehensionProblems && (
-                <div className="space-y-6 mt-6">
-                  {(generatedResource as WorksheetResource).comprehensionProblems.map((problem, index) => (
+              {(generatedResource as WorksheetResource).comprehensionProblems?.map((problem, index) => (
                     <div key={index} className="space-y-3">
                       <div className="font-medium">{(index + 1)}. {problem.question.replace(/^\d+\.\s*/, '')}</div>
                       {problem.evidence_prompt && (
@@ -970,62 +1259,26 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
                       </div>
                     </div>
                   ))}
-                </div>
-              )}
 
               {/* Literary Analysis Problems section */}
-              {(generatedResource as WorksheetResource).literaryAnalysisProblems && (
-                <div className="space-y-6 mt-6">
-                  {(generatedResource as WorksheetResource).literaryAnalysisProblems.map((problem, index) => (
+              {(generatedResource as WorksheetResource).literaryAnalysisProblems?.map((problem, index) => (
                     <div key={index} className="space-y-3">
                       <div className="font-medium">{(index + 1)}. Analyze: {problem.element}</div>
                       <div>{problem.question}</div>
-                      {problem.guiding_questions && (
-                        <div className="pl-4 space-y-1 mb-2">
-                          {problem.guiding_questions.map((q, qIndex) => (
-                            <div key={qIndex} className="text-sm text-gray-600">
-                              • {q}
-                            </div>
-                          ))}
-                        </div>
-                      )}
                       <div className="pl-4">
                         <div className="border-b-2 border-gray-300 h-16 w-full" />
                       </div>
                     </div>
                   ))}
-                </div>
-              )}
 
               {/* Vocabulary Problems section */}
-              {(generatedResource as WorksheetResource).vocabularyProblems && (
-                <div className="space-y-6 mt-6">
-                  {(generatedResource as WorksheetResource).vocabularyProblems.map((problem, index) => (
+              {(generatedResource as WorksheetResource).vocabularyProblems?.map((problem, index) => (
                     <div key={index} className="space-y-3 border p-4 rounded-lg">
                       <div className="font-semibold text-lg">{problem.word}</div>
                       <div className="text-gray-600">Context: "{problem.context}"</div>
                       <div>Definition: {problem.definition}</div>
-                      <div className="space-y-3">
-                        {problem.questions.map((q, qIndex) => (
-                          <div key={qIndex}>
-                            <div className="font-medium">{(qIndex + 1)}. {q.question.replace(/^\d+\.\s*/, '')}</div>
-                            <div className="pl-4 mt-2">
-                              <div className="border-b-2 border-gray-300 h-8 w-full" />
-                            </div>
                           </div>
                         ))}
-                      </div>
-                      <div className="mt-3">
-                        <div className="font-medium">Application:</div>
-                        <div className="text-sm text-gray-600">{problem.application}</div>
-                        <div className="pl-4 mt-2">
-                          <div className="border-b-2 border-gray-300 h-12 w-full" />
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
             </>
           )}
 

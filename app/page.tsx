@@ -20,6 +20,7 @@ import {
   ChevronRight,
   Pause,
   Play,
+  ChevronLeft,
 } from "lucide-react"
 import AIAssistant from "@/components/ai-assistant"
 import SubstituteBookingSystem from "@/components/substitute-booking-system"
@@ -181,14 +182,20 @@ export default function VoiceVentureAI() {
     "Create backup plans for high school history",
   ]
 
-  // NEW: Rotate examples every 5 seconds
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setCurrentExampleIndex((prev) => (prev + 1) % examplePrompts.length)
-    }, 5000)
+  // Remove auto-rotation and add manual navigation
+  const handlePrevExamples = () => {
+    setCurrentExampleIndex((prev) => {
+      const newIndex = prev - 4;
+      return newIndex < 0 ? Math.max(0, examplePrompts.length - 4) : newIndex;
+    });
+  };
 
-    return () => clearInterval(interval)
-  }, [])
+  const handleNextExamples = () => {
+    setCurrentExampleIndex((prev) => {
+      const newIndex = prev + 4;
+      return newIndex >= examplePrompts.length ? 0 : newIndex;
+    });
+  };
 
   // Initialize the timer property
   if (typeof window !== "undefined") {
@@ -1939,9 +1946,25 @@ ${solution}`)
                   <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
                     <div className="flex items-center justify-between mb-4">
                       <h2 className="text-gray-800 text-lg font-medium">Try These Examples</h2>
-                      <div className="flex items-center gap-2 text-xs text-gray-500">
-                        <div className="w-2 h-2 bg-purple-400 rounded-full animate-pulse"></div>
-                        <span>Auto-rotating</span>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handlePrevExamples}
+                          className="h-8 w-8 p-0 flex items-center justify-center"
+                        >
+                          <ChevronLeft className="h-4 w-4" />
+                          <span className="sr-only">Previous examples</span>
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleNextExamples}
+                          className="h-8 w-8 p-0 flex items-center justify-center"
+                        >
+                          <ChevronRight className="h-4 w-4" />
+                          <span className="sr-only">Next examples</span>
+                        </Button>
                       </div>
                     </div>
                     <div className="space-y-3">

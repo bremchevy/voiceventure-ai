@@ -176,9 +176,24 @@ export function WorksheetGenerator({ onBack, onComplete, request }: BaseGenerato
         { id: "activity", icon: "🎯", name: "Activity", desc: "Hands-on learning experience" }
       ],
       rubric: [
-        { id: "4_point", icon: "📊", name: "4-Point Scale", desc: "Detailed criteria with four performance levels" },
-        { id: "3_point", icon: "🎯", name: "3-Point Scale", desc: "Simple criteria with three performance levels" },
-        { id: "checklist", icon: "✅", name: "Checklist", desc: "Binary yes/no criteria evaluation" }
+        { 
+          id: "4_point", 
+          icon: "📊", 
+          name: "4-Point Scale", 
+          desc: "Excellent, Good, Satisfactory, Needs Improvement" 
+        },
+        { 
+          id: "3_point", 
+          icon: "🎯", 
+          name: "3-Point Scale", 
+          desc: "Exceeds, Meets, Below Expectations" 
+        },
+        { 
+          id: "checklist", 
+          icon: "✅", 
+          name: "Checklist", 
+          desc: "Simple yes/no criteria" 
+        }
       ]
     },
     Reading: {
@@ -212,9 +227,24 @@ export function WorksheetGenerator({ onBack, onComplete, request }: BaseGenerato
         { id: "activity", icon: "🎯", name: "Activity", desc: "Hands-on learning experience" }
       ],
       rubric: [
-        { id: "4_point", icon: "📊", name: "4-Point Scale", desc: "Detailed criteria with four performance levels" },
-        { id: "3_point", icon: "🎯", name: "3-Point Scale", desc: "Simple criteria with three performance levels" },
-        { id: "checklist", icon: "✅", name: "Checklist", desc: "Binary yes/no criteria evaluation" }
+        { 
+          id: "4_point", 
+          icon: "📊", 
+          name: "4-Point Scale", 
+          desc: "Excellent, Good, Satisfactory, Needs Improvement" 
+        },
+        { 
+          id: "3_point", 
+          icon: "🎯", 
+          name: "3-Point Scale", 
+          desc: "Exceeds, Meets, Below Expectations" 
+        },
+        { 
+          id: "checklist", 
+          icon: "✅", 
+          name: "Checklist", 
+          desc: "Simple yes/no criteria" 
+        }
       ]
     },
     Science: {
@@ -248,15 +278,72 @@ export function WorksheetGenerator({ onBack, onComplete, request }: BaseGenerato
         { id: "activity", icon: "🎯", name: "Activity", desc: "Hands-on learning experience" }
       ],
       rubric: [
-        { id: "4_point", icon: "📊", name: "4-Point Scale", desc: "Detailed criteria with four performance levels" },
-        { id: "3_point", icon: "🎯", name: "3-Point Scale", desc: "Simple criteria with three performance levels" },
-        { id: "checklist", icon: "✅", name: "Checklist", desc: "Binary yes/no criteria evaluation" }
+        { 
+          id: "4_point", 
+          icon: "📊", 
+          name: "4-Point Scale", 
+          desc: "Excellent, Good, Satisfactory, Needs Improvement" 
+        },
+        { 
+          id: "3_point", 
+          icon: "🎯", 
+          name: "3-Point Scale", 
+          desc: "Exceeds, Meets, Below Expectations" 
+        },
+        { 
+          id: "checklist", 
+          icon: "✅", 
+          name: "Checklist", 
+          desc: "Simple yes/no criteria" 
+        }
       ]
     }
   };
 
   const renderSpecificSettings = () => (
     <div className="space-y-6">
+      {/* Resource Type Selection */}
+      <div>
+        <label className="block text-sm font-medium text-gray-700 mb-3">Resource Type</label>
+        <div className="grid grid-cols-1 gap-3">
+          {[
+            { type: "worksheet" as const, icon: "📝", title: "Worksheet", desc: "Traditional practice with problems and answers" },
+            { type: "quiz" as const, icon: "🧠", title: "Quiz", desc: "Assessment with various question types" },
+            { type: "rubric" as const, icon: "📋", title: "Rubric", desc: "Evaluation criteria and scoring guide" },
+            { type: "lesson_plan" as const, icon: "📚", title: "Lesson Plan", desc: "Structured teaching guide with objectives" },
+            { type: "exit_slip" as const, icon: "🚪", title: "Exit Slip", desc: "Quick end-of-lesson assessment" }
+          ].map((resType) => (
+            <button
+              key={resType.type}
+              onClick={() => {
+                setSettings((prev) => ({ 
+                  ...prev, 
+                  resourceType: resType.type,
+                  // Reset format when changing resource type
+                  format: resType.type === 'rubric' ? '4_point' : 'standard'
+                }));
+              }}
+              className={`p-3 rounded-lg border-2 text-sm font-medium transition-all text-left flex items-center justify-between ${
+                settings.resourceType === resType.type
+                  ? "border-purple-500 bg-purple-50 text-purple-700"
+                  : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <span>{resType.icon}</span>
+                <div>
+                  <div className="font-medium">{resType.title}</div>
+                  <div className="text-xs text-gray-500">{resType.desc}</div>
+                </div>
+              </div>
+              {settings.resourceType === resType.type && (
+                <span className="text-purple-600">✓</span>
+              )}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Resource Format Selection */}
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-3">Format</label>
@@ -311,15 +398,15 @@ export function WorksheetGenerator({ onBack, onComplete, request }: BaseGenerato
 
   return (
     <ResourceGenerator<WorksheetSettings, WorksheetResource>
-      type="worksheet"
+      type={settings.resourceType}
       settings={settings}
       setSettings={setSettings}
       onBack={onBack}
       onComplete={onComplete}
       request={request}
       renderSpecificSettings={renderSpecificSettings}
-      icon="📝"
-      title="Worksheet Generator"
+      icon={resourceFormats[settings.subject]?.[settings.resourceType]?.[0].icon || "📝"}
+      title={`${settings.resourceType.charAt(0).toUpperCase()}${settings.resourceType.slice(1)} Generator`}
     />
   );
 } 
