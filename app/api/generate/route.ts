@@ -237,7 +237,8 @@ export async function POST(req: Request) {
       questionCount,
       customInstructions,
       selectedQuestionTypes = ['multiple_choice'],
-      format
+      format,
+      lessonDuration
     } = await req.json();
 
     // Validate required fields
@@ -452,7 +453,45 @@ export async function POST(req: Request) {
         systemPrompt += 'Create a detailed rubric with clear criteria and performance levels. ';
         break;
       case 'lesson plan':
-        systemPrompt += 'Design a comprehensive lesson plan with objectives, activities, and assessment strategies. ';
+        systemPrompt += `Design a comprehensive lesson plan with objectives, activities, and assessment strategies. Return the response in this exact JSON format:
+{
+  "title": "${topicArea} Lesson Plan",
+  "grade_level": "${gradeLevel}",
+  "subject": "${subject}",
+  "duration": "${lessonDuration || '45 minutes'}",
+  "objectives": ["Learning objective 1", "Learning objective 2"],
+  "materials": ["Required material 1", "Required material 2"],
+  "activities": {
+    "opening": {
+      "duration": "10 minutes",
+      "description": "Opening activity description",
+      "teacher_actions": ["Action 1", "Action 2"],
+      "student_actions": ["Action 1", "Action 2"]
+    },
+    "main": {
+      "duration": "25 minutes",
+      "description": "Main activity description",
+      "teacher_actions": ["Action 1", "Action 2"],
+      "student_actions": ["Action 1", "Action 2"]
+    },
+    "closing": {
+      "duration": "10 minutes",
+      "description": "Closing activity description",
+      "teacher_actions": ["Action 1", "Action 2"],
+      "student_actions": ["Action 1", "Action 2"]
+    }
+  },
+  "assessment": {
+    "formative": ["Assessment method 1", "Assessment method 2"],
+    "summative": ["Assessment method 1", "Assessment method 2"]
+  },
+  "differentiation": {
+    "struggling": ["Support strategy 1", "Support strategy 2"],
+    "advanced": ["Challenge strategy 1", "Challenge strategy 2"]
+  },
+  "extensions": ["Extension activity 1", "Extension activity 2"],
+  "reflection_points": ["Reflection point 1", "Reflection point 2"]
+}`;
         break;
       case 'exit slip':
         systemPrompt += `Create exactly ${questionCount} exit slip questions to assess student understanding. `;

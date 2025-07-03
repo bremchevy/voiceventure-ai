@@ -4,7 +4,7 @@ import { ChevronLeft, Download, Edit, Store, CheckCircle, Sparkles, ArrowLeft, C
 import { generatePDF } from "@/lib/utils/pdf";
 import { toast } from "@/components/ui/use-toast";
 import { BaseGeneratorProps, BaseGeneratorSettings, themeEmojis, suggestedTopics, isFormat1, isFormat2, isFormat3 } from '@/lib/types/generator-types';
-import { Resource, WorksheetResource, QuizResource } from '@/lib/types/resource';
+import { Resource, WorksheetResource, QuizResource, LessonPlanResource } from '@/lib/types/resource';
 import { generateWorksheetPDF } from '@/lib/utils/pdf-generator';
 
 interface ResourceGeneratorProps<T extends BaseGeneratorSettings, R extends Resource> extends BaseGeneratorProps {
@@ -328,6 +328,59 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
       return quizResource as R;
     }
 
+    // Handle lesson plan response
+    if (type === 'lesson plan' || (response.objectives && response.activities && response.assessment)) {
+      console.log('Raw lesson plan response:', response);
+      
+      // Ensure we have a valid response structure
+      if (!response || typeof response !== 'object') {
+        throw new Error('Invalid lesson plan response format');
+      }
+
+      const lessonPlan: LessonPlanResource = {
+        resourceType: 'lesson_plan',
+        title: response.title || `${settings.topicArea} Lesson Plan`,
+        grade_level: response.grade_level || settings.grade,
+        subject: response.subject || settings.subject,
+        topic: settings.topicArea,
+        format: (settings as any).lessonType || 'full-lesson',
+        duration: response.duration || (settings as any).lessonDuration || '45 minutes',
+        objectives: Array.isArray(response.objectives) ? response.objectives : [],
+        materials: Array.isArray(response.materials) ? response.materials : [],
+        activities: {
+          opening: {
+            duration: response.activities?.opening?.duration || '10 minutes',
+            description: response.activities?.opening?.description || '',
+            teacher_actions: (response.activities?.opening?.teacher_actions || []).map((action: string) => action),
+            student_actions: (response.activities?.opening?.student_actions || []).map((action: string) => action)
+          },
+          main: {
+            duration: response.activities?.main?.duration || '25 minutes',
+            description: response.activities?.main?.description || '',
+            teacher_actions: (response.activities?.main?.teacher_actions || []).map((action: string) => action),
+            student_actions: (response.activities?.main?.student_actions || []).map((action: string) => action)
+          },
+          closing: {
+            duration: response.activities?.closing?.duration || '10 minutes',
+            description: response.activities?.closing?.description || '',
+            teacher_actions: (response.activities?.closing?.teacher_actions || []).map((action: string) => action),
+            student_actions: (response.activities?.closing?.student_actions || []).map((action: string) => action)
+          }
+        },
+        assessment: {
+          formative: Array.isArray(response.assessment?.formative) ? response.assessment.formative : [],
+          summative: Array.isArray(response.assessment?.summative) ? response.assessment.summative : []
+        },
+        differentiation: {
+          struggling: Array.isArray(response.differentiation?.struggling) ? response.differentiation.struggling : [],
+          advanced: Array.isArray(response.differentiation?.advanced) ? response.differentiation.advanced : []
+        },
+        extensions: Array.isArray(response.extensions) ? response.extensions : [],
+        reflection_points: Array.isArray(response.reflection_points) ? response.reflection_points : []
+      };
+      return lessonPlan as R;
+    }
+
     // Handle worksheet response
     // Get format-specific instructions
     let instructions = 'Show your work and write your answers in the spaces provided.';
@@ -579,6 +632,17 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
           if (!worksheetResponse.title || !worksheetResponse.subject || !worksheetResponse.grade_level) {
             console.error('Missing required fields in transformed worksheet response:', transformedResponse);
             throw new Error('Generated worksheet missing required fields after transformation');
+          }
+        } else if (type === 'lesson_plan') {
+          const lessonPlanResponse = transformedResponse as LessonPlanResource;
+          if (!lessonPlanResponse.objectives || !lessonPlanResponse.materials || !lessonPlanResponse.activities) {
+            console.error('Missing required fields in transformed lesson plan response:', transformedResponse);
+            throw new Error('Generated lesson plan missing required fields after transformation');
+          }
+          // Check if activities has opening and closing sections
+          if (!lessonPlanResponse.activities.opening || !lessonPlanResponse.activities.closing) {
+            console.error('Invalid activities structure in lesson plan response:', transformedResponse);
+            throw new Error('Generated lesson plan has invalid activities structure');
           }
         }
         
@@ -967,7 +1031,7 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
         </div>
 
         {/* Resource Preview */}
-        <div className="bg-white p-8 rounded-lg shadow-lg max-w-4xl mx-auto" ref={resourceRef}>
+        <div className="bg-white p-8 rounded-lg shadow-lg max-w-3xl mx-auto" ref={resourceRef}>
           {/* Title */}
           <div className="space-y-2 mb-6">
             <h2 className="text-2xl font-bold">{generatedResource.title}</h2>
@@ -1280,6 +1344,193 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
                           </div>
                         ))}
             </>
+          )}
+
+          {/* Lesson Plan Content */}
+          {type === 'lesson_plan' && (
+            <div className="space-y-6 max-w-3xl mx-auto">
+              {/* Duration and Objectives */}
+              <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
+                <div className="flex items-center gap-2 mb-3">
+                  <span className="text-2xl">⏱️</span>
+                  <div className="font-semibold text-blue-900">{(generatedResource as LessonPlanResource).duration}</div>
+                </div>
+                <div className="space-y-2">
+                  <h3 className="font-semibold text-blue-900">Learning Objectives:</h3>
+                  <ul className="list-disc list-inside space-y-1">
+                    {(generatedResource as LessonPlanResource).objectives.map((objective, idx) => (
+                      <li key={idx} className="text-blue-700">{objective}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+
+              {/* Materials */}
+              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                <h3 className="font-semibold mb-2">Materials Needed:</h3>
+                <ul className="list-disc list-inside space-y-1">
+                  {(generatedResource as LessonPlanResource).materials.map((material, idx) => (
+                    <li key={idx} className="text-gray-700">{material}</li>
+                  ))}
+                </ul>
+              </div>
+
+              {/* Activities */}
+              <div className="space-y-4">
+                {/* Opening */}
+                <div className="border rounded-lg overflow-hidden">
+                  <div className="bg-green-50 p-4 border-b border-green-100">
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-semibold text-green-900">Opening Activity</h3>
+                      <span className="text-sm text-green-700">{(generatedResource as LessonPlanResource).activities.opening.duration}</span>
+                    </div>
+                  </div>
+                  <div className="p-4 space-y-4">
+                    <p className="text-gray-800">{(generatedResource as LessonPlanResource).activities.opening.description}</p>
+                    <div className="space-y-4">
+                      <div>
+                        <h4 className="font-medium text-gray-700 mb-2">Teacher Actions:</h4>
+                        <ul className="list-disc list-inside space-y-1">
+                          {(generatedResource as LessonPlanResource).activities.opening.teacher_actions.map((action, idx) => (
+                            <li key={idx} className="text-gray-600">{action}</li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div>
+                        <h4 className="font-medium text-gray-700 mb-2">Student Actions:</h4>
+                        <ul className="list-disc list-inside space-y-1">
+                          {(generatedResource as LessonPlanResource).activities.opening.student_actions.map((action, idx) => (
+                            <li key={idx} className="text-gray-600">{action}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Main Activity */}
+                <div className="border rounded-lg overflow-hidden">
+                  <div className="bg-purple-50 p-4 border-b border-purple-100">
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-semibold text-purple-900">Main Activity</h3>
+                      <span className="text-sm text-purple-700">{(generatedResource as LessonPlanResource).activities.main.duration}</span>
+                    </div>
+                  </div>
+                  <div className="p-4 space-y-4">
+                    <p className="text-gray-800">{(generatedResource as LessonPlanResource).activities.main.description}</p>
+                    <div className="space-y-4">
+                      <div>
+                        <h4 className="font-medium text-gray-700 mb-2">Teacher Actions:</h4>
+                        <ul className="list-disc list-inside space-y-1">
+                          {(generatedResource as LessonPlanResource).activities.main.teacher_actions.map((action, idx) => (
+                            <li key={idx} className="text-gray-600">{action}</li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div>
+                        <h4 className="font-medium text-gray-700 mb-2">Student Actions:</h4>
+                        <ul className="list-disc list-inside space-y-1">
+                          {(generatedResource as LessonPlanResource).activities.main.student_actions.map((action, idx) => (
+                            <li key={idx} className="text-gray-600">{action}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Closing Activity */}
+                <div className="border rounded-lg overflow-hidden">
+                  <div className="bg-orange-50 p-4 border-b border-orange-100">
+                    <div className="flex items-center justify-between">
+                      <h3 className="font-semibold text-orange-900">Closing Activity</h3>
+                      <span className="text-sm text-orange-700">{(generatedResource as LessonPlanResource).activities.closing.duration}</span>
+                    </div>
+                  </div>
+                  <div className="p-4 space-y-4">
+                    <p className="text-gray-800">{(generatedResource as LessonPlanResource).activities.closing.description}</p>
+                    <div className="space-y-4">
+                      <div>
+                        <h4 className="font-medium text-gray-700 mb-2">Teacher Actions:</h4>
+                        <ul className="list-disc list-inside space-y-1">
+                          {(generatedResource as LessonPlanResource).activities.closing.teacher_actions.map((action, idx) => (
+                            <li key={idx} className="text-gray-600">{action}</li>
+                          ))}
+                        </ul>
+                      </div>
+                      <div>
+                        <h4 className="font-medium text-gray-700 mb-2">Student Actions:</h4>
+                        <ul className="list-disc list-inside space-y-1">
+                          {(generatedResource as LessonPlanResource).activities.closing.student_actions.map((action, idx) => (
+                            <li key={idx} className="text-gray-600">{action}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Assessment */}
+              <div className="space-y-4">
+                <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                  <h3 className="font-semibold mb-2">Formative Assessment:</h3>
+                  <ul className="list-disc list-inside space-y-1">
+                    {(generatedResource as LessonPlanResource).assessment.formative.map((item, idx) => (
+                      <li key={idx} className="text-gray-700">{item}</li>
+                    ))}
+                  </ul>
+                </div>
+                <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                  <h3 className="font-semibold mb-2">Summative Assessment:</h3>
+                  <ul className="list-disc list-inside space-y-1">
+                    {(generatedResource as LessonPlanResource).assessment.summative.map((item, idx) => (
+                      <li key={idx} className="text-gray-700">{item}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+
+              {/* Differentiation */}
+              <div className="space-y-4">
+                <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                  <h3 className="font-semibold mb-2">Support for Struggling Students:</h3>
+                  <ul className="list-disc list-inside space-y-1">
+                    {(generatedResource as LessonPlanResource).differentiation.struggling.map((item, idx) => (
+                      <li key={idx} className="text-gray-700">{item}</li>
+                    ))}
+                  </ul>
+                </div>
+                <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                  <h3 className="font-semibold mb-2">Extensions for Advanced Students:</h3>
+                  <ul className="list-disc list-inside space-y-1">
+                    {(generatedResource as LessonPlanResource).differentiation.advanced.map((item, idx) => (
+                      <li key={idx} className="text-gray-700">{item}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+
+              {/* Extensions and Reflection */}
+              <div className="space-y-4">
+                <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                  <h3 className="font-semibold mb-2">Extension Activities:</h3>
+                  <ul className="list-disc list-inside space-y-1">
+                    {(generatedResource as LessonPlanResource).extensions.map((item, idx) => (
+                      <li key={idx} className="text-gray-700">{item}</li>
+                    ))}
+                  </ul>
+                </div>
+                <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
+                  <h3 className="font-semibold mb-2">Reflection Points:</h3>
+                  <ul className="list-disc list-inside space-y-1">
+                    {(generatedResource as LessonPlanResource).reflection_points.map((item, idx) => (
+                      <li key={idx} className="text-gray-700">{item}</li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            </div>
           )}
 
           {/* Action Buttons */}

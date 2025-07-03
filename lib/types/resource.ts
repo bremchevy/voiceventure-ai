@@ -165,19 +165,39 @@ export interface ExitSlipResource extends BaseResource {
 // Lesson plan resource type
 export interface LessonPlanResource extends BaseResource {
   resourceType: 'lesson_plan';
+  duration: string;
   objectives: string[];
   materials: string[];
-  procedure: {
-    phase: string;
-    duration: string;
-    activities: string[];
-  }[];
+  activities: {
+    opening: {
+      duration: string;
+      description: string;
+      teacher_actions: string[];
+      student_actions: string[];
+    };
+    main: {
+      duration: string;
+      description: string;
+      teacher_actions: string[];
+      student_actions: string[];
+    };
+    closing: {
+      duration: string;
+      description: string;
+      teacher_actions: string[];
+      student_actions: string[];
+    };
+  };
   assessment: {
-    type: string;
-    description: string;
-  }[];
-  extensions?: string[];
-  accommodations?: string[];
+    formative: string[];
+    summative: string[];
+  };
+  differentiation: {
+    struggling: string[];
+    advanced: string[];
+  };
+  extensions: string[];
+  reflection_points: string[];
 }
 
 // Rubric resource type
