@@ -279,7 +279,7 @@ export class FormPopulator {
       quiz: ['multiple_choice', 'true_false', 'short_answer'],
       rubric: ['4_point', '3_point', 'checklist'],
       lesson_plan: ['full_lesson', 'mini_lesson', 'activity'],
-      exit_slip: ['multiple_choice', 'open_response', 'rating_scale']
+      exit_slip: ['reflection_prompt', 'vocabulary_check', 'skill_assessment']
     };
 
     return formatMap[resourceType] || null;

@@ -108,9 +108,9 @@ export function VoiceResourceForm({ onSubmit, className }: VoiceResourceFormProp
         { value: 'activity', label: 'Activity' }
       ],
       exit_slip: [
-        { value: 'multiple_choice', label: 'Multiple Choice' },
-        { value: 'open_response', label: 'Open Response' },
-        { value: 'rating_scale', label: 'Rating Scale' }
+        { value: 'reflection_prompt', label: 'Reflection Prompt' },
+        { value: 'vocabulary_check', label: 'Vocabulary Check' },
+        { value: 'skill_assessment', label: 'Skill Assessment' }
       ]
     };
 

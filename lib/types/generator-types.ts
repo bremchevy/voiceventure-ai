@@ -3,7 +3,14 @@ import { Resource } from './resource';
 export interface BaseGeneratorProps {
   onBack?: () => void;
   onComplete?: (resource: Resource) => void;
-  request?: string;
+  request?: {
+    grade?: string;
+    subject?: string;
+    theme?: string;
+    topicArea?: string;
+    resourceType?: ResourceType;
+    format?: Format;
+  };
 }
 
 export interface BaseGeneratorSettings {
@@ -36,7 +43,7 @@ export interface RubricSettings extends BaseGeneratorSettings {
 }
 
 export interface ExitSlipSettings extends BaseGeneratorSettings {
-  exitSlipFormat: 'multiple-choice' | 'open-response' | 'rating-scale';
+  format: 'reflection_prompt' | 'vocabulary_check' | 'skill_assessment';
   questionCount: number;
 }
 
@@ -89,7 +96,10 @@ export const suggestedTopics: Record<string, Record<string, string[]>> = {
       "Study Strategy Check",
       "Understanding Assessment",
       "Progress Review",
-      "Goal Setting"
+      "Goal Setting",
+      "Bell Ringer Activity",
+      "Warm-up Exercise",
+      "Quick Review"
     ]
   },
   Math: {
@@ -129,7 +139,10 @@ export const suggestedTopics: Record<string, Record<string, string[]>> = {
       "Problem Solving Check",
       "Math Vocabulary Review",
       "Number Sense",
-      "Operations Practice"
+      "Operations Practice",
+      "Bell Ringer Warm-up",
+      "Quick Math Facts",
+      "Mental Math Practice"
     ]
   },
   Reading: {
@@ -168,7 +181,10 @@ export const suggestedTopics: Record<string, Record<string, string[]>> = {
       "Vocabulary Check",
       "Reading Strategy",
       "Main Idea Review",
-      "Character Analysis"
+      "Character Analysis",
+      "Bell Ringer Reading",
+      "Quick Comprehension",
+      "Word of the Day"
     ]
   },
   Science: {
@@ -207,7 +223,10 @@ export const suggestedTopics: Record<string, Record<string, string[]>> = {
       "Experiment Results",
       "Scientific Vocabulary",
       "Process Understanding",
-      "Data Analysis"
+      "Data Analysis",
+      "Bell Ringer Observation",
+      "Quick Hypothesis",
+      "Science Fact Review"
     ]
   }
 };
@@ -361,15 +380,17 @@ export type Format =
   | 'multiple_choice'
   | 'true_false'
   | 'short_answer'
+  // Exit slip formats
+  | 'reflection_prompt'
+  | 'vocabulary_check'
+  | 'skill_assessment'
   // Other resource formats
   | 'full_lesson'
   | 'mini_lesson'
   | 'activity'
   | '4_point'
   | '3_point'
-  | 'checklist'
-  | 'open_response'
-  | 'rating_scale';
+  | 'checklist';
 
 // Remove duplicate declarations:
 // export interface WorksheetSettings {

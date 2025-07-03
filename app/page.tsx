@@ -419,12 +419,12 @@ export default function VoiceVentureAI() {
         description: "Quizzes, tests, and assessments",
       },
 
-      // Bell Ringers & Warm-ups
+      // Exit Slips & Bell Ringers
       {
-        pattern: /\b(bell\s+ringer|warm[\s-]?up|starter|opening\s+activity|daily\s+starter|entrance\s+ticket)\b/i,
-        category: "bell_ringer",
-        icon: "🔔",
-        description: "Bell ringers and warm-up activities",
+        pattern: /\b(exit\s+slip|exit\s+ticket|bell\s*-?\s*ringer|warm[\s-]?up|starter|opening\s+activity|daily\s+starter|entrance\s+ticket)\b/i,
+        category: "exit_slip",
+        icon: "🚪",
+        description: "Exit slips and bell ringer activities",
       },
 
       // Choice Boards
@@ -457,14 +457,6 @@ export default function VoiceVentureAI() {
         category: "sub_plan",
         icon: "👩‍🏫",
         description: "Substitute teacher plans and activities",
-      },
-
-      // Exit Tickets
-      {
-        pattern: /\b(exit\s+ticket|exit\s+slip|closure\s+activity|wrap[\s-]?up)\b/i,
-        category: "exit_ticket",
-        icon: "🎫",
-        description: "Exit tickets and closure activities",
       },
     ]
 
@@ -653,7 +645,7 @@ export default function VoiceVentureAI() {
       processedCommand.resourceType === 'worksheet' ||
       processedCommand.resourceType === 'lesson_plan' ||
       processedCommand.resourceType === 'rubric' ||
-      processedCommand.resourceType === 'bell_ringer' ||
+      processedCommand.resourceType === 'exit_slip' ||
       processedCommand.resourceType === 'choice_board' ||
       processedCommand.resourceType === 'sub_plan' ||
       lowerText.includes("math problems") ||
@@ -676,14 +668,15 @@ export default function VoiceVentureAI() {
 
       // NEW: Enhanced response based on detected resource type
       const resourceType = processedCommand.resourceType || 'worksheet';
-      const responseText = `I'll create a ${resourceType} based on what you said: "${text}"`;
+      const resourceTypeDisplay = resourceType === 'exit_slip' ? 'Exit Slip / Bell Ringer' : resourceType.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+      const responseText = `I'll create a ${resourceTypeDisplay} based on what you said: "${text}"`;
 
       // Show confirmation before redirecting to appropriate generator
       setVoiceResponse({
         text: responseText,
         actions: [
           {
-            label: `Create ${resourceType.charAt(0).toUpperCase() + resourceType.slice(1)} Now`,
+            label: `Create ${resourceTypeDisplay} Now`,
             onClick: () => {
               if (resourceType === 'quiz') {
                 setQuizRequest(JSON.stringify(structuredData));
@@ -697,7 +690,7 @@ export default function VoiceVentureAI() {
           {
             label: "Add More Details",
             onClick: () => {
-              setContextHint(`Please provide more details for your ${resourceType}`)
+              setContextHint(`Please provide more details for your ${resourceTypeDisplay}`)
               startListening()
             },
           },

@@ -41,7 +41,7 @@ const transformQuizResponse = (apiResponse: any): QuizResource => {
 
   // Extract grade level from title
   const gradeLevelMatch = quizData.title.match(/(\d+)(st|nd|rd|th)\s+Grade/);
-  const gradeLevel = gradeLevelMatch ? gradeLevelMatch[0] : settings.grade;
+  const gradeLevel = settings.grade || (gradeLevelMatch ? gradeLevelMatch[0] : "");
 
   // Construct the transformed response with all required fields
   return {
@@ -68,7 +68,7 @@ const transformQuizResponse = (apiResponse: any): QuizResource => {
 
 export function QuizGenerator({ onBack, onComplete, request }: BaseGeneratorProps) {
   const [settings, setSettings] = useState<QuizSettings>(() => ({
-    grade: request?.grade || "3rd Grade",
+    grade: request?.grade || "",
     subject: request?.subject || "Math",
     theme: request?.theme || "General",
     questionCount: 10,
@@ -266,7 +266,7 @@ export function QuizGenerator({ onBack, onComplete, request }: BaseGeneratorProp
         format: request.format || (
           request.resourceType === 'quiz' ? 'multiple_choice' :
           request.resourceType === 'worksheet' ? 'standard' :
-          request.resourceType === 'exit_slip' ? 'multiple_choice' :
+          request.resourceType === 'exit_slip' ? 'reflection_prompt' :
           prev.format
         )
       }));
@@ -294,7 +294,7 @@ export function QuizGenerator({ onBack, onComplete, request }: BaseGeneratorProp
               { type: "quiz" as const, icon: "🧠", title: "Quiz", desc: "Assessment with various question types" },
               { type: "rubric" as const, icon: "📋", title: "Rubric", desc: "Evaluation criteria and scoring guide" },
               { type: "lesson_plan" as const, icon: "📚", title: "Lesson Plan", desc: "Structured teaching guide with objectives" },
-              { type: "exit_slip" as const, icon: "🚪", title: "Exit Slip", desc: "Quick end-of-lesson assessment" }
+              { type: "exit_slip" as const, icon: "🚪", title: "Exit Slip / Bell Ringer", desc: "Quick assessments for the beginning or end of class" }
             ].map((resType) => {
               const isDisabled = settings.resourceType !== resType.type;
               return (

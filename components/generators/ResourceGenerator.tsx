@@ -85,6 +85,86 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
   }, [request]);
 
   const transformResponse = (response: any): R => {
+    // Handle exit slip response
+    if (type === 'exit_slip' || response.exit_slip_questions) {
+      // Get questions from either questions array or reflection_prompts array
+      const questions = response.questions || response.reflection_prompts || [];
+      
+      // Transform questions based on format
+      const transformedQuestions = questions.map((q: any) => {
+        switch (settings.format) {
+          case 'reflection_prompt':
+            return {
+              type: 'reflection_prompt',
+              mainQuestion: q.question || 'Reflect on your learning:',
+              reflectionGuides: q.guides || [
+                'What was the most important thing you learned?',
+                'What questions do you still have?',
+                'How can you apply this learning?'
+              ],
+              sentenceStarters: q.starters || [
+                'I learned that...',
+                'I wonder about...',
+                'I can use this by...'
+              ],
+              notes: q.notes || 'Consider how this connects to previous learning.'
+            };
+
+          case 'vocabulary_check':
+            return {
+              type: 'vocabulary_check',
+              term: q.term || q.question,
+              definition: q.definition || q.answer,
+              context: q.context || '',
+              examples: q.examples || [],
+              usagePrompt: q.usagePrompt || 'Use this term in a new sentence:',
+              relationships: q.relationships || [], // Related terms or concepts
+              visualCue: q.visualCue || '' // Optional image or symbol reference
+            };
+
+          case 'skill_assessment':
+            return {
+              type: 'skill_assessment',
+              skillName: q.skillName || q.question,
+              task: q.task || '',
+              steps: q.steps || [],
+              criteria: q.criteria || [],
+              applicationContext: q.applicationContext || '',
+              difficultyLevel: q.difficultyLevel || response.difficulty_level || 'Basic'
+            };
+
+          default:
+            return q;
+        }
+      });
+
+      const instructions = response.instructions || 
+        (settings.format === 'reflection_prompt' ? 'Take a moment to reflect on today\'s learning. Use the prompts to guide your thinking and express your understanding.' :
+         settings.format === 'vocabulary_check' ? 'Review and demonstrate your understanding of key terms from today\'s lesson.' :
+         settings.format === 'skill_assessment' ? 'Show your mastery of today\'s skills by completing the following tasks.' :
+         'Complete the following exit slip to demonstrate your understanding.');
+      
+      const exitSlipResource = {
+        resourceType: 'exit_slip' as const,
+        title: response.title || `${settings.subject} Exit Slip`,
+        subject: settings.subject,
+        grade_level: settings.grade,
+        topic: settings.topicArea || response.exit_slip_topic,
+        format: settings.format || 'reflection_prompt',
+        questions: transformedQuestions,
+        instructions,
+        metadata: {
+          timeEstimate: '5-10 minutes',
+          focusArea: settings.topicArea || response.exit_slip_topic,
+          learningObjectives: response.learningObjectives || [],
+          assessmentType: 'formative'
+        }
+      };
+
+      console.log('Transformed exit slip:', exitSlipResource);
+      return exitSlipResource as unknown as R;
+    }
+
     // Handle rubric response
     if (type === 'rubric') {
       let criteria = [];
@@ -1021,7 +1101,7 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
             </Button>
             <div>
               <h1 className="text-xl font-bold text-gray-900">📄 Resource Preview</h1>
-              <p className="text-sm text-gray-600">Review your generated {type}</p>
+              <p className="text-sm text-gray-600">Review your {type === 'exit_slip' ? 'Exit Slip' : type.replace('_', ' ')}</p>
             </div>
           </div>
           <Button variant="outline" size="sm" onClick={() => setCurrentStep("settings")}>
@@ -1046,6 +1126,163 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
             <div className="space-y-2 mb-6">
               <h3 className="font-semibold">Instructions:</h3>
               <p>{generatedResource.instructions}</p>
+            </div>
+          )}
+
+          {/* Exit Slip Content */}
+          {type === 'exit_slip' && (
+            <div className="space-y-6">
+              {/* Format Header */}
+              <div className="flex items-center gap-2 mb-6 bg-blue-50 p-4 rounded-lg border border-blue-100">
+                <span className="text-2xl">
+                  {settings.format === 'reflection_prompt' ? '💭' :
+                   settings.format === 'vocabulary_check' ? '📚' :
+                   settings.format === 'skill_assessment' ? '🎯' : '✏️'}
+                </span>
+                <div>
+                  <h3 className="font-semibold text-blue-900">
+                    {settings.format === 'reflection_prompt' ? 'Reflection Exit Slip' :
+                     settings.format === 'vocabulary_check' ? 'Vocabulary Check' :
+                     settings.format === 'skill_assessment' ? 'Skill Assessment' : 'Exit Slip'}
+                  </h3>
+                  <p className="text-sm text-blue-700">{generatedResource.instructions}</p>
+                </div>
+              </div>
+
+              {/* Questions Section */}
+              <div className="space-y-6">
+                {generatedResource.questions?.map((question: any, index: number) => (
+                  <div key={index} className="p-4 bg-white rounded-lg border border-gray-200">
+                    {question.type === 'reflection_prompt' && (
+                      <div className="space-y-4">
+                        <h4 className="font-semibold text-lg flex items-center gap-2">
+                          <span>💭</span> {question.mainQuestion}
+                        </h4>
+                        {question.reflectionGuides && (
+                          <div className="space-y-2">
+                            <p className="font-medium text-sm text-gray-700">Consider these points:</p>
+                            <ul className="list-disc pl-5 space-y-1">
+                              {question.reflectionGuides.map((guide: string, i: number) => (
+                                <li key={i} className="text-gray-600">{guide}</li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        {question.sentenceStarters && (
+                          <div className="space-y-2">
+                            <p className="font-medium text-sm text-gray-700">Sentence Starters:</p>
+                            <ul className="list-none space-y-2">
+                              {question.sentenceStarters.map((starter: string, i: number) => (
+                                <li key={i} className="pl-5 border-b border-dotted border-gray-300 pb-2">
+                                  {starter} _____________________
+                                </li>
+                              ))}
+                            </ul>
+                          </div>
+                        )}
+                        {question.notes && (
+                          <div className="mt-3 text-sm text-gray-500 italic">
+                            Note: {question.notes}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    
+                    {question.type === 'vocabulary_check' && (
+                      <div className="space-y-4">
+                        <h4 className="font-semibold text-lg flex items-center gap-2">
+                          <span>📚</span> {question.term}
+                        </h4>
+                        <div className="space-y-3">
+                          <div>
+                            <p className="font-medium text-sm text-gray-700">Definition:</p>
+                            <p className="pl-4 text-gray-600">{question.definition}</p>
+                          </div>
+                          {question.context && (
+                            <div>
+                              <p className="font-medium text-sm text-gray-700">Context:</p>
+                              <p className="pl-4 text-gray-600">{question.context}</p>
+                            </div>
+                          )}
+                          {question.examples && question.examples.length > 0 && (
+                            <div>
+                              <p className="font-medium text-sm text-gray-700">Examples:</p>
+                              <ul className="list-disc pl-8">
+                                {question.examples.map((example: string, i: number) => (
+                                  <li key={i} className="text-gray-600">{example}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                          {question.usagePrompt && (
+                            <div className="mt-3">
+                              <p className="font-medium text-sm text-gray-700">{question.usagePrompt}</p>
+                              <div className="pl-4 mt-2 border-b border-dotted border-gray-300">
+                                ________________________________________________
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {question.type === 'skill_assessment' && (
+                      <div className="space-y-4">
+                        <h4 className="font-semibold text-lg flex items-center gap-2">
+                          <span>🎯</span> {question.skillName}
+                        </h4>
+                        <div className="space-y-3">
+                          <div>
+                            <p className="font-medium text-sm text-gray-700">Task:</p>
+                            <p className="pl-4 text-gray-600">{question.task}</p>
+                          </div>
+                          {question.steps && question.steps.length > 0 && (
+                            <div>
+                              <p className="font-medium text-sm text-gray-700">Steps:</p>
+                              <ol className="list-decimal pl-8">
+                                {question.steps.map((step: string, i: number) => (
+                                  <li key={i} className="text-gray-600">{step}</li>
+                                ))}
+                              </ol>
+                            </div>
+                          )}
+                          {question.criteria && question.criteria.length > 0 && (
+                            <div>
+                              <p className="font-medium text-sm text-gray-700">Success Criteria:</p>
+                              <ul className="list-none pl-4">
+                                {question.criteria.map((criterion: string, i: number) => (
+                                  <li key={i} className="text-gray-600 flex items-center gap-2">
+                                    <input type="checkbox" className="form-checkbox h-4 w-4 text-purple-600" />
+                                    {criterion}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                          {question.applicationContext && (
+                            <div className="mt-3 p-3 bg-gray-50 rounded-md">
+                              <p className="font-medium text-sm text-gray-700">Real-world Application:</p>
+                              <p className="text-gray-600">{question.applicationContext}</p>
+                            </div>
+                          )}
+                          {question.difficultyLevel && (
+                            <div className="mt-2 text-sm">
+                              <span className="font-medium text-gray-700">Difficulty: </span>
+                              <span className={`px-2 py-1 rounded ${
+                                question.difficultyLevel === 'Basic' ? 'bg-green-100 text-green-700' :
+                                question.difficultyLevel === 'Intermediate' ? 'bg-yellow-100 text-yellow-700' :
+                                'bg-red-100 text-red-700'
+                              }`}>
+                                {question.difficultyLevel}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           )}
 

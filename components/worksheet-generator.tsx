@@ -59,7 +59,6 @@ interface WorksheetSettings {
   selectedQuestionTypes?: string[]
   rubricCriteria?: string[]
   rubricStyle?: string
-  exitSlipFormat?: string
   lessonDuration?: string
   lessonObjectives?: string[]
   lessonType?: string
@@ -280,6 +279,7 @@ const resourcePatterns: Array<{
   patterns: RegExp[];
   icon: string;
   title: string;
+  desc?: string;
 }> = [
   {
     type: "quiz",
@@ -337,7 +337,8 @@ const resourcePatterns: Array<{
       /\bcreate\s+(?:a|an)\s+exit\s+slip\b/i
     ],
     icon: "🚪",
-    title: "Exit Slip Generator"
+    title: "Exit Slip / Bell Ringer Generator",
+    desc: "Quick assessments for the beginning or end of class"
   }
 ];
 

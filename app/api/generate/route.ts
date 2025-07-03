@@ -625,7 +625,85 @@ export async function POST(req: Request) {
         systemPrompt += lessonFormat;
         break;
       case 'exit slip':
-        systemPrompt += `Create exactly ${questionCount} exit slip questions to assess student understanding. `;
+        let exitSlipFormat = '';
+        switch (format) {
+          case 'reflection_prompt':
+            exitSlipFormat = `Create ${questionCount} reflection prompts following this structure. Return the response in this exact JSON format:
+            {
+              "title": "${topicArea} Exit Slip",
+              "subject": "${subject}",
+              "grade_level": "${gradeLevel}",
+              "exit_slip_topic": "${topicArea}",
+              "difficulty_level": "Basic/Intermediate/Advanced",
+              "questions": [
+                {
+                  "question": "Main reflection question",
+                  "guides": ["Reflection guide 1", "Reflection guide 2", "Reflection guide 3"],
+                  "starters": ["I learned that...", "I wonder about...", "I can use this by..."],
+                  "notes": "Optional teacher notes or context"
+                }
+              ]
+            }`;
+            break;
+          case 'vocabulary_check':
+            exitSlipFormat = `Create ${questionCount} vocabulary check items following this structure. Return the response in this exact JSON format:
+            {
+              "title": "${topicArea} Vocabulary Check",
+              "subject": "${subject}",
+              "grade_level": "${gradeLevel}",
+              "exit_slip_topic": "${topicArea}",
+              "difficulty_level": "Basic/Intermediate/Advanced",
+              "questions": [
+                {
+                  "term": "Key term to assess",
+                  "definition": "Definition of the term",
+                  "context": "Context or example sentence",
+                  "examples": ["Example 1", "Example 2"],
+                  "usagePrompt": "Prompt for using the term",
+                  "relationships": ["Related term 1", "Related term 2"],
+                  "visualCue": "Description of a visual representation"
+                }
+              ]
+            }`;
+            break;
+          case 'skill_assessment':
+            exitSlipFormat = `Create ${questionCount} skill assessment items following this structure. Return the response in this exact JSON format:
+            {
+              "title": "${topicArea} Skill Assessment",
+              "subject": "${subject}",
+              "grade_level": "${gradeLevel}",
+              "exit_slip_topic": "${topicArea}",
+              "difficulty_level": "Basic/Intermediate/Advanced",
+              "questions": [
+                {
+                  "skillName": "Name of the skill being assessed",
+                  "task": "Specific task or problem to solve",
+                  "steps": ["Step 1", "Step 2", "Step 3"],
+                  "criteria": ["Success criterion 1", "Success criterion 2"],
+                  "applicationContext": "Real-world context for the skill",
+                  "difficultyLevel": "Basic/Intermediate/Advanced"
+                }
+              ]
+            }`;
+            break;
+          default:
+            exitSlipFormat = `Create ${questionCount} exit slip questions to assess student understanding. Return the response in this exact JSON format:
+            {
+              "title": "${topicArea} Exit Slip",
+              "subject": "${subject}",
+              "grade_level": "${gradeLevel}",
+              "exit_slip_topic": "${topicArea}",
+              "difficulty_level": "Basic/Intermediate/Advanced",
+              "questions": [
+                {
+                  "question": "Assessment question",
+                  "answer": "Expected answer or response",
+                  "notes": "Teacher notes or guidance"
+                }
+              ]
+            }`;
+        }
+        systemPrompt += exitSlipFormat;
         break;
     }
 

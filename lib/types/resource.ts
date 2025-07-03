@@ -1,6 +1,6 @@
 import { Format, Subject } from './generator-types';
 
-export type ResourceType = 'worksheet' | 'quiz' | 'rubric' | 'lesson plan' | 'exit slip';
+export type ResourceType = 'worksheet' | 'quiz' | 'rubric' | 'lesson plan' | 'exit slip/bell ringer';
 
 export type QuestionType = 'multiple_choice' | 'true_false' | 'short_answer';
 
@@ -155,11 +155,39 @@ export interface QuizResource extends BaseResource {
 // Exit slip resource type
 export interface ExitSlipResource extends BaseResource {
   resourceType: 'exit_slip';
-  questions: {
-    type: string;
-    question: string;
-    purpose: string;
-  }[];
+  questions: Array<{
+    type: 'reflection_prompt' | 'vocabulary_check' | 'skill_assessment';
+    // Common fields
+    mainQuestion: string;
+    notes?: string;
+    
+    // Reflection prompt fields
+    reflectionGuides?: string[];
+    sentenceStarters?: string[];
+    
+    // Vocabulary check fields
+    term?: string;
+    definition?: string;
+    context?: string;
+    examples?: string[];
+    usagePrompt?: string;
+    relationships?: string[];
+    visualCue?: string;
+    
+    // Skill assessment fields
+    skillName?: string;
+    task?: string;
+    steps?: string[];
+    criteria?: string[];
+    applicationContext?: string;
+    difficultyLevel?: string;
+  }>;
+  metadata?: {
+    timeEstimate: string;
+    focusArea: string;
+    learningObjectives: string[];
+    assessmentType: 'formative';
+  };
 }
 
 // Lesson plan resource type

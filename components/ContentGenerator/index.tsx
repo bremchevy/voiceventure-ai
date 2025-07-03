@@ -6,9 +6,11 @@ import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
+import { Alert } from '@/components/ui/alert';
 import { generatePDF } from '@/lib/utils/pdf';
 import { useRouter } from 'next/navigation';
 import { CommandProcessor } from '@/lib/services/CommandProcessor';
+import { Subject, ResourceType } from '@/lib/types/generator-types';
 
 interface GeneratorProps {
   onGenerate: (options: any) => Promise<void>;
@@ -17,11 +19,13 @@ interface GeneratorProps {
 }
 
 export function ContentGenerator({ onGenerate, isGenerating, streamingContent }: GeneratorProps) {
-  const [subject, setSubject] = useState<'math' | 'reading' | 'science'>('math');
+  const [subject, setSubject] = useState<Subject | null>(null);
+  const [resourceType, setResourceType] = useState<ResourceType | null>(null);
   const [grade, setGrade] = useState(5);
   const [problemCount, setProblemCount] = useState(5);
   const [topic, setTopic] = useState('arithmetic');
   const [prompt, setPrompt] = useState('');
+  const [showSelectionPrompt, setShowSelectionPrompt] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const commandProcessor = new CommandProcessor();
@@ -37,13 +41,24 @@ export function ContentGenerator({ onGenerate, isGenerating, streamingContent }:
     if (e.target.value) {
       const result = commandProcessor.processCommand(e.target.value);
       
-      // Only update subject if we have a high confidence match and explicit subject mention
+      // Handle subject selection
       if (result.subject && result.confidence >= 0.9) {
-        const subjectLower = result.subject.toLowerCase() as 'math' | 'reading' | 'science';
-        // Additional validation to ensure it's one of our supported subjects
+        const subjectLower = result.subject.toLowerCase() as Subject;
         if (['math', 'reading', 'science'].includes(subjectLower)) {
           setSubject(subjectLower);
+          setShowSelectionPrompt(false);
         }
+      } else {
+        setSubject(null);
+        setShowSelectionPrompt(true);
+      }
+
+      // Handle resource type selection
+      if (result.resourceType && result.confidence >= 0.8) {
+        setResourceType(result.resourceType);
+      } else {
+        setResourceType(null);
+        setShowSelectionPrompt(true);
       }
       
       // Update grade if detected
@@ -56,17 +71,14 @@ export function ContentGenerator({ onGenerate, isGenerating, streamingContent }:
       
       // Update other options based on specifications
       if (result.specifications) {
-        // Update problem count if explicitly specified
         if (result.specifications.problemCount) {
           setProblemCount(result.specifications.problemCount);
         }
         
-        // Update difficulty if specified
         if (result.specifications.difficulty) {
           setOptions(prev => ({ ...prev, difficulty: result.specifications.difficulty }));
         }
         
-        // Update topic if specified and matches current subject
         if (result.specifications.topicArea) {
           const topicArea = result.specifications.topicArea.toLowerCase();
           if (subject === 'math' && ['algebra', 'geometry', 'arithmetic', 'word problems'].includes(topicArea)) {
@@ -78,6 +90,12 @@ export function ContentGenerator({ onGenerate, isGenerating, streamingContent }:
   };
 
   const handleGenerate = useCallback(async () => {
+    // Validate required selections
+    if (!subject || !resourceType) {
+      setShowSelectionPrompt(true);
+      return;
+    }
+
     const subjectOptions = {
       math: {
         topic: topic,
@@ -104,11 +122,12 @@ export function ContentGenerator({ onGenerate, isGenerating, streamingContent }:
 
     await onGenerate({
       subject,
+      resourceType,
       grade,
-      prompt, // Include the original prompt
+      prompt,
       ...subjectOptions[subject],
     });
-  }, [subject, grade, options, problemCount, topic, prompt, onGenerate]);
+  }, [subject, resourceType, grade, options, problemCount, topic, prompt, onGenerate]);
 
   const handleDownloadPDF = async () => {
     if (contentRef.current && streamingContent) {
@@ -136,124 +155,162 @@ export function ContentGenerator({ onGenerate, isGenerating, streamingContent }:
               className="w-full"
             />
           </div>
-          
-          <Tabs value={subject} onValueChange={(value: any) => setSubject(value)}>
-            <TabsList className="mb-4">
-              <TabsTrigger value="math">Math</TabsTrigger>
-              <TabsTrigger value="reading">Reading</TabsTrigger>
-              <TabsTrigger value="science">Science</TabsTrigger>
-            </TabsList>
 
-            <div className="space-y-6">
-              {subject === 'math' && (
-                <div>
-                  <label className="block text-sm font-medium mb-2">Topic</label>
+          {showSelectionPrompt && (
+            <Alert className="mb-4">
+              <p>Please select the following required options:</p>
+              {!subject && (
+                <div className="mt-2">
+                  <label className="block text-sm font-medium mb-2">Subject Area:</label>
                   <Select
-                    value={topic}
-                    onValueChange={(value) => setTopic(value)}
+                    value={subject || ''}
+                    onValueChange={(value) => {
+                      setSubject(value as Subject);
+                      setShowSelectionPrompt(false);
+                    }}
                   >
-                    <option value="arithmetic">Arithmetic</option>
-                    <option value="algebra">Algebra</option>
-                    <option value="geometry">Geometry</option>
-                    <option value="wordProblems">Word Problems</option>
+                    <option value="">Select a subject</option>
+                    <option value="math">Math</option>
+                    <option value="reading">Reading</option>
+                    <option value="science">Science</option>
                   </Select>
                 </div>
               )}
-
-              <div>
-                <label className="block text-sm font-medium mb-2">Grade Level</label>
-                <Slider
-                  value={[grade]}
-                  min={1}
-                  max={12}
-                  step={1}
-                  onValueChange={([value]) => setGrade(value)}
-                  className="w-full"
-                />
-                <div className="text-sm text-gray-500 mt-1">Grade {grade}</div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-2">Number of Problems</label>
-                <Slider
-                  value={[problemCount]}
-                  min={3}
-                  max={10}
-                  step={1}
-                  onValueChange={([value]) => setProblemCount(value)}
-                  className="w-full"
-                />
-                <div className="text-sm text-gray-500 mt-1">{problemCount} problems</div>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <label className="text-sm font-medium">Include Questions</label>
-                <Switch
-                  checked={options.includeQuestions}
-                  onCheckedChange={(checked) =>
-                    setOptions((prev) => ({ ...prev, includeQuestions: checked }))
-                  }
-                />
-              </div>
-
-              <div className="flex items-center justify-between">
-                <label className="text-sm font-medium">Include Visuals</label>
-                <Switch
-                  checked={options.includeVisuals}
-                  onCheckedChange={(checked) =>
-                    setOptions((prev) => ({ ...prev, includeVisuals: checked }))
-                  }
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-2">Difficulty</label>
-                <Select
-                  value={options.difficulty}
-                  onValueChange={(value) =>
-                    setOptions((prev) => ({ ...prev, difficulty: value }))
-                  }
-                >
-                  <option value="basic">Basic</option>
-                  <option value="intermediate">Intermediate</option>
-                  <option value="advanced">Advanced</option>
-                </Select>
-              </div>
-
-              <Button
-                onClick={handleGenerate}
-                disabled={isGenerating}
-                className="w-full"
-              >
-                {isGenerating ? 'Generating...' : 'Generate Content'}
-              </Button>
-            </div>
-          </Tabs>
-        </div>
-      </Card>
-
-      <Card>
-        <div className="p-6">
-          <h3 className="text-xl font-semibold mb-4">Generated Content</h3>
-          <div 
-            ref={contentRef}
-            className="whitespace-pre-wrap min-h-[200px] p-4 bg-gray-50 rounded-lg mb-4"
-          >
-            {streamingContent || 'Content will appear here...'}
-          </div>
-          
-          {streamingContent && (
-            <div className="flex gap-4 mt-4">
-              <Button onClick={handleBackToSettings} variant="outline">
-                Back to Settings
-              </Button>
-              <Button onClick={handleDownloadPDF}>
-                Download PDF
-              </Button>
-            </div>
+              {!resourceType && (
+                <div className="mt-2">
+                  <label className="block text-sm font-medium mb-2">Resource Type:</label>
+                  <Select
+                    value={resourceType || ''}
+                    onValueChange={(value) => {
+                      setResourceType(value as ResourceType);
+                      setShowSelectionPrompt(false);
+                    }}
+                  >
+                    <option value="">Select a resource type</option>
+                    <option value="worksheet">Worksheet</option>
+                    <option value="quiz">Quiz</option>
+                    <option value="exit_slip">Exit Slip / Bell Ringer</option>
+                    <option value="lesson_plan">Lesson Plan</option>
+                    <option value="rubric">Rubric</option>
+                  </Select>
+                </div>
+              )}
+            </Alert>
           )}
+          
+          {subject && (
+            <Tabs value={subject} onValueChange={(value: any) => setSubject(value)}>
+              <TabsList className="mb-4">
+                <TabsTrigger value="math">Math</TabsTrigger>
+                <TabsTrigger value="reading">Reading</TabsTrigger>
+                <TabsTrigger value="science">Science</TabsTrigger>
+              </TabsList>
+
+              <div className="space-y-6">
+                {subject === 'math' && (
+                  <div>
+                    <label className="block text-sm font-medium mb-2">Topic</label>
+                    <Select
+                      value={topic}
+                      onValueChange={(value) => setTopic(value)}
+                    >
+                      <option value="arithmetic">Arithmetic</option>
+                      <option value="algebra">Algebra</option>
+                      <option value="geometry">Geometry</option>
+                      <option value="wordProblems">Word Problems</option>
+                    </Select>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">Grade Level</label>
+                  <Slider
+                    value={[grade]}
+                    min={1}
+                    max={12}
+                    step={1}
+                    onValueChange={([value]) => setGrade(value)}
+                    className="w-full"
+                  />
+                  <div className="text-sm text-gray-500 mt-1">Grade {grade}</div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">Number of Problems</label>
+                  <Slider
+                    value={[problemCount]}
+                    min={3}
+                    max={10}
+                    step={1}
+                    onValueChange={([value]) => setProblemCount(value)}
+                    className="w-full"
+                  />
+                  <div className="text-sm text-gray-500 mt-1">{problemCount} problems</div>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium">Include Questions</label>
+                  <Switch
+                    checked={options.includeQuestions}
+                    onCheckedChange={(checked) =>
+                      setOptions((prev) => ({ ...prev, includeQuestions: checked }))
+                    }
+                  />
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-medium">Include Visuals</label>
+                  <Switch
+                    checked={options.includeVisuals}
+                    onCheckedChange={(checked) =>
+                      setOptions((prev) => ({ ...prev, includeVisuals: checked }))
+                    }
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">Difficulty</label>
+                  <Select
+                    value={options.difficulty}
+                    onValueChange={(value) =>
+                      setOptions((prev) => ({ ...prev, difficulty: value }))
+                    }
+                  >
+                    <option value="basic">Basic</option>
+                    <option value="intermediate">Intermediate</option>
+                    <option value="advanced">Advanced</option>
+                  </Select>
+                </div>
+              </div>
+            </Tabs>
+          )}
+
+          <div className="mt-6 flex justify-end space-x-4">
+            <Button onClick={handleBackToSettings} variant="outline">
+              Back
+            </Button>
+            <Button 
+              onClick={handleGenerate} 
+              disabled={isGenerating || !subject || !resourceType}
+            >
+              {isGenerating ? 'Generating...' : 'Generate'}
+            </Button>
+          </div>
         </div>
       </Card>
+
+      {streamingContent && (
+        <Card className="p-6">
+          <div ref={contentRef} className="prose max-w-none">
+            <div dangerouslySetInnerHTML={{ __html: streamingContent }} />
+          </div>
+          <div className="mt-4 flex justify-end">
+            <Button onClick={handleDownloadPDF} variant="outline">
+              Download PDF
+            </Button>
+          </div>
+        </Card>
+      )}
     </div>
   );
 } 

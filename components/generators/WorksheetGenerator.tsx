@@ -184,9 +184,9 @@ export function WorksheetGenerator({ onBack, onComplete, request }: BaseGenerato
         { id: "mixed", icon: "🔄", name: "Mixed Format", desc: "Combination of different question types" }
       ],
       exit_slip: [
-        { id: "multiple_choice", icon: "🔘", name: "Multiple Choice", desc: "Quick check with options" },
-        { id: "open_response", icon: "📝", name: "Open Response", desc: "Written reflection on learning" },
-        { id: "rating_scale", icon: "⭐", name: "Rating Scale", desc: "Self-assessment of understanding" }
+        { id: "reflection_prompt", icon: "💭", name: "Reflection Prompt", desc: "Open-ended reflection on learning" },
+        { id: "vocabulary_check", icon: "📚", name: "Vocabulary Check", desc: "Key terms and definitions review" },
+        { id: "skill_assessment", icon: "🎯", name: "Skill Assessment", desc: "Quick check of specific skills" }
       ],
       lesson_plan: [
         { id: "full_lesson", icon: "📚", name: "Full Lesson", desc: "Complete lesson with objectives, activities, and assessment" },
@@ -235,9 +235,9 @@ export function WorksheetGenerator({ onBack, onComplete, request }: BaseGenerato
         { id: "mixed", icon: "🔄", name: "Mixed Format", desc: "Combination of different question types" }
       ],
       exit_slip: [
-        { id: "multiple_choice", icon: "🔘", name: "Multiple Choice", desc: "Quick check with options" },
-        { id: "open_response", icon: "📝", name: "Open Response", desc: "Written reflection on learning" },
-        { id: "rating_scale", icon: "⭐", name: "Rating Scale", desc: "Self-assessment of understanding" }
+        { id: "reflection_prompt", icon: "💭", name: "Reflection Prompt", desc: "Open-ended reflection on learning" },
+        { id: "vocabulary_check", icon: "📚", name: "Vocabulary Check", desc: "Key terms and definitions review" },
+        { id: "skill_assessment", icon: "🎯", name: "Skill Assessment", desc: "Quick check of specific skills" }
       ],
       lesson_plan: [
         { id: "full_lesson", icon: "📚", name: "Full Lesson", desc: "Complete lesson with objectives, activities, and assessment" },
@@ -286,9 +286,9 @@ export function WorksheetGenerator({ onBack, onComplete, request }: BaseGenerato
         { id: "multiple_choice", icon: "📝", name: "Multiple Choice", desc: "Multiple choice questions" }
       ],
       exit_slip: [
-        { id: "multiple_choice", icon: "🔘", name: "Multiple Choice", desc: "Quick check with options" },
-        { id: "open_response", icon: "📝", name: "Open Response", desc: "Written reflection on learning" },
-        { id: "rating_scale", icon: "⭐", name: "Rating Scale", desc: "Self-assessment of understanding" }
+        { id: "reflection_prompt", icon: "💭", name: "Reflection Prompt", desc: "Open-ended reflection on learning" },
+        { id: "vocabulary_check", icon: "📚", name: "Vocabulary Check", desc: "Key terms and definitions review" },
+        { id: "skill_assessment", icon: "🎯", name: "Skill Assessment", desc: "Quick check of specific skills" }
       ],
       lesson_plan: [
         { id: "full_lesson", icon: "📚", name: "Full Lesson", desc: "Complete lesson with objectives, activities, and assessment" },
@@ -329,7 +329,7 @@ export function WorksheetGenerator({ onBack, onComplete, request }: BaseGenerato
             { type: "quiz" as const, icon: "🧠", title: "Quiz", desc: "Assessment with various question types" },
             { type: "rubric" as const, icon: "📋", title: "Rubric", desc: "Evaluation criteria and scoring guide" },
             { type: "lesson_plan" as const, icon: "📚", title: "Lesson Plan", desc: "Structured teaching guide with objectives" },
-            { type: "exit_slip" as const, icon: "🚪", title: "Exit Slip", desc: "Quick end-of-lesson assessment" }
+            { type: "exit_slip" as const, icon: "🚪", title: "Exit Slip / Bell Ringer", desc: "Quick assessments for the beginning or end of class" }
           ].map((resType) => {
             const isDisabled = requestedType !== null && requestedType !== resType.type;
             return (
