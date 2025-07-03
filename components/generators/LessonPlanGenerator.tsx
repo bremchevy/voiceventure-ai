@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { BaseGeneratorProps, LessonPlanSettings } from '@/lib/types/generator-types';
+import { BaseGeneratorProps, LessonPlanSettings, Format } from '@/lib/types/generator-types';
 import { LessonPlanResource } from '@/lib/types/resource';
 import { ResourceGenerator } from './ResourceGenerator';
 
@@ -12,6 +12,7 @@ export function LessonPlanGenerator({ onBack, onComplete, request }: BaseGenerat
     lessonDuration: "45 minutes",
     lessonObjectives: ["Students will understand", "Students will be able to"],
     topicArea: "",
+    format: "full_lesson" as Format
   });
 
   const lessonTypes = [
@@ -19,19 +20,22 @@ export function LessonPlanGenerator({ onBack, onComplete, request }: BaseGenerat
       type: "full-lesson", 
       label: "Full Lesson", 
       desc: "Complete 45-60 minute lesson",
-      icon: "📚" 
+      icon: "📚",
+      format: "full_lesson" as Format
     },
     { 
       type: "mini-lesson", 
       label: "Mini-Lesson", 
       desc: "Short 15-20 minute focused lesson",
-      icon: "⚡" 
+      icon: "⚡",
+      format: "mini_lesson" as Format
     },
     { 
       type: "activity", 
       label: "Activity", 
       desc: "Standalone learning activity",
-      icon: "🎯" 
+      icon: "🎯",
+      format: "activity" as Format
     },
   ];
 
@@ -42,7 +46,11 @@ export function LessonPlanGenerator({ onBack, onComplete, request }: BaseGenerat
         {lessonTypes.map((type) => (
           <button
             key={type.type}
-            onClick={() => setSettings((prev) => ({ ...prev, lessonType: type.type as LessonPlanSettings['lessonType'] }))}
+            onClick={() => setSettings((prev) => ({ 
+              ...prev, 
+              lessonType: type.type as LessonPlanSettings['lessonType'],
+              format: type.format
+            }))}
             className={`w-full p-3 rounded-lg border-2 text-sm font-medium transition-all text-left flex items-center gap-3 ${
               settings.lessonType === type.type
                 ? "border-purple-500 bg-purple-50 text-purple-700"
@@ -62,7 +70,7 @@ export function LessonPlanGenerator({ onBack, onComplete, request }: BaseGenerat
 
   return (
     <ResourceGenerator<LessonPlanSettings, LessonPlanResource>
-      type="lesson plan"
+      type="lesson_plan"
       settings={settings}
       setSettings={setSettings}
       onBack={onBack}

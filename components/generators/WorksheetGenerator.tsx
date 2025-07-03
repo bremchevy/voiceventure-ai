@@ -30,6 +30,8 @@ export function WorksheetGenerator({ onBack, onComplete, request }: BaseGenerato
     format: "standard"
   });
 
+  const [requestedType, setRequestedType] = useState<string | null>(null);
+
   // Helper function to determine the best format based on content
   const inferBestFormat = (text: string, subject: string, resourceType: string): Format => {
     if (!text) return 'standard';
@@ -90,6 +92,9 @@ export function WorksheetGenerator({ onBack, onComplete, request }: BaseGenerato
         const resourceType = parsedRequest.resourceType || 'worksheet';
         const bestFormat = inferBestFormat(parsedRequest.text, subject, resourceType);
         
+        // Set the requested type
+        setRequestedType(resourceType);
+        
         setSettings(prev => ({
           ...prev,
           grade: parsedRequest.grade || prev.grade,
@@ -105,10 +110,23 @@ export function WorksheetGenerator({ onBack, onComplete, request }: BaseGenerato
         }));
       } catch (e) {
         console.error('Error parsing request:', e);
-        setSettings(prev => ({
-          ...prev,
-          topicArea: request
-        }));
+        // If it's a string request, try to infer the resource type from the text
+        const lowerRequest = request.toLowerCase();
+        if (lowerRequest.includes('lesson plan')) {
+          setRequestedType('lesson_plan');
+          setSettings(prev => ({ ...prev, resourceType: 'lesson_plan', topicArea: request }));
+        } else if (lowerRequest.includes('rubric')) {
+          setRequestedType('rubric');
+          setSettings(prev => ({ ...prev, resourceType: 'rubric', topicArea: request }));
+        } else if (lowerRequest.includes('quiz')) {
+          setRequestedType('quiz');
+          setSettings(prev => ({ ...prev, resourceType: 'quiz', topicArea: request }));
+        } else if (lowerRequest.includes('exit slip')) {
+          setRequestedType('exit_slip');
+          setSettings(prev => ({ ...prev, resourceType: 'exit_slip', topicArea: request }));
+        } else {
+          setSettings(prev => ({ ...prev, topicArea: request }));
+        }
       }
     }
   }, [request]);
@@ -312,35 +330,47 @@ export function WorksheetGenerator({ onBack, onComplete, request }: BaseGenerato
             { type: "rubric" as const, icon: "📋", title: "Rubric", desc: "Evaluation criteria and scoring guide" },
             { type: "lesson_plan" as const, icon: "📚", title: "Lesson Plan", desc: "Structured teaching guide with objectives" },
             { type: "exit_slip" as const, icon: "🚪", title: "Exit Slip", desc: "Quick end-of-lesson assessment" }
-          ].map((resType) => (
-            <button
-              key={resType.type}
-              onClick={() => {
-                setSettings((prev) => ({ 
-                  ...prev, 
-                  resourceType: resType.type,
-                  // Reset format when changing resource type
-                  format: resType.type === 'rubric' ? '4_point' : 'standard'
-                }));
-              }}
-              className={`p-3 rounded-lg border-2 text-sm font-medium transition-all text-left flex items-center justify-between ${
-                settings.resourceType === resType.type
-                  ? "border-purple-500 bg-purple-50 text-purple-700"
-                  : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
-              }`}
-            >
-              <div className="flex items-center gap-2">
-                <span>{resType.icon}</span>
-                <div>
-                  <div className="font-medium">{resType.title}</div>
-                  <div className="text-xs text-gray-500">{resType.desc}</div>
-                </div>
+          ].map((resType) => {
+            const isDisabled = requestedType !== null && requestedType !== resType.type;
+            return (
+              <div key={resType.type} className="relative">
+                <button
+                  onClick={() => {
+                    if (!isDisabled) {
+                      setSettings((prev) => ({ 
+                        ...prev, 
+                        resourceType: resType.type,
+                        // Reset format when changing resource type
+                        format: resType.type === 'rubric' ? '4_point' : 'standard'
+                      }));
+                    }
+                  }}
+                  disabled={isDisabled}
+                  className={`w-full p-3 rounded-lg border-2 text-sm font-medium transition-all text-left flex items-center justify-between ${
+                    settings.resourceType === resType.type
+                      ? "border-purple-500 bg-purple-50 text-purple-700"
+                      : isDisabled
+                      ? "border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed"
+                      : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span>{resType.icon}</span>
+                    <div>
+                      <div className="font-medium">{resType.title}</div>
+                      <div className="text-xs text-gray-500">{resType.desc}</div>
+                    </div>
+                  </div>
+                  {settings.resourceType === resType.type && (
+                    <span className="text-purple-600">✓</span>
+                  )}
+                </button>
+                {isDisabled && (
+                  <div className="absolute inset-0 bg-white opacity-50 rounded-lg pointer-events-none" />
+                )}
               </div>
-              {settings.resourceType === resType.type && (
-                <span className="text-purple-600">✓</span>
-              )}
-            </button>
-          ))}
+            );
+          })}
         </div>
       </div>
 
@@ -373,26 +403,28 @@ export function WorksheetGenerator({ onBack, onComplete, request }: BaseGenerato
         </div>
       </div>
 
-      {/* Number of Questions */}
-      <div className="space-y-4">
-        <div className="flex justify-between items-center">
-          <Label className="text-sm font-medium text-gray-700">Number of Questions</Label>
-          <span className="text-sm text-gray-500">{settings.problemCount}</span>
+      {/* Number of Questions - Only show for certain resource types */}
+      {settings.resourceType !== 'lesson_plan' && settings.resourceType !== 'rubric' && (
+        <div className="space-y-4">
+          <div className="flex justify-between items-center">
+            <Label className="text-sm font-medium text-gray-700">Number of Questions</Label>
+            <span className="text-sm text-gray-500">{settings.problemCount}</span>
+          </div>
+          <Slider
+            value={[settings.problemCount]}
+            onValueChange={handleProblemCountChange}
+            max={30}
+            min={0}
+            step={1}
+            className="w-full"
+          />
+          {settings.problemCount === 0 && (
+            <p className="text-sm text-gray-500 italic">
+              No questions will be generated. This is useful for reading passages, observation sheets, or other content-only resources.
+            </p>
+          )}
         </div>
-        <Slider
-          value={[settings.problemCount]}
-          onValueChange={handleProblemCountChange}
-          max={20}
-          min={0}
-          step={1}
-          className="w-full"
-        />
-        {settings.problemCount === 0 && (
-          <p className="text-sm text-gray-500 italic">
-            No questions will be generated. This is useful for reading passages, observation sheets, or other content-only resources.
-          </p>
-        )}
-      </div>
+      )}
     </div>
   );
 

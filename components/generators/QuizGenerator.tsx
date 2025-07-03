@@ -3,6 +3,8 @@ import { BaseGeneratorProps, QuizSettings } from '@/lib/types/generator-types';
 import { QuizResource } from '@/lib/types/resource';
 import { ResourceGenerator } from './ResourceGenerator';
 import { getQuizDifficultyParams, getQuizPromptEnhancements } from '@/lib/services/AIContentGenerator/quiz-difficulty';
+import { Label } from '@/components/ui/label';
+import { Slider } from '@/components/ui/slider';
 
 // Transform function to convert API response to required format
 const transformQuizResponse = (apiResponse: any): QuizResource => {
@@ -281,92 +283,116 @@ export function QuizGenerator({ onBack, onComplete, request }: BaseGeneratorProp
   }, [settings.grade, settings.subject, settings.resourceType]);
 
   const renderSpecificSettings = () => {
-    let currentFormats;
-    if (settings.resourceType === 'worksheet') {
-      // For worksheets, show subject-specific formats
-      currentFormats = formatOptions.worksheet[settings.subject as keyof typeof formatOptions.worksheet] || [];
-    } else {
-      // For other resource types, show general formats
-      currentFormats = formatOptions[settings.resourceType as keyof typeof formatOptions] || [];
-    }
-    
     return (
       <div className="space-y-6">
-        {/* Format Selection */}
-    <div>
-          <label className="block text-sm font-medium text-gray-700 mb-3">
-            {settings.resourceType === 'quiz' ? 'Quiz Format' : 
-             settings.resourceType === 'worksheet' ? `${settings.subject} Worksheet Format` : 
-             settings.resourceType === 'exit_slip' ? 'Exit Slip Format' :
-             settings.resourceType === 'lesson_plan' ? 'Lesson Plan Format' :
-             settings.resourceType === 'rubric' ? 'Rubric Format' :
-             'Format'}
-          </label>
-      <div className="space-y-2">
-            {currentFormats.map((format) => (
-          <button
-            key={format.type}
-            onClick={() => {
-                  setSettings(prev => ({
-                ...prev,
-                    selectedQuestionTypes: [format.type],
-                    format: format.format
-              }));
-            }}
-            className={`w-full p-3 rounded-lg border-2 text-sm font-medium transition-all text-left flex items-center justify-between ${
-                  settings.format === format.format
-                ? "border-purple-500 bg-purple-50 text-purple-700"
-                : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
-            }`}
-          >
-            <div className="flex items-center gap-2">
-              <span>{format.icon}</span>
-              <div>
-                <div className="font-medium">{format.type}</div>
-                <div className="text-xs text-gray-500">{format.desc}</div>
-                    {settings.format === format.format && format.examples && (
-                      <div className="mt-2 text-xs text-purple-600">
-                        Example: {format.examples[settings.subject as keyof typeof format.examples]}
+        {/* Resource Type Selection */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-3">Resource Type</label>
+          <div className="grid grid-cols-1 gap-3">
+            {[
+              { type: "worksheet" as const, icon: "📝", title: "Worksheet", desc: "Traditional practice with problems and answers" },
+              { type: "quiz" as const, icon: "🧠", title: "Quiz", desc: "Assessment with various question types" },
+              { type: "rubric" as const, icon: "📋", title: "Rubric", desc: "Evaluation criteria and scoring guide" },
+              { type: "lesson_plan" as const, icon: "📚", title: "Lesson Plan", desc: "Structured teaching guide with objectives" },
+              { type: "exit_slip" as const, icon: "🚪", title: "Exit Slip", desc: "Quick end-of-lesson assessment" }
+            ].map((resType) => {
+              const isDisabled = settings.resourceType !== resType.type;
+              return (
+                <div key={resType.type} className="relative">
+                  <button
+                    onClick={() => {
+                      if (!isDisabled) {
+                        setSettings((prev) => ({ 
+                          ...prev, 
+                          resourceType: resType.type,
+                          format: resType.type === 'rubric' ? '4_point' : 'standard'
+                        }));
+                      }
+                    }}
+                    disabled={isDisabled}
+                    className={`w-full p-3 rounded-lg border-2 text-sm font-medium transition-all text-left flex items-center justify-between ${
+                      settings.resourceType === resType.type
+                        ? "border-purple-500 bg-purple-50 text-purple-700"
+                        : isDisabled
+                        ? "border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed"
+                        : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span>{resType.icon}</span>
+                      <div>
+                        <div className="font-medium">{resType.title}</div>
+                        <div className="text-xs text-gray-500">{resType.desc}</div>
                       </div>
+                    </div>
+                    {settings.resourceType === resType.type && (
+                      <span className="text-purple-600">✓</span>
                     )}
-              </div>
-            </div>
-                {settings.format === format.format && (
-              <span className="text-purple-600">✓</span>
-            )}
-          </button>
-        ))}
-      </div>
+                  </button>
+                  {isDisabled && (
+                    <div className="absolute inset-0 bg-white opacity-50 rounded-lg pointer-events-none" />
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
 
-        {/* Question/Problem Count */}
-        {(settings.resourceType === 'quiz' || settings.resourceType === 'worksheet' || settings.resourceType === 'exit_slip') && (
-          <div className="space-y-4">
-            <div className="flex justify-between items-center">
-              <label className="text-sm font-medium text-gray-700">
-                {settings.resourceType === 'quiz' ? 'Number of Questions' : 
-                 settings.resourceType === 'worksheet' ? 'Number of Problems' :
-                 'Number of Questions'}
-              </label>
-              <span className="text-sm text-gray-500">{settings.questionCount}</span>
-            </div>
-            <input
-              type="range"
-              min={settings.resourceType === 'exit_slip' ? 1 : 5}
-              max={settings.resourceType === 'exit_slip' ? 5 : 20}
-              value={settings.questionCount}
-              onChange={(e) => setSettings(prev => ({ ...prev, questionCount: parseInt(e.target.value) }))}
-              className="w-full"
-            />
-            {settings.resourceType === 'quiz' && difficultyParams && (
-              <p className="text-xs text-gray-500">
-                Estimated time: {Math.round(settings.questionCount * difficultyParams.timePerQuestion)} minutes
-              </p>
-            )}
+        {/* Question Type Selection */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-3">Question Type</label>
+          <div className="grid grid-cols-1 gap-3">
+            {formatOptions.quiz.map((format) => (
+              <button
+                key={format.type}
+                onClick={() => {
+                  setSettings(prev => ({
+                    ...prev,
+                    selectedQuestionTypes: [format.type],
+                    format: format.format
+                  }));
+                }}
+                className={`p-3 rounded-lg border-2 text-sm font-medium transition-all text-left flex items-center justify-between ${
+                  settings.selectedQuestionTypes.includes(format.type)
+                    ? "border-purple-500 bg-purple-50 text-purple-700"
+                    : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  <span>{format.icon}</span>
+                  <div>
+                    <div className="font-medium">{format.type}</div>
+                    <div className="text-xs text-gray-500">{format.desc}</div>
+                    <div className="text-xs text-gray-400 mt-1 italic">
+                      Example: {format.examples[settings.subject]}
+                    </div>
+                  </div>
+                </div>
+                {settings.selectedQuestionTypes.includes(format.type) && (
+                  <span className="text-purple-600">✓</span>
+                )}
+              </button>
+            ))}
           </div>
-      )}
-    </div>
-  );
+        </div>
+
+        {/* Number of Questions Slider */}
+        <div className="space-y-4">
+          <div className="flex justify-between items-center">
+            <Label className="text-sm font-medium text-gray-700">Number of Questions</Label>
+            <span className="text-sm text-gray-500">{settings.questionCount}</span>
+          </div>
+          <Slider
+            value={[settings.questionCount]}
+            onValueChange={(value) => setSettings(prev => ({ ...prev, questionCount: value[0] }))}
+            max={30}
+            min={1}
+            step={1}
+            className="w-full"
+          />
+        </div>
+      </div>
+    );
   };
 
   return (

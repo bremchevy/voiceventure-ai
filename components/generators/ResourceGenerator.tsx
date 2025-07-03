@@ -383,7 +383,7 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
 
     // Handle worksheet response
     // Get format-specific instructions
-    let instructions = 'Show your work and write your answers in the spaces provided.';
+    let instructions = 'Write your answers in the spaces provided.';
     switch (response.format) {
       case 'comprehension':
         instructions = 'Read the passage carefully. Then, answer each question using evidence from the text to support your answers.';
@@ -404,16 +404,16 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
         instructions = 'Apply the scientific concept to each scenario. Explain your reasoning and support it with evidence.';
         break;
       case 'guided':
-        instructions = 'Follow the step-by-step guidance for each problem. Show your work at each step.';
+        instructions = 'Follow the step-by-step guidance for each problem.';
         break;
       case 'interactive':
         instructions = 'Use the provided materials to solve each problem. Follow the activity instructions carefully.';
         break;
       default:
         if (response.subject === 'Math') {
-          instructions = 'Show your work and include units in your answers where applicable.';
+          instructions = 'Solve each problem and include units in your answers where applicable.';
         } else {
-          instructions = 'Show your work and write your answers in the spaces provided.';
+          instructions = 'Write your answers in the spaces provided.';
         }
     }
 
@@ -1288,16 +1288,13 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
                             </div>
                           ) : (
                             // Standard Format
-                            <div className="space-y-4">
-                              <div className="font-medium text-gray-800">{problem.question}</div>
-                              <div className="mt-4 border-t-2 border-gray-200 pt-4">
-                                <div className="text-sm text-gray-500 mb-2">Show your work:</div>
-                                <div className="border-b-2 border-gray-300 h-24"></div>
-                              </div>
-                              <div className="flex items-center gap-2 mt-4">
-                                <span className="text-sm font-medium text-gray-700">Answer:</span>
-                                <div className="flex-1">
-                                  <div className="border-b-2 border-gray-300 h-8"></div>
+                            <div className="border rounded-lg p-4 bg-white">
+                              <div className="font-medium text-gray-800 mb-4">{problem.question}</div>
+                              <div className="space-y-2">
+                                <div className="text-sm font-medium text-gray-700 mb-2">Answer:</div>
+                                {/* Single line for response */}
+                                <div className="py-2">
+                                  <div className="h-6 border-b border-gray-300"></div>
                                 </div>
                               </div>
                             </div>

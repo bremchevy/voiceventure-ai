@@ -453,7 +453,136 @@ export async function POST(req: Request) {
         systemPrompt += 'Create a detailed rubric with clear criteria and performance levels. ';
         break;
       case 'lesson plan':
-        systemPrompt += `Design a comprehensive lesson plan with objectives, activities, and assessment strategies. Return the response in this exact JSON format:
+        let lessonFormat;
+        switch (format) {
+          case 'full_lesson':
+            lessonFormat = `Design a comprehensive 45-60 minute lesson plan with detailed objectives, activities, and assessment strategies. Return the response in this exact JSON format:
+{
+  "title": "${topicArea} Lesson Plan",
+  "grade_level": "${gradeLevel}",
+  "subject": "${subject}",
+  "duration": "45-60 minutes",
+  "objectives": ["Learning objective 1", "Learning objective 2"],
+  "materials": ["Required material 1", "Required material 2"],
+  "activities": {
+    "opening": {
+      "duration": "10-15 minutes",
+      "description": "Opening activity description",
+      "teacher_actions": ["Action 1", "Action 2"],
+      "student_actions": ["Action 1", "Action 2"]
+    },
+    "main": {
+      "duration": "25-30 minutes",
+      "description": "Main activity description",
+      "teacher_actions": ["Action 1", "Action 2"],
+      "student_actions": ["Action 1", "Action 2"]
+    },
+    "closing": {
+      "duration": "10-15 minutes",
+      "description": "Closing activity description",
+      "teacher_actions": ["Action 1", "Action 2"],
+      "student_actions": ["Action 1", "Action 2"]
+    }
+  },
+  "assessment": {
+    "formative": ["Assessment method 1", "Assessment method 2"],
+    "summative": ["Assessment method 1", "Assessment method 2"]
+  },
+  "differentiation": {
+    "struggling": ["Support strategy 1", "Support strategy 2"],
+    "advanced": ["Challenge strategy 1", "Challenge strategy 2"]
+  },
+  "extensions": ["Extension activity 1", "Extension activity 2"],
+  "reflection_points": ["Reflection point 1", "Reflection point 2"]
+}`;
+            break;
+          
+          case 'mini_lesson':
+            lessonFormat = `Design a focused 15-20 minute mini-lesson that targets a specific skill or concept. Return the response in this exact JSON format:
+{
+  "title": "${topicArea} Mini-Lesson",
+  "grade_level": "${gradeLevel}",
+  "subject": "${subject}",
+  "duration": "15-20 minutes",
+  "objectives": ["Focused learning objective"],
+  "materials": ["Required material 1", "Required material 2"],
+  "activities": {
+    "opening": {
+      "duration": "3-5 minutes",
+      "description": "Brief opening hook or connection",
+      "teacher_actions": ["Action 1"],
+      "student_actions": ["Action 1"]
+    },
+    "main": {
+      "duration": "10-12 minutes",
+      "description": "Focused instruction and guided practice",
+      "teacher_actions": ["Action 1", "Action 2"],
+      "student_actions": ["Action 1", "Action 2"]
+    },
+    "closing": {
+      "duration": "2-3 minutes",
+      "description": "Quick check for understanding",
+      "teacher_actions": ["Action 1"],
+      "student_actions": ["Action 1"]
+    }
+  },
+  "assessment": {
+    "formative": ["Quick check method"],
+    "summative": ["Application task"]
+  },
+  "differentiation": {
+    "struggling": ["Support strategy"],
+    "advanced": ["Challenge strategy"]
+  },
+  "extensions": ["Brief extension idea"],
+  "reflection_points": ["Key reflection point"]
+}`;
+            break;
+          
+          case 'activity':
+            lessonFormat = `Design a standalone hands-on learning activity that can be completed in 20-30 minutes. Return the response in this exact JSON format:
+{
+  "title": "${topicArea} Activity",
+  "grade_level": "${gradeLevel}",
+  "subject": "${subject}",
+  "duration": "20-30 minutes",
+  "objectives": ["Activity-specific learning objective"],
+  "materials": ["Required material 1", "Required material 2"],
+  "activities": {
+    "opening": {
+      "duration": "5 minutes",
+      "description": "Activity setup and instructions",
+      "teacher_actions": ["Setup action", "Instruction delivery"],
+      "student_actions": ["Preparation action"]
+    },
+    "main": {
+      "duration": "15-20 minutes",
+      "description": "Hands-on activity execution",
+      "teacher_actions": ["Facilitation action", "Support action"],
+      "student_actions": ["Activity step 1", "Activity step 2"]
+    },
+    "closing": {
+      "duration": "5 minutes",
+      "description": "Share-out and connection",
+      "teacher_actions": ["Facilitate sharing"],
+      "student_actions": ["Share findings"]
+    }
+  },
+  "assessment": {
+    "formative": ["Activity-based assessment"],
+    "summative": ["Product or outcome evaluation"]
+  },
+  "differentiation": {
+    "struggling": ["Scaffolding strategy"],
+    "advanced": ["Extension option"]
+  },
+  "extensions": ["Follow-up activity idea"],
+  "reflection_points": ["Activity-specific reflection"]
+}`;
+            break;
+          
+          default:
+            lessonFormat = `Design a comprehensive lesson plan with objectives, activities, and assessment strategies. Return the response in this exact JSON format:
 {
   "title": "${topicArea} Lesson Plan",
   "grade_level": "${gradeLevel}",
@@ -492,6 +621,8 @@ export async function POST(req: Request) {
   "extensions": ["Extension activity 1", "Extension activity 2"],
   "reflection_points": ["Reflection point 1", "Reflection point 2"]
 }`;
+        }
+        systemPrompt += lessonFormat;
         break;
       case 'exit slip':
         systemPrompt += `Create exactly ${questionCount} exit slip questions to assess student understanding. `;
