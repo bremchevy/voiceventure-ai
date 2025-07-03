@@ -885,6 +885,42 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
     };
   };
 
+  const formatRequest = (req: any): string => {
+    try {
+      // If it's a JSON string, parse it first
+      if (typeof req === 'string' && req.startsWith('{')) {
+        req = JSON.parse(req);
+      }
+
+      // If it's a plain string, return it
+      if (typeof req === 'string') return req;
+
+      // If it's an object (either originally or parsed from JSON)
+      if (typeof req === 'object') {
+        // If it has a text property, use that directly
+        if (req.text) return req.text;
+
+        // Otherwise, construct a sentence from the available fields
+        const displayFields = {
+          topic: req.topic || req.topicArea || req.specifications?.topic,
+          subject: req.subject,
+          grade: req.grade,
+          type: req.resourceType || req.type || type
+        };
+
+        if (displayFields.topic && displayFields.subject && displayFields.grade) {
+          return `Create a ${displayFields.type} about ${displayFields.topic} for ${displayFields.grade} ${displayFields.subject}`;
+        }
+      }
+
+      // Fallback: return the stringified request
+      return typeof req === 'string' ? req : JSON.stringify(req);
+    } catch (error) {
+      // If there's any error in parsing/formatting, return the original request
+      return String(req);
+    }
+  };
+
   const renderSettings = () => (
     <div className="space-y-6 relative">
       {/* Header */}
@@ -909,7 +945,7 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
             <Sparkles className="w-4 h-4 text-purple-600" />
             <span className="text-sm font-medium text-purple-800">I heard you say:</span>
           </div>
-          <p className="text-sm text-purple-700 font-medium">"{request}"</p>
+          <p className="text-sm text-purple-700 font-medium">"{formatRequest(request)}"</p>
           <div className="mt-2 text-xs text-purple-600">
             <p>I've set up your {type} based on this request. You can adjust any settings below.</p>
           </div>
