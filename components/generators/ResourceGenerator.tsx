@@ -6,7 +6,6 @@ import { toast } from "@/components/ui/use-toast";
 import { BaseGeneratorProps, BaseGeneratorSettings, themeEmojis, suggestedTopics, isFormat1, isFormat2, isFormat3 } from '@/lib/types/generator-types';
 import { Resource, WorksheetResource, QuizResource, LessonPlanResource } from '@/lib/types/resource';
 import { generateWorksheetPDF } from '@/lib/utils/pdf-generator';
-import { WorksheetSettings, QuizSettings, ExitSlipSettings, RubricSettings, LessonPlanSettings } from '@/lib/types/generator-types';
 
 interface ResourceGeneratorProps<T extends BaseGeneratorSettings, R extends Resource> extends BaseGeneratorProps {
   type: string;
@@ -45,13 +44,6 @@ interface RubricCriterion {
   levels: RubricLevel[];
 }
 
-const themeEmojisData = {
-  Halloween: ['🎃', '👻', '🦇', '🕷️', '🕸️'],
-  Winter: ['❄️', '⛄', '🎄', '🎁', '☃️'],
-  Spring: ['🌸', '🌺', '🦋', '🌱', '🌷'],
-  General: ['⭐', '🌟', '✨', '🎯', '📚'],
-} as const;
-
 export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Resource>({
   type,
   settings,
@@ -69,6 +61,31 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
   const [generatedResource, setGeneratedResource] = useState<R | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const resourceRef = useRef<HTMLDivElement>(null);
+
+  // Extract readable text from request
+  const getReadableRequest = (req: any): string => {
+    if (!req) return '';
+    
+    if (typeof req === 'string') {
+      try {
+        // Check if it's a JSON string
+        if (req.trim().startsWith('{') && req.trim().endsWith('}')) {
+          const parsed = JSON.parse(req);
+          return parsed.text || req;
+        }
+        return req;
+      } catch {
+        return req;
+      }
+    }
+    
+    // If it's already an object
+    if (typeof req === 'object') {
+      return req.text || req.topicArea || JSON.stringify(req);
+    }
+    
+    return String(req);
+  };
 
   const generationSteps = [
     { icon: "🔍", text: "Analyzing your request", completed: false },
@@ -645,65 +662,8 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
     return worksheetResource as R;
   };
 
-  const validateSettings = () => {
-    const errors: string[] = [];
-
-    // Validate base required fields
-    if (!settings.grade) errors.push("Please select a grade level");
-    if (!settings.subject) errors.push("Please select a subject");
-    if (!settings.theme) errors.push("Please select a theme");
-    if (!settings.topicArea?.trim()) errors.push("Please enter a topic area");
-
-    // Validate resource-specific required fields
-    switch (type) {
-      case 'worksheet':
-        if (!('format' in settings) || !(settings as WorksheetSettings).format) errors.push("Please select a format");
-        if (!('problemCount' in settings) || !(settings as WorksheetSettings).problemCount) errors.push("Please specify number of problems");
-        break;
-      case 'quiz':
-        if (!('questionCount' in settings) || !(settings as QuizSettings).questionCount) errors.push("Please specify number of questions");
-        if (!('selectedQuestionTypes' in settings) || !(settings as QuizSettings).selectedQuestionTypes?.length) 
-          errors.push("Please select at least one question type");
-        break;
-      case 'exit_slip':
-        if (!('format' in settings) || !(settings as ExitSlipSettings).format) errors.push("Please select a format");
-        if (!('questionCount' in settings) || !(settings as ExitSlipSettings).questionCount) errors.push("Please specify number of questions");
-        break;
-      case 'rubric':
-        if (!('rubricStyle' in settings) || !(settings as RubricSettings).rubricStyle) errors.push("Please select a rubric style");
-        if (!('rubricCriteria' in settings) || !(settings as RubricSettings).rubricCriteria?.length) 
-          errors.push("Please add at least one criterion");
-        break;
-      case 'lesson_plan':
-        if (!('lessonType' in settings) || !(settings as LessonPlanSettings).lessonType) errors.push("Please select a lesson type");
-        if (!('lessonDuration' in settings) || !(settings as LessonPlanSettings).lessonDuration) errors.push("Please specify lesson duration");
-        if (!('lessonObjectives' in settings) || !(settings as LessonPlanSettings).lessonObjectives?.length) 
-          errors.push("Please add at least one lesson objective");
-        break;
-    }
-
-    return errors;
-  };
-
   const generateResource = async () => {
     try {
-      // Validate settings before generation
-      const validationErrors = validateSettings();
-      if (validationErrors.length > 0) {
-        toast({
-          title: "Missing Required Fields",
-          description: (
-            <ul className="list-disc pl-4">
-              {validationErrors.map((error, index) => (
-                <li key={index}>{error}</li>
-              ))}
-            </ul>
-          ),
-          variant: "destructive"
-        });
-        return;
-      }
-
       setCurrentStep("generating");
 
       // Step 1: Analyzing request
@@ -875,52 +835,6 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
     { type: "exit_slip", icon: "🎯", desc: "Quick end-of-lesson assessment" }
   ];
 
-  const getThemeEmojis = () => {
-    if (!settings.theme) return { first: '', second: '' };
-    const emojis = themeEmojisData[settings.theme as keyof typeof themeEmojisData];
-    if (!emojis) return { first: '', second: '' };
-    return { 
-      first: emojis[0],
-      second: emojis[1]
-    };
-  };
-
-  const formatRequest = (req: any): string => {
-    try {
-      // If it's a JSON string, parse it first
-      if (typeof req === 'string' && req.startsWith('{')) {
-        req = JSON.parse(req);
-      }
-
-      // If it's a plain string, return it
-      if (typeof req === 'string') return req;
-
-      // If it's an object (either originally or parsed from JSON)
-      if (typeof req === 'object') {
-        // If it has a text property, use that directly
-        if (req.text) return req.text;
-
-        // Otherwise, construct a sentence from the available fields
-        const displayFields = {
-          topic: req.topic || req.topicArea || req.specifications?.topic,
-          subject: req.subject,
-          grade: req.grade,
-          type: req.resourceType || req.type || type
-        };
-
-        if (displayFields.topic && displayFields.subject && displayFields.grade) {
-          return `Create a ${displayFields.type} about ${displayFields.topic} for ${displayFields.grade} ${displayFields.subject}`;
-        }
-      }
-
-      // Fallback: return the stringified request
-      return typeof req === 'string' ? req : JSON.stringify(req);
-    } catch (error) {
-      // If there's any error in parsing/formatting, return the original request
-      return String(req);
-    }
-  };
-
   const renderSettings = () => (
     <div className="space-y-6 relative">
       {/* Header */}
@@ -931,9 +845,7 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
           </Button>
         )}
         <div>
-          <h1 className="text-xl font-bold text-gray-900">
-            {icon} {settings.theme && <span>{getThemeEmojis().first}</span>} {title} {settings.theme && <span>{getThemeEmojis().second}</span>}
-          </h1>
+          <h1 className="text-xl font-bold text-gray-900">{icon} {title}</h1>
           <p className="text-sm text-gray-600">Create customized educational resources</p>
         </div>
       </div>
@@ -945,7 +857,7 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
             <Sparkles className="w-4 h-4 text-purple-600" />
             <span className="text-sm font-medium text-purple-800">I heard you say:</span>
           </div>
-          <p className="text-sm text-purple-700 font-medium">"{formatRequest(request)}"</p>
+          <p className="text-sm text-purple-700 font-medium">"{getReadableRequest(request)}"</p>
           <div className="mt-2 text-xs text-purple-600">
             <p>I've set up your {type} based on this request. You can adjust any settings below.</p>
           </div>
@@ -954,43 +866,35 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
 
       {/* Grade Level */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-3 required-field">
-          Grade Level
-          <span className="text-xs text-gray-500 ml-2">(Required)</span>
-        </label>
-        <div className="space-y-2">
-          <div className="grid grid-cols-3 gap-3">
-            {[
-              "Kindergarten",
-              "1st Grade",
-              "2nd Grade", 
-              "3rd Grade",
-              "4th Grade",
-              "5th Grade",
-              "6th Grade",
-              "7th Grade",
-              "8th Grade",
-              "9th Grade",
-              "10th Grade",
-              "11th Grade",
-              "12th Grade"
-            ].map((grade) => (
-              <button
-                key={grade}
-                onClick={() => setSettings((prev) => ({ ...prev, grade }))}
-                className={`p-3 rounded-lg border-2 text-sm font-medium transition-all ${
-                  settings.grade === grade
-                    ? "border-purple-500 bg-purple-50 text-purple-700"
-                    : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
-                }`}
-              >
-                {grade}
-              </button>
-            ))}
-          </div>
-          {!settings.grade && (
-            <p className="text-sm text-red-500 mt-1">Please select a grade level</p>
-          )}
+        <label className="block text-sm font-medium text-gray-700 mb-3">Grade Level</label>
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            "Kindergarten",
+            "1st Grade",
+            "2nd Grade", 
+            "3rd Grade",
+            "4th Grade",
+            "5th Grade",
+            "6th Grade",
+            "7th Grade",
+            "8th Grade",
+            "9th Grade",
+            "10th Grade",
+            "11th Grade",
+            "12th Grade"
+          ].map((grade) => (
+            <button
+              key={grade}
+              onClick={() => setSettings((prev) => ({ ...prev, grade }))}
+              className={`p-3 rounded-lg border-2 text-sm font-medium transition-all ${
+                settings.grade === grade
+                  ? "border-purple-500 bg-purple-50 text-purple-700"
+                  : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
+              }`}
+            >
+              {grade}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -1020,43 +924,27 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
 
       {/* Theme */}
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-3 required-field">
-          Theme
-          <span className="text-xs text-gray-500 ml-2">(Required)</span>
-        </label>
-        <div className="space-y-2">
-          <div className="grid grid-cols-2 gap-3">
-            {[
-              { name: "Halloween", emojis: ['🎃', '👻', '🦇', '🕷️', '🕸️'] },
-              { name: "Winter", emojis: ['❄️', '⛄', '🎄', '🎁', '☃️'] },
-              { name: "Spring", emojis: ['🌸', '🌺', '🦋', '🌱', '🌷'] },
-              { name: "General", emojis: ['⭐', '🌟', '✨', '🎯', '📚'] },
-            ].map((theme) => (
-              <button
-                key={theme.name}
-                onClick={() => setSettings((prev) => ({ ...prev, theme: theme.name as T['theme'] }))}
-                className={`p-3 rounded-lg border-2 text-sm font-medium transition-all ${
-                  settings.theme === theme.name
-                    ? "border-purple-500 bg-purple-50 text-purple-700"
-                    : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
-                }`}
-              >
-                <div className="flex flex-col items-center gap-2">
-                  <div className="flex gap-1 text-lg">
-                    {theme.emojis.map((emoji, index) => (
-                      <span key={index} className="animate-bounce" style={{ animationDelay: `${index * 200}ms` }}>
-                        {emoji}
-                      </span>
-                    ))}
-                  </div>
-                  <span>{theme.name}</span>
-                </div>
-              </button>
-            ))}
-          </div>
-          {!settings.theme && (
-            <p className="text-sm text-red-500 mt-1">Please select a theme</p>
-          )}
+        <label className="block text-sm font-medium text-gray-700 mb-3">Theme</label>
+        <div className="grid grid-cols-2 gap-3">
+          {[
+            { name: "Halloween", emoji: "🎃" },
+            { name: "Winter", emoji: "❄️" },
+            { name: "Spring", emoji: "🌸" },
+            { name: "General", emoji: "⭐" },
+          ].map((theme) => (
+            <button
+              key={theme.name}
+              onClick={() => setSettings((prev) => ({ ...prev, theme: theme.name as T['theme'] }))}
+              className={`p-3 rounded-lg border-2 text-sm font-medium transition-all flex items-center gap-2 ${
+                settings.theme === theme.name
+                  ? "border-purple-500 bg-purple-50 text-purple-700"
+                  : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
+              }`}
+            >
+              <span className="text-lg">{theme.emoji}</span>
+              {theme.name}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -1119,13 +1007,8 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
       {/* Generate Button */}
       <Button
         onClick={generateResource}
-        className={`w-full py-4 text-lg font-semibold ${
-          isGenerateDisabled() 
-            ? 'bg-gray-400 hover:bg-gray-400 cursor-not-allowed'
-            : 'bg-purple-600 hover:bg-purple-700'
-        } text-white`}
+        className="w-full bg-purple-600 hover:bg-purple-700 text-white py-4 text-lg font-semibold"
         size="lg"
-        disabled={isGenerateDisabled()}
       >
         ✨ Generate {type.charAt(0).toUpperCase() + type.slice(1)}
       </Button>
@@ -1242,9 +1125,7 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
               <ChevronLeft className="w-4 h-4" />
             </Button>
             <div>
-              <h1 className="text-xl font-bold text-gray-900">
-                📄 {settings.theme && <span>{getThemeEmojis().first}</span>} Resource Preview {settings.theme && <span>{getThemeEmojis().second}</span>}
-              </h1>
+              <h1 className="text-xl font-bold text-gray-900">📄 Resource Preview</h1>
               <p className="text-sm text-gray-600">Review your {type === 'exit_slip' ? 'Exit Slip' : type.replace('_', ' ')}</p>
             </div>
           </div>
@@ -1258,11 +1139,7 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
         <div className="bg-white p-8 rounded-lg shadow-lg max-w-3xl mx-auto" ref={resourceRef}>
           {/* Title */}
           <div className="space-y-2 mb-6">
-            <h2 className="text-2xl font-bold flex items-center gap-2">
-              {settings.theme && <span>{getThemeEmojis().first}</span>}
-              <span>{generatedResource.title}</span>
-              {settings.theme && <span>{getThemeEmojis().second}</span>}
-            </h2>
+            <h2 className="text-2xl font-bold">{generatedResource.title}</h2>
             <div className="text-gray-600">
               <div>{generatedResource.subject}</div>
               <div>{generatedResource.grade_level}</div>
@@ -2016,40 +1893,6 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
         )}
       </div>
     );
-  };
-
-  const isGenerateDisabled = () => {
-    // Check base required fields
-    if (!settings.grade || !settings.subject || !settings.theme || !settings.topicArea?.trim()) {
-      return true;
-    }
-
-    // Check resource-specific required fields
-    switch (type) {
-      case 'worksheet':
-        if (!('format' in settings) || !(settings as WorksheetSettings).format) return true;
-        if (!('problemCount' in settings) || !(settings as WorksheetSettings).problemCount) return true;
-        break;
-      case 'quiz':
-        if (!('questionCount' in settings) || !(settings as QuizSettings).questionCount) return true;
-        if (!('selectedQuestionTypes' in settings) || !(settings as QuizSettings).selectedQuestionTypes?.length) return true;
-        break;
-      case 'exit_slip':
-        if (!('format' in settings) || !(settings as ExitSlipSettings).format) return true;
-        if (!('questionCount' in settings) || !(settings as ExitSlipSettings).questionCount) return true;
-        break;
-      case 'rubric':
-        if (!('rubricStyle' in settings) || !(settings as RubricSettings).rubricStyle) return true;
-        if (!('rubricCriteria' in settings) || !(settings as RubricSettings).rubricCriteria?.length) return true;
-        break;
-      case 'lesson_plan':
-        if (!('lessonType' in settings) || !(settings as LessonPlanSettings).lessonType) return true;
-        if (!('lessonDuration' in settings) || !(settings as LessonPlanSettings).lessonDuration) return true;
-        if (!('lessonObjectives' in settings) || !(settings as LessonPlanSettings).lessonObjectives?.length) return true;
-        break;
-    }
-
-    return false;
   };
 
   return (

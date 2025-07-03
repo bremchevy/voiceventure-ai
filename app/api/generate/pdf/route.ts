@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { generateWorksheetPDF } from '@/lib/utils/pdf-generator';
 import { Resource } from '@/lib/types/resource';
+import { PDFService } from '@/lib/services/PDFService';
 
 export const runtime = 'nodejs'; // Required for @react-pdf/renderer
 
@@ -9,15 +9,15 @@ export async function POST(request: Request) {
     const resource = await request.json() as Resource;
     
     // Validate the resource
-    if (!resource || !resource.title || !resource.problems) {
+    if (!resource || !resource.title) {
       return NextResponse.json(
         { error: 'Invalid resource data provided' },
         { status: 400 }
       );
     }
 
-    // Generate PDF
-    const pdfBuffer = await generateWorksheetPDF(resource);
+    // Generate PDF using PDFService
+    const pdfBuffer = await PDFService.generateFromResource(resource);
 
     // Set response headers for PDF download
     const headers = new Headers();

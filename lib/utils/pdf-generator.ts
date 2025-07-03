@@ -1,121 +1,193 @@
 import { jsPDF } from 'jspdf';
-import { Resource } from '../types/resource';
+import { Resource, WorksheetResource, MathProblem } from '../types/resource';
 
-export async function generateWorksheetPDF(resource: Resource): Promise<Buffer> {
+// Add the Helvetica font family for a clean, modern look
+export async function generateWorksheetPDF(resource: WorksheetResource): Promise<Buffer> {
   const doc = new jsPDF();
   const lineHeight = 10;
   let yPosition = 20;
   const margin = 20;
   const pageWidth = doc.internal.pageSize.width;
+  const pageHeight = doc.internal.pageSize.height;
+  const maxY = pageHeight - margin; // Maximum y position before needing a new page
 
-  // Title
-  doc.setFontSize(16);
+  // Helper function to check and add new page if needed
+  const checkAndAddPage = (requiredSpace: number = lineHeight): void => {
+    if (yPosition + requiredSpace > maxY) {
+      doc.addPage();
+      yPosition = margin;
+      // Reset font settings after new page
+      doc.setFont("helvetica");
+      doc.setFontSize(11);
+    }
+  };
+
+  // Helper function to handle multiline text
+  const addMultilineText = (text: string, indent: number = 0): void => {
+    const maxWidth = pageWidth - (margin * 2) - indent;
+    const lines = doc.splitTextToSize(text, maxWidth);
+    
+    lines.forEach((line: string) => {
+      checkAndAddPage();
+      doc.text(line, margin + indent, yPosition);
+      yPosition += lineHeight;
+    });
+  };
+
+  // Set default font to Helvetica
+  doc.setFont("helvetica");
+
+  // Title with modern styling
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(24);
+  checkAndAddPage(lineHeight * 2);
   doc.text(resource.title, pageWidth / 2, yPosition, { align: 'center' });
   yPosition += lineHeight * 1.5;
 
-  // Name and Date fields - smaller and below title
-  doc.setFontSize(10);
-  // Calculate positions for two columns
+  // Name and Date fields with modern styling
+  checkAndAddPage(lineHeight * 2);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(11);
   const columnWidth = (pageWidth - margin * 2) / 2;
   const nameX = margin;
-  const dateX = margin + columnWidth + 10; // Add 10 for spacing between columns
+  const dateX = margin + columnWidth + 10;
   
+  // Name field
+  doc.setFont("helvetica", "bold");
   doc.text('Name:', nameX, yPosition);
-  doc.line(nameX + 20, yPosition, nameX + columnWidth - 10, yPosition);
+  doc.setFont("helvetica", "normal");
+  doc.line(nameX + 25, yPosition, nameX + columnWidth - 10, yPosition);
   
+  // Date field
+  doc.setFont("helvetica", "bold");
   doc.text('Date:', dateX, yPosition);
-  doc.line(dateX + 20, yPosition, dateX + columnWidth - 10, yPosition);
+  doc.setFont("helvetica", "normal");
+  doc.line(dateX + 25, yPosition, dateX + columnWidth - 10, yPosition);
   
   yPosition += lineHeight * 1.5;
 
-  // Metadata
-  doc.setFontSize(12);
-  doc.text(`Subject: ${resource.subject}`, margin, yPosition);
+  // Metadata with modern styling
+  checkAndAddPage();
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11);
+  doc.text(`Subject: `, margin, yPosition);
+  doc.setFont("helvetica", "normal");
+  doc.text(resource.subject, margin + 35, yPosition);
   yPosition += lineHeight;
-  doc.text(`Grade Level: ${resource.gradeLevel}`, margin, yPosition);
-  yPosition += lineHeight * 1.5;
+  
+  checkAndAddPage();
+  doc.setFont("helvetica", "bold");
+  doc.text(`Grade Level: `, margin, yPosition);
+  doc.setFont("helvetica", "normal");
+  doc.text(resource.grade_level, margin + 45, yPosition);
+  yPosition += lineHeight;
 
-  // Instructions
-  if ('instructions' in resource && resource.instructions) {
+  // Instructions with modern styling
+  if (resource.instructions) {
+    checkAndAddPage(lineHeight * 2);
+    doc.setFont("helvetica", "bold");
     doc.setFontSize(12);
     doc.text('Instructions:', margin, yPosition);
     yPosition += lineHeight;
-    doc.setFontSize(10);
-    const splitInstructions = doc.splitTextToSize(resource.instructions, pageWidth - margin * 2);
-    doc.text(splitInstructions, margin, yPosition);
-    yPosition += lineHeight * (splitInstructions.length + 1);
+    
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(11);
+    addMultilineText(resource.instructions);
+    yPosition += lineHeight; // Add extra space after instructions
   }
 
-  // Problems
-  doc.setFontSize(12);
-  resource.problems.forEach((problem, index) => {
-    // New page if needed
-    if (yPosition > doc.internal.pageSize.height - margin) {
-      doc.addPage();
-      yPosition = margin;
-    }
+  // Problems with modern styling
+  if (resource.problems) {
+    doc.setFontSize(11);
+    resource.problems.forEach((problem: MathProblem, index: number) => {
+      checkAndAddPage(lineHeight * 2);
 
-    // Problem text
-    doc.text(`${index + 1}. ${problem.question}`, margin, yPosition);
-    yPosition += lineHeight;
-
-    // Options or answer space
-    if ('options' in problem && problem.options) {
-      problem.options.forEach((option, optIndex) => {
-        doc.text(`${String.fromCharCode(65 + optIndex)}. ${option}`, margin + 10, yPosition);
+      // Problem text
+      doc.setFont("helvetica", "bold");
+      doc.text(`${index + 1}.`, margin, yPosition);
+      doc.setFont("helvetica", "normal");
+      
+      // Handle long question text
+      const questionLines = doc.splitTextToSize(problem.question, pageWidth - margin * 2 - 15);
+      questionLines.forEach((line: string, lineIndex: number) => {
+        if (lineIndex > 0) {
+          checkAndAddPage();
+        }
+        doc.text(line, margin + 15, yPosition);
         yPosition += lineHeight;
       });
-    } else {
-      // Answer line
-      doc.line(margin, yPosition, pageWidth - margin, yPosition);
-      yPosition += lineHeight * 2;
-    }
-  });
 
-  // Answer key for standard format
-  if ('format' in resource && resource.format === 'standard') {
+      // Options or answer space
+      if ('options' in problem && (problem as any).options) {
+        ((problem as any).options as string[]).forEach((option: string, optIndex: number) => {
+          checkAndAddPage();
+          doc.text(`${String.fromCharCode(65 + optIndex)}.`, margin + 15, yPosition);
+          
+          // Handle long option text
+          const optionLines = doc.splitTextToSize(option, pageWidth - margin * 2 - 30);
+          optionLines.forEach((line: string, lineIndex: number) => {
+            if (lineIndex > 0) {
+              checkAndAddPage();
+            }
+            doc.text(line, margin + 30, yPosition + (lineIndex * lineHeight));
+          });
+          yPosition += lineHeight * optionLines.length;
+        });
+      } else {
+        checkAndAddPage();
+        // Answer line with subtle styling
+        doc.setDrawColor(200, 200, 200); // Light gray line
+        doc.line(margin + 15, yPosition, pageWidth - margin, yPosition);
+        yPosition += lineHeight * 1.5;
+      }
+    });
+
+    // Answer key on a new page with modern styling
     doc.addPage();
     yPosition = margin;
     
-    doc.setFontSize(14);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(18);
     doc.text('Answer Key', pageWidth / 2, yPosition, { align: 'center' });
-    yPosition += lineHeight * 2;
+    yPosition += lineHeight * 1.5;
 
-    doc.setFontSize(12);
-    resource.problems.forEach((problem, index) => {
-      if (yPosition > doc.internal.pageSize.height - margin) {
-        doc.addPage();
-        yPosition = margin;
-      }
-      doc.text(`${index + 1}. ${problem.answer || ''}`, margin, yPosition);
-      yPosition += lineHeight;
-    });
-  }
-
-  // Vocabulary section
-  if ('vocabulary' in resource && typeof resource.vocabulary === 'object' && resource.vocabulary) {
-    const vocabEntries = Object.entries(resource.vocabulary);
-    if (vocabEntries.length > 0) {
-      doc.addPage();
-      yPosition = margin;
+    doc.setFontSize(11);
+    resource.problems.forEach((problem: MathProblem, index: number) => {
+      checkAndAddPage(lineHeight * 2);
       
-      doc.setFontSize(14);
-      doc.text('Vocabulary', pageWidth / 2, yPosition, { align: 'center' });
-      yPosition += lineHeight * 2;
-
-      doc.setFontSize(12);
-      vocabEntries.forEach(([term, definition]) => {
-        if (yPosition > doc.internal.pageSize.height - margin) {
-          doc.addPage();
-          yPosition = margin;
+      // Display both question and answer with modern styling
+      doc.setFont("helvetica", "bold");
+      doc.text(`${index + 1}.`, margin, yPosition);
+      doc.setFont("helvetica", "normal");
+      
+      // Handle long question text in answer key
+      const questionLines = doc.splitTextToSize(problem.question, pageWidth - margin * 2 - 15);
+      questionLines.forEach((line: string, lineIndex: number) => {
+        if (lineIndex > 0) {
+          checkAndAddPage();
         }
-        doc.text(`${term}:`, margin, yPosition);
+        doc.text(line, margin + 15, yPosition);
         yPosition += lineHeight;
-        const splitDefinition = doc.splitTextToSize(definition, pageWidth - margin * 2);
-        doc.text(splitDefinition, margin + 10, yPosition);
-        yPosition += lineHeight * (splitDefinition.length + 0.5);
       });
-    }
+      
+      checkAndAddPage();
+      doc.setFont("helvetica", "bold");
+      doc.text('Answer:', margin + 15, yPosition);
+      doc.setFont("helvetica", "normal");
+      
+      // Handle long answer text
+      if (problem.answer) {
+        const answerLines = doc.splitTextToSize(problem.answer, pageWidth - margin * 2 - 45);
+        answerLines.forEach((line: string, lineIndex: number) => {
+          if (lineIndex > 0) {
+            checkAndAddPage();
+          }
+          doc.text(line, margin + 45, yPosition);
+          yPosition += lineHeight;
+        });
+      }
+      yPosition += lineHeight * 0.2; // Small extra space between problems
+    });
   }
 
   return Buffer.from(doc.output('arraybuffer'));

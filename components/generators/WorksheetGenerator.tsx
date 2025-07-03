@@ -86,13 +86,54 @@ export function WorksheetGenerator({ onBack, onComplete, request }: BaseGenerato
   // Parse initial request if provided
   useEffect(() => {
     if (request) {
+      // Helper function to extract subject from text
+      const extractSubject = (text: string): string => {
+        const lowerText = text.toLowerCase();
+        if (lowerText.includes('math') || /\b(addition|subtraction|multiplication|division|fraction|geometry|algebra)\b/i.test(text)) {
+          return 'Math';
+        }
+        if (lowerText.includes('reading') || /\b(comprehension|vocabulary|story|text|book|literature|writing)\b/i.test(text)) {
+          return 'Reading';
+        }
+        if (lowerText.includes('science') || /\b(experiment|lab|observation|hypothesis|scientific|biology|chemistry|physics)\b/i.test(text)) {
+          return 'Science';
+        }
+        return 'Math'; // Default to Math if no subject is detected
+      };
+
+      // Helper function to extract grade from text
+      const extractGrade = (text: string): string => {
+        const gradeMatch = text.match(/\b(\d+)(st|nd|rd|th)?\s*grade\b/i);
+        if (gradeMatch) {
+          const gradeNum = gradeMatch[1];
+          const suffix = ['1', '2', '3'].includes(gradeNum) ? 
+            ['st', 'nd', 'rd'][parseInt(gradeNum) - 1] : 'th';
+          return `${gradeNum}${suffix} Grade`;
+        }
+        if (text.toLowerCase().includes('kindergarten')) {
+          return 'Kindergarten';
+        }
+        return '3rd Grade'; // Default to 3rd Grade if no grade is detected
+      };
+
+      // Helper function to extract resource type from text
+      const extractResourceType = (text: string): string => {
+        const lowerText = text.toLowerCase();
+        if (lowerText.includes('lesson plan')) return 'lesson_plan';
+        if (lowerText.includes('rubric')) return 'rubric';
+        if (lowerText.includes('quiz')) return 'quiz';
+        if (lowerText.includes('exit slip')) return 'exit_slip';
+        return 'worksheet';
+      };
+
+      // First, check if it looks like a JSON string
+      if (request.trim().startsWith('{') && request.trim().endsWith('}')) {
       try {
         const parsedRequest = JSON.parse(request);
         const subject = parsedRequest.subject || 'Math';
         const resourceType = parsedRequest.resourceType || 'worksheet';
         const bestFormat = inferBestFormat(parsedRequest.text, subject, resourceType);
         
-        // Set the requested type
         setRequestedType(resourceType);
         
         setSettings(prev => ({
@@ -101,7 +142,7 @@ export function WorksheetGenerator({ onBack, onComplete, request }: BaseGenerato
           subject: subject,
           resourceType: resourceType,
           theme: parsedRequest.specifications?.theme || prev.theme,
-          topicArea: parsedRequest.specifications?.topicArea || prev.topicArea,
+            topicArea: parsedRequest.specifications?.topicArea || parsedRequest.text || prev.topicArea,
           problemCount: parsedRequest.specifications?.questionCount || prev.problemCount,
           format: bestFormat,
           customInstructions: prev.customInstructions,
@@ -109,27 +150,34 @@ export function WorksheetGenerator({ onBack, onComplete, request }: BaseGenerato
           selectedQuestionTypes: prev.selectedQuestionTypes
         }));
       } catch (e) {
-        console.error('Error parsing request:', e);
-        // If it's a string request, try to infer the resource type from the text
-        const lowerRequest = request.toLowerCase();
-        if (lowerRequest.includes('lesson plan')) {
-          setRequestedType('lesson_plan');
-          setSettings(prev => ({ ...prev, resourceType: 'lesson_plan', topicArea: request }));
-        } else if (lowerRequest.includes('rubric')) {
-          setRequestedType('rubric');
-          setSettings(prev => ({ ...prev, resourceType: 'rubric', topicArea: request }));
-        } else if (lowerRequest.includes('quiz')) {
-          setRequestedType('quiz');
-          setSettings(prev => ({ ...prev, resourceType: 'quiz', topicArea: request }));
-        } else if (lowerRequest.includes('exit slip')) {
-          setRequestedType('exit_slip');
-          setSettings(prev => ({ ...prev, resourceType: 'exit_slip', topicArea: request }));
-        } else {
-          setSettings(prev => ({ ...prev, topicArea: request }));
+          console.error('Error parsing JSON request:', e);
+          // Fall back to text processing
+          handleTextRequest(request);
         }
+      } else {
+        // Process as plain text
+        handleTextRequest(request);
       }
     }
   }, [request]);
+
+  // Function to handle text-based requests
+  const handleTextRequest = (text: string) => {
+    const subject = extractSubject(text);
+    const resourceType = extractResourceType(text);
+    const grade = extractGrade(text);
+    const bestFormat = inferBestFormat(text, subject, resourceType);
+
+    setRequestedType(resourceType);
+    setSettings(prev => ({
+      ...prev,
+      grade: grade,
+      subject: subject,
+      resourceType: resourceType,
+      topicArea: text,
+      format: bestFormat
+    }));
+  };
 
   // Handle problem count change
   const handleProblemCountChange = (value: number[]) => {

@@ -1,17 +1,111 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { BaseGeneratorProps, ExitSlipSettings } from '@/lib/types/generator-types';
 import { ExitSlipResource } from '@/lib/types/resource';
 import { ResourceGenerator } from './ResourceGenerator';
 
 export function ExitSlipGenerator({ onBack, onComplete, request }: BaseGeneratorProps) {
   const [settings, setSettings] = useState<ExitSlipSettings>({
-    grade: request?.grade || "",
-    subject: request?.subject || "Math",
-    theme: request?.theme as 'Halloween' | 'Winter' | 'Spring' | 'General' || "General",
+    grade: "",
+    subject: "Math",
+    theme: "General",
     format: "reflection_prompt",
     questionCount: 3,
-    topicArea: request?.topicArea || "",
+    topicArea: "",
   });
+
+  // Helper function to extract subject from text
+  const extractSubject = (text: string): string => {
+    const lowerText = text.toLowerCase();
+    if (lowerText.includes('math') || /\b(addition|subtraction|multiplication|division|fraction|geometry|algebra)\b/i.test(text)) {
+      return 'Math';
+    }
+    if (lowerText.includes('reading') || /\b(comprehension|vocabulary|story|text|book|literature|writing)\b/i.test(text)) {
+      return 'Reading';
+    }
+    if (lowerText.includes('science') || /\b(experiment|lab|observation|hypothesis|scientific|biology|chemistry|physics)\b/i.test(text)) {
+      return 'Science';
+    }
+    return 'Math'; // Default to Math if no subject is detected
+  };
+
+  // Helper function to extract grade from text
+  const extractGrade = (text: string): string => {
+    const gradeMatch = text.match(/\b(\d+)(st|nd|rd|th)?\s*grade\b/i);
+    if (gradeMatch) {
+      const gradeNum = gradeMatch[1];
+      const suffix = ['1', '2', '3'].includes(gradeNum) ? 
+        ['st', 'nd', 'rd'][parseInt(gradeNum) - 1] : 'th';
+      return `${gradeNum}${suffix} Grade`;
+    }
+    if (text.toLowerCase().includes('kindergarten')) {
+      return 'Kindergarten';
+    }
+    return '3rd Grade'; // Default to 3rd Grade if no grade is detected
+  };
+
+  // Helper function to infer best format from text
+  const inferBestFormat = (text: string): ExitSlipSettings['format'] => {
+    const lowerText = text.toLowerCase();
+    if (/\b(reflect|reflection|think|thoughts|opinion|feel|understand)\b/i.test(lowerText)) {
+      return 'reflection_prompt';
+    }
+    if (/\b(vocabulary|word|term|definition|meaning|concept)\b/i.test(lowerText)) {
+      return 'vocabulary_check';
+    }
+    if (/\b(skill|ability|can do|demonstrate|show|practice)\b/i.test(lowerText)) {
+      return 'skill_assessment';
+    }
+    return 'reflection_prompt'; // Default to reflection prompt
+  };
+
+  // Parse initial request if provided
+  useEffect(() => {
+    if (request) {
+      // First, check if it looks like a JSON string
+      if (typeof request === 'string' && request.trim().startsWith('{') && request.trim().endsWith('}')) {
+        try {
+          const parsedRequest = JSON.parse(request);
+          setSettings(prev => ({
+            ...prev,
+            grade: parsedRequest.grade || extractGrade(parsedRequest.text) || prev.grade,
+            subject: parsedRequest.subject || extractSubject(parsedRequest.text) || prev.subject,
+            theme: parsedRequest.theme || prev.theme,
+            format: parsedRequest.format || inferBestFormat(parsedRequest.text) || prev.format,
+            topicArea: parsedRequest.topicArea || parsedRequest.text || prev.topicArea,
+            questionCount: parsedRequest.questionCount || prev.questionCount
+          }));
+        } catch (e) {
+          console.error('Error parsing JSON request:', e);
+          // Fall back to text processing
+          handleTextRequest(request);
+        }
+      } else if (typeof request === 'string') {
+        // Process as plain text
+        handleTextRequest(request);
+      } else {
+        // Handle object request (from BaseGeneratorProps type)
+        setSettings(prev => ({
+          ...prev,
+          grade: request.grade || prev.grade,
+          subject: request.subject || prev.subject,
+          theme: (request.theme as ExitSlipSettings['theme']) || prev.theme,
+          topicArea: request.topicArea || prev.topicArea,
+          format: (request.format as ExitSlipSettings['format']) || prev.format
+        }));
+      }
+    }
+  }, [request]);
+
+  // Function to handle text-based requests
+  const handleTextRequest = (text: string) => {
+    setSettings(prev => ({
+      ...prev,
+      grade: extractGrade(text),
+      subject: extractSubject(text),
+      topicArea: text,
+      format: inferBestFormat(text)
+    }));
+  };
 
   const exitSlipFormats = [
     { 
