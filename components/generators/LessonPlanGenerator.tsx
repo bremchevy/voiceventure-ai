@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { BaseGeneratorProps, LessonPlanSettings, Format } from '@/lib/types/generator-types';
 import { LessonPlanResource } from '@/lib/types/resource';
 import { ResourceGenerator } from './ResourceGenerator';
+import { PDFService } from '@/lib/services/PDFService';
 
 export function LessonPlanGenerator({ onBack, onComplete, request }: BaseGeneratorProps) {
   const [settings, setSettings] = useState<LessonPlanSettings>({
@@ -68,6 +69,17 @@ export function LessonPlanGenerator({ onBack, onComplete, request }: BaseGenerat
     </div>
   );
 
+  const handleDownloadPDF = async (resource: LessonPlanResource) => {
+    try {
+      const pdfBuffer = await PDFService.generateFromResource(resource);
+      const blob = new Blob([pdfBuffer], { type: 'application/pdf' });
+      PDFService.downloadPDF(blob, `${resource.title.toLowerCase().replace(/\s+/g, '-')}-lesson-plan.pdf`);
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      // Handle error appropriately
+    }
+  };
+
   return (
     <ResourceGenerator<LessonPlanSettings, LessonPlanResource>
       type="lesson_plan"
@@ -79,6 +91,7 @@ export function LessonPlanGenerator({ onBack, onComplete, request }: BaseGenerat
       renderSpecificSettings={renderSpecificSettings}
       icon="📚"
       title="Lesson Plan Generator"
+      onDownloadPDF={handleDownloadPDF}
     />
   );
 } 

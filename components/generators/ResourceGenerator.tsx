@@ -14,6 +14,7 @@ interface ResourceGeneratorProps<T extends BaseGeneratorSettings, R extends Reso
   renderSpecificSettings: () => JSX.Element;
   icon: string;
   title: string;
+  onDownloadPDF?: (resource: R) => Promise<void>;
 }
 
 // BackArrow component for consistent navigation
@@ -54,6 +55,7 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
   renderSpecificSettings,
   icon,
   title,
+  onDownloadPDF,
 }: ResourceGeneratorProps<T, R>) {
   const [currentStep, setCurrentStep] = useState("settings");
   const [generationProgress, setGenerationProgress] = useState(0);

@@ -2,16 +2,15 @@ import { Format, Subject } from './generator-types';
 
 export type ResourceType = 'worksheet' | 'quiz' | 'rubric' | 'lesson plan' | 'exit slip/bell ringer';
 
-export type QuestionType = 'multiple_choice' | 'true_false' | 'short_answer';
+export type QuestionType = 'multiple_choice' | 'true_false' | 'short_answer' | 'skill_assessment';
 
 export interface BaseResource {
-  id?: string;
+  resourceType: string;
   title: string;
+  subject: string;
   grade_level: string;
-  subject: Subject;
-  topic: string;
-  format: Format;
   instructions?: string;
+  topic?: string;
 }
 
 // Math-specific types
@@ -128,7 +127,7 @@ export interface WorksheetResource extends BaseResource {
 // Quiz resource type
 export interface QuizResource extends BaseResource {
   resourceType: 'quiz';
-  questions: {
+  questions: Array<{
     type: QuestionType;
     question: string;
     options?: string[];
@@ -137,7 +136,15 @@ export interface QuizResource extends BaseResource {
     explanation?: string;
     cognitiveLevel?: string;
     points?: number;
-  }[];
+  } | {
+    type: 'skill_assessment';
+    mainQuestion: string;
+    task?: string;
+    steps?: string[];
+    successCriteria?: string[];
+    realWorldApplication?: string;
+    difficulty?: 'Basic' | 'Intermediate' | 'Advanced';
+  }>;
   estimatedTime?: string;
   totalPoints?: number;
   metadata?: {
@@ -155,17 +162,25 @@ export interface QuizResource extends BaseResource {
 // Exit slip resource type
 export interface ExitSlipResource extends BaseResource {
   resourceType: 'exit_slip';
+  format: 'reflection_prompt' | 'vocabulary_check' | 'skill_assessment';
   questions: Array<{
-    type: 'reflection_prompt' | 'vocabulary_check' | 'skill_assessment';
-    // Common fields
-    mainQuestion: string;
-    notes?: string;
-    
-    // Reflection prompt fields
+    type: 'multiple_choice' | 'true_false' | 'short_answer' | 'vocabulary_check' | 'reflection_prompt' | 'skill_assessment';
+    // Base question fields
+    question?: string;
+    options?: string[];
+    answer?: string;
+    // Reflection prompt specific fields
+    mainQuestion?: string;
     reflectionGuides?: string[];
     sentenceStarters?: string[];
-    
-    // Vocabulary check fields
+    notes?: string;
+    // Skill assessment specific fields
+    task?: string;
+    steps?: string[];
+    successCriteria?: string[];
+    realWorldApplication?: string;
+    difficulty?: 'Basic' | 'Intermediate' | 'Advanced';
+    // Vocabulary check specific fields
     term?: string;
     definition?: string;
     context?: string;
@@ -173,21 +188,32 @@ export interface ExitSlipResource extends BaseResource {
     usagePrompt?: string;
     relationships?: string[];
     visualCue?: string;
-    
-    // Skill assessment fields
-    skillName?: string;
-    task?: string;
-    steps?: string[];
-    criteria?: string[];
-    applicationContext?: string;
-    difficultyLevel?: string;
   }>;
+  instructions?: string;
+  estimatedTime?: string;
   metadata?: {
-    timeEstimate: string;
-    focusArea: string;
-    learningObjectives: string[];
-    assessmentType: 'formative';
+    timeEstimate?: string;
+    focusArea?: string;
+    learningObjectives?: string[];
+    assessmentType?: string;
   };
+}
+
+interface Activity {
+  duration: string;
+  description: string;
+  teacher_actions: string[];
+  student_actions: string[];
+}
+
+interface Assessment {
+  formative: string[];
+  summative: string[];
+}
+
+interface Differentiation {
+  struggling: string[];
+  advanced: string[];
 }
 
 // Lesson plan resource type
@@ -197,33 +223,12 @@ export interface LessonPlanResource extends BaseResource {
   objectives: string[];
   materials: string[];
   activities: {
-    opening: {
-      duration: string;
-      description: string;
-      teacher_actions: string[];
-      student_actions: string[];
-    };
-    main: {
-      duration: string;
-      description: string;
-      teacher_actions: string[];
-      student_actions: string[];
-    };
-    closing: {
-      duration: string;
-      description: string;
-      teacher_actions: string[];
-      student_actions: string[];
-    };
+    opening: Activity;
+    main: Activity;
+    closing: Activity;
   };
-  assessment: {
-    formative: string[];
-    summative: string[];
-  };
-  differentiation: {
-    struggling: string[];
-    advanced: string[];
-  };
+  assessment: Assessment;
+  differentiation: Differentiation;
   extensions: string[];
   reflection_points: string[];
 }
@@ -231,22 +236,18 @@ export interface LessonPlanResource extends BaseResource {
 // Rubric resource type
 export interface RubricResource extends BaseResource {
   resourceType: 'rubric';
+  format: 'checklist' | '3_point' | '4_point';
   criteria: {
     name: string;
     description: string;
     levels: {
-      score: number;
+      score: string;
       description: string;
     }[];
   }[];
 }
 
-export type Resource =
-  | WorksheetResource
-  | QuizResource
-  | ExitSlipResource
-  | LessonPlanResource
-  | RubricResource;
+export type Resource = BaseResource | WorksheetResource | QuizResource | RubricResource | ExitSlipResource | LessonPlanResource;
 
 export interface ResourceGenerationOptions {
   subject: string;

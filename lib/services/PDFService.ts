@@ -1,7 +1,7 @@
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
-import { Resource, WorksheetResource } from '../types/resource';
-import { generateWorksheetPDF } from '../utils/pdf-generator';
+import { Resource, WorksheetResource, QuizResource, RubricResource, ExitSlipResource, LessonPlanResource } from '../types/resource';
+import { generateWorksheetPDF, generateQuizPDF, generateRubricPDF, generateExitSlipPDF, generateLessonPlanPDF } from '../utils/pdf-generator';
 
 export type PDFGenerationMethod = 'client' | 'server';
 
@@ -104,40 +104,50 @@ export class PDFService {
     options: PDFOptions = {}
   ): Promise<Buffer> {
     try {
-      if (resourceData.resourceType === 'worksheet') {
-        return generateWorksheetPDF(resourceData);
+      switch (resourceData.resourceType) {
+        case 'worksheet':
+          return generateWorksheetPDF(resourceData as WorksheetResource);
+        case 'quiz':
+          return generateQuizPDF(resourceData as QuizResource);
+        case 'rubric':
+          return generateRubricPDF(resourceData as RubricResource);
+        case 'exit_slip':
+          return generateExitSlipPDF(resourceData as ExitSlipResource);
+        case 'lesson_plan':
+          return generateLessonPlanPDF(resourceData as LessonPlanResource);
+        default: {
+          // For other resource types, create a simple PDF
+          const doc = new jsPDF();
+          const lineHeight = 10;
+          let yPosition = 20;
+          const margin = 20;
+          const pageWidth = doc.internal.pageSize.width;
+
+          // Title
+          doc.setFontSize(16);
+          doc.text(resourceData.title, pageWidth / 2, yPosition, { align: 'center' });
+          yPosition += lineHeight * 1.5;
+
+          // Metadata
+          doc.setFontSize(12);
+          doc.text(`Subject: ${resourceData.subject}`, margin, yPosition);
+          yPosition += lineHeight;
+          doc.text(`Grade Level: ${resourceData.grade_level}`, margin, yPosition);
+          yPosition += lineHeight * 1.5;
+
+          // Instructions if available
+          if ('instructions' in resourceData && resourceData.instructions) {
+            doc.setFontSize(12);
+            doc.text('Instructions:', margin, yPosition);
+            yPosition += lineHeight;
+            doc.setFontSize(10);
+            const splitInstructions = doc.splitTextToSize(resourceData.instructions, pageWidth - margin * 2);
+            doc.text(splitInstructions, margin, yPosition);
+          }
+
+          return Buffer.from(doc.output('arraybuffer'));
+        }
       }
-
-      // For other resource types, create a simple PDF
-      const doc = new jsPDF();
-      const lineHeight = 10;
-      let yPosition = 20;
-      const margin = 20;
-      const pageWidth = doc.internal.pageSize.width;
-
-      // Title
-      doc.setFontSize(16);
-      doc.text(resourceData.title, pageWidth / 2, yPosition, { align: 'center' });
-      yPosition += lineHeight * 1.5;
-
-      // Metadata
-      doc.setFontSize(12);
-      doc.text(`Subject: ${resourceData.subject}`, margin, yPosition);
-      yPosition += lineHeight;
-      doc.text(`Grade Level: ${resourceData.grade_level}`, margin, yPosition);
-      yPosition += lineHeight * 1.5;
-
-      // Instructions if available
-      if (resourceData.instructions) {
-        doc.setFontSize(12);
-        doc.text('Instructions:', margin, yPosition);
-        yPosition += lineHeight;
-        doc.setFontSize(10);
-        const splitInstructions = doc.splitTextToSize(resourceData.instructions, pageWidth - margin * 2);
-        doc.text(splitInstructions, margin, yPosition);
-      }
-
-      return Buffer.from(doc.output('arraybuffer'));
     } catch (error) {
       console.error('Error generating PDF from resource:', error);
       throw new Error('Failed to generate PDF from resource');

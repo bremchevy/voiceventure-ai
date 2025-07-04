@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { BaseGeneratorProps, ExitSlipSettings } from '@/lib/types/generator-types';
 import { ExitSlipResource } from '@/lib/types/resource';
 import { ResourceGenerator } from './ResourceGenerator';
+import { PDFService } from '@/lib/services/PDFService';
 
 export function ExitSlipGenerator({ onBack, onComplete, request }: BaseGeneratorProps) {
   const [settings, setSettings] = useState<ExitSlipSettings>({
@@ -153,6 +154,17 @@ export function ExitSlipGenerator({ onBack, onComplete, request }: BaseGenerator
     </div>
   );
 
+  const handleDownloadPDF = async (resource: ExitSlipResource) => {
+    try {
+      const pdfBuffer = await PDFService.generateFromResource(resource);
+      const blob = new Blob([pdfBuffer], { type: 'application/pdf' });
+      PDFService.downloadPDF(blob, `${resource.title.toLowerCase().replace(/\s+/g, '-')}-exit-slip.pdf`);
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      // Handle error appropriately
+    }
+  };
+
   return (
     <ResourceGenerator<ExitSlipSettings, ExitSlipResource>
       type="exit_slip"
@@ -164,6 +176,7 @@ export function ExitSlipGenerator({ onBack, onComplete, request }: BaseGenerator
       renderSpecificSettings={renderSpecificSettings}
       icon="🚪"
       title="Exit Slip / Bell Ringer"
+      onDownloadPDF={handleDownloadPDF}
     />
   );
 } 

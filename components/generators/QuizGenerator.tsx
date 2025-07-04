@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
 
 // Transform function to convert API response to required format
-const transformQuizResponse = (apiResponse: any): QuizResource => {
+const transformQuizResponse = (apiResponse: any, settings: QuizSettings): QuizResource => {
   // Handle the new response format where content is wrapped in a "quiz" object
   const quizData = apiResponse.quiz || apiResponse;
   
@@ -16,47 +16,50 @@ const transformQuizResponse = (apiResponse: any): QuizResource => {
     // Handle different question formats
     if (q.options) {
       // Multiple choice format
+      const options = Array.isArray(q.options) ? q.options : 
+                     typeof q.options === 'object' ? [q.options.a, q.options.b, q.options.c, q.options.d] :
+                     [];
+      
       return {
-        type: "Multiple Choice",
+        type: "multiple_choice",
         question: q.question,
-        options: [q.options.a, q.options.b, q.options.c, q.options.d],
-        correctAnswer: q.options[q.answer.toLowerCase()],
-        explanation: `The correct answer is ${q.options[q.answer.toLowerCase()]}`,
-        cognitiveLevel: "recall",
-        points: 1
+        options: options,
+        answer: q.answer || q.correctAnswer,
+        correctAnswer: q.correctAnswer || q.answer,
+        explanation: q.explanation || `The correct answer is ${q.correctAnswer || q.answer}`,
+        cognitiveLevel: q.cognitiveLevel || "recall",
+        points: q.points || 1
       };
     } else {
       // Short answer format
       return {
-        type: "Short Answer",
+        type: "short_answer",
         question: q.question,
         options: [],
-        correctAnswer: q.answer,
-        explanation: `The correct answer is ${q.answer}`,
-        cognitiveLevel: "recall",
-        points: 1
+        answer: q.answer || q.correctAnswer,
+        correctAnswer: q.correctAnswer || q.answer,
+        explanation: q.explanation || `The correct answer is ${q.answer || q.correctAnswer}`,
+        cognitiveLevel: q.cognitiveLevel || "recall",
+        points: q.points || 1
       };
     }
   });
 
-  // Extract grade level from title
-  const gradeLevelMatch = quizData.title.match(/(\d+)(st|nd|rd|th)\s+Grade/);
-  const gradeLevel = settings.grade || (gradeLevelMatch ? gradeLevelMatch[0] : "");
-
-  // Construct the transformed response with all required fields
   return {
+    resourceType: 'quiz',
     title: quizData.title || "Quiz",
-    subject: settings.subject || "General",
-    gradeLevel: gradeLevel,
-    topic: settings.topicArea || "General",
-    estimatedTime: `${transformedQuestions.length * 2} minutes`,
+    subject: quizData.subject || settings.subject || "General",
+    grade_level: quizData.grade_level || settings.grade || "",
+    topic: quizData.topic || settings.topicArea || "General",
+    format: settings.format || "multiple_choice",
+    estimatedTime: quizData.estimatedTime || `${transformedQuestions.length * 2} minutes`,
     questions: transformedQuestions,
-    totalPoints: transformedQuestions.length,
-    instructions: "Answer each question to the best of your ability.",
+    totalPoints: quizData.totalPoints || transformedQuestions.length,
+    instructions: quizData.instructions || "Answer each question to the best of your ability.",
     metadata: {
-      complexityLevel: 5,
-      languageLevel: 5,
-      cognitiveDistribution: {
+      complexityLevel: quizData.metadata?.complexityLevel || 5,
+      languageLevel: quizData.metadata?.languageLevel || 5,
+      cognitiveDistribution: quizData.metadata?.cognitiveDistribution || {
         recall: 0.6,
         comprehension: 0.3,
         application: 0.1,
@@ -69,7 +72,7 @@ const transformQuizResponse = (apiResponse: any): QuizResource => {
 export function QuizGenerator({ onBack, onComplete, request }: BaseGeneratorProps) {
   const [settings, setSettings] = useState<QuizSettings>(() => ({
     grade: request?.grade || "",
-    subject: request?.subject || "Math",
+    subject: request?.subject || "",
     theme: request?.theme || "General",
     questionCount: 10,
     selectedQuestionTypes: ["Multiple Choice"],
