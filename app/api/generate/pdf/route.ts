@@ -8,6 +8,9 @@ export async function POST(request: Request) {
   try {
     const resource = await request.json() as Resource;
     
+    // Debug logging
+    console.log('Resource data received by PDF API:', resource);
+    
     // Validate the resource
     if (!resource || !resource.title) {
       return NextResponse.json(
@@ -18,6 +21,9 @@ export async function POST(request: Request) {
 
     // Generate PDF using PDFService
     const pdfBuffer = await PDFService.generateFromResource(resource);
+
+    // Debug logging
+    console.log('PDF generation completed, buffer size:', pdfBuffer.length);
 
     // Set response headers for PDF download
     const headers = new Headers();

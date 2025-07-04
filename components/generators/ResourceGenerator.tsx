@@ -783,6 +783,9 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
     try {
       setIsLoading(true);
       
+      // Debug logging
+      console.log('Resource data being sent to PDF generation:', generatedResource);
+      
       // Call the PDF generation API
       const response = await fetch('/api/generate/pdf', {
         method: 'POST',
@@ -797,6 +800,9 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
         throw new Error(errorData.error || 'Failed to generate PDF');
       }
 
+      // Debug logging
+      console.log('PDF generation response status:', response.status);
+
       // Get the PDF blob from the response
       const pdfBlob = await response.blob();
       
@@ -810,11 +816,11 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
 
-        toast({
-          title: "Success",
-          description: "PDF downloaded successfully!",
-          variant: "default"
-        });
+      toast({
+        title: "Success",
+        description: "PDF downloaded successfully!",
+        variant: "default"
+      });
     } catch (error) {
       console.error('Error in PDF generation:', error);
       toast({
