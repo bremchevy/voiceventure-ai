@@ -422,7 +422,6 @@ export async function generateWorksheetPDF(resource: WorksheetResource): Promise
 }
 
 export async function generateQuizPDF(resource: QuizResource): Promise<Buffer> {
-  console.log("Starting quiz PDF generation");
   const doc = new jsPDF();
   const lineHeight = 10;
   let yPosition = 20;
@@ -488,212 +487,129 @@ export async function generateQuizPDF(resource: QuizResource): Promise<Buffer> {
   }
   if (resource.totalPoints) {
     doc.text(`Total Points: ${resource.totalPoints}`, dateX, yPosition);
+    yPosition += lineHeight * 2;
   }
-  yPosition += lineHeight * 2;
 
-  // Instructions
+  // Instructions if available
   if (resource.instructions) {
     doc.setFont("helvetica", "bold");
     doc.text('Instructions:', margin, yPosition);
     yPosition += lineHeight;
-    
     doc.setFont("helvetica", "normal");
-    addMultilineText(resource.instructions);
-    yPosition += lineHeight * 2;
+    const instructionLines = doc.splitTextToSize(resource.instructions, pageWidth - margin * 2);
+    doc.text(instructionLines, margin, yPosition);
+    yPosition += instructionLines.length * lineHeight + lineHeight;
   }
 
   // Questions
-  if (resource.questions && resource.questions.length > 0) {
-    resource.questions.forEach((question, index) => {
-      checkAndAddPage(lineHeight * 2);
+  resource.questions.forEach((question, index) => {
+    // Calculate space needed
+    let totalHeight = lineHeight * 2;
+    const contentWidth = pageWidth - margin * 2;
+
+    if (question.type === 'skill_assessment') {
+      const mainQuestionLines = doc.splitTextToSize(question.mainQuestion, contentWidth - 20);
+      totalHeight += mainQuestionLines.length * lineHeight;
       
-      // Question number and points
-      doc.setFont("helvetica", "bold");
-      const points = question.points || 1;
-      doc.text(`${index + 1}. (${points} Point${points > 1 ? 's' : ''})`, margin, yPosition);
-      yPosition += lineHeight;
-      
-      // Question text
-      doc.setFont("helvetica", "normal");
-      addMultilineText(question.question, 0);
-      yPosition += lineHeight;
-      
-      // Multiple choice options
-      if (question.type === 'multiple_choice' && Array.isArray(question.options)) {
-        const optionLabels = ['A', 'B', 'C', 'D'];
-        // Calculate total height needed for all options
-        const totalOptionsHeight = question.options.length * lineHeight;
-        
-        // If we don't have enough space for all options, start a new page
-        if (yPosition + totalOptionsHeight > maxY) {
-          doc.addPage();
-          yPosition = margin;
-          doc.setFont("helvetica");
-          doc.setFontSize(11);
-        }
-
-        // Now we can safely display all options
-        question.options.forEach((option, optIndex) => {
-          if (!option) return;
-          const optionText = option.toString().trim();
-          const optionLine = `${optionLabels[optIndex]}) ${optionText}`;
-          const optionLines = doc.splitTextToSize(optionLine, pageWidth - margin * 4);
-          doc.text(optionLines, margin + 10, yPosition);
-          yPosition += optionLines.length * lineHeight;
-        });
-        yPosition += lineHeight; // Single line space after options
-      }
-      // True/False options
-      else if (question.type === 'true_false') {
-        // Check if we need a new page for both options
-        if (yPosition + lineHeight * 2 > maxY) {
-          doc.addPage();
-          yPosition = margin;
-          doc.setFont("helvetica");
-          doc.setFontSize(11);
-        }
-        doc.text('A) True', margin + 10, yPosition);
-        yPosition += lineHeight;
-        doc.text('B) False', margin + 10, yPosition);
-        yPosition += lineHeight;
-      }
-      // Short answer options
-      else if (question.type === 'short_answer') {
-        // Check if we need a new page for the answer lines
-        if (yPosition + lineHeight * 3 > maxY) {
-          doc.addPage();
-          yPosition = margin;
-          doc.setFont("helvetica");
-          doc.setFontSize(11);
-        }
-        // Add lines for writing space
-        doc.setDrawColor(200, 200, 200);
-        for (let i = 0; i < 3; i++) {
-          doc.line(margin + 10, yPosition + (i * lineHeight), 
-                  pageWidth - margin, yPosition + (i * lineHeight));
-        }
-        yPosition += lineHeight * 3;
-      } else if (question.type === 'skill_assessment') {
-        // Title/Topic
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(14);
-        const titleText = question.skillName || question.mainQuestion || '';
-        const titleLines = doc.splitTextToSize(titleText, pageWidth - margin * 4);
-        doc.text(titleLines, margin, yPosition);
-        yPosition += titleLines.length * lineHeight + lineHeight;
-
-        // Task section
-        doc.setFont("helvetica", "bold");
-        doc.text('Task:', margin, yPosition);
-        yPosition += lineHeight;
-        
-        doc.setFont("helvetica", "normal");
-        const taskLines = doc.splitTextToSize(question.task || '', pageWidth - margin * 4);
-        doc.text(taskLines, margin, yPosition);
-        yPosition += taskLines.length * lineHeight;
-
-        // Steps section
-        doc.setFont("helvetica", "bold");
-        doc.text('Steps:', margin, yPosition);
-        yPosition += lineHeight;
-
-        doc.setFont("helvetica", "normal");
-        if (question.steps) {
-          question.steps.forEach((step: string, stepIndex: number) => {
-            const stepLines = doc.splitTextToSize(`${stepIndex + 1}. ${step}`, pageWidth - margin * 4);
-            doc.text(stepLines, margin, yPosition);
-            yPosition += stepLines.length * lineHeight;
-          });
-        }
-
-        // Success Criteria section
-        doc.setFont("helvetica", "bold");
-        doc.text('Success Criteria:', margin, yPosition);
-        yPosition += lineHeight;
-
-        doc.setFont("helvetica", "normal");
-        if (question.successCriteria && question.successCriteria.length > 0) {
-          question.successCriteria.forEach((criterion: string) => {
-            // Draw checkbox
-            doc.rect(margin, yPosition - 3, 4, 4);
-            const criterionLines = doc.splitTextToSize(criterion, pageWidth - margin * 5);
-            doc.text(criterionLines, margin + 8, yPosition);
-            yPosition += criterionLines.length * lineHeight;
-          });
-        } else {
-          // Add default success criteria
-          const defaultCriteria = [
-            "I can find a common denominator for all fractions",
-            "I can convert each fraction to an equivalent fraction with the common denominator",
-            "I can compare and order the fractions correctly"
-          ];
-          defaultCriteria.forEach((criterion: string) => {
-            doc.rect(margin, yPosition - 3, 4, 4);
-            const criterionLines = doc.splitTextToSize(criterion, pageWidth - margin * 5);
-            doc.text(criterionLines, margin + 8, yPosition);
-            yPosition += criterionLines.length * lineHeight;
-          });
-        }
-
-        // Real-world Application section
-        doc.setFont("helvetica", "bold");
-        doc.text('Real-world Application:', margin, yPosition);
-        yPosition += lineHeight;
-
-        doc.setFont("helvetica", "normal");
-        const defaultApplication = "Understanding how to compare and order fractions is essential in many real-world situations, such as cooking (measuring ingredients), construction (measuring materials), or sharing items equally among people.";
-        const applicationText = question.realWorldApplication || defaultApplication;
-        const applicationLines = doc.splitTextToSize(applicationText, pageWidth - margin * 4);
-        doc.text(applicationLines, margin, yPosition);
-        yPosition += applicationLines.length * lineHeight;
-
-        // Add answer lines
-        yPosition += lineHeight;
-        doc.setDrawColor(200, 200, 200); // Light gray lines
-        for (let i = 0; i < 2; i++) {
-          doc.line(margin, yPosition + (i * lineHeight), pageWidth - margin, yPosition + (i * lineHeight));
-        }
-        yPosition += lineHeight * 3; // Space for the lines plus extra space between questions
+      if (question.task) {
+        const taskLines = doc.splitTextToSize(question.task, contentWidth - 20);
+        totalHeight += taskLines.length * lineHeight;
       }
       
-      // Add space before next question, but check if we need a new page
-      if (yPosition + lineHeight * 2 > maxY) {
-        doc.addPage();
-        yPosition = margin;
-        doc.setFont("helvetica");
-        doc.setFontSize(11);
-      } else {
-        yPosition += lineHeight * 1.5; // Reduced spacing between questions
+      if (question.steps?.length) {
+        totalHeight += question.steps.length * lineHeight;
       }
-    });
-  }
+      
+      if (question.successCriteria?.length) {
+        totalHeight += question.successCriteria.length * lineHeight;
+      }
+      
+      totalHeight += lineHeight * 4; // Extra space for work
+    } else {
+      // Handle standard question types
+      const questionLines = doc.splitTextToSize(question.question, contentWidth - 20);
+      totalHeight += questionLines.length * lineHeight;
+      
+      if (question.options?.length) {
+        totalHeight += question.options.length * lineHeight;
+      }
+      
+      if (question.explanation) {
+        const explanationLines = doc.splitTextToSize(question.explanation, contentWidth - 20);
+        totalHeight += explanationLines.length * lineHeight;
+      }
+      
+      totalHeight += lineHeight * 2; // Space for answer
+    }
 
-  // Answer Key
-  if (resource.questions && resource.questions.length > 0) {
-    doc.addPage();
-    yPosition = margin;
-    
+    // Check if we need a new page
+    checkAndAddPage(totalHeight);
+
+    // Question number
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(18);
-    doc.text('Answer Key', pageWidth / 2, yPosition, { align: 'center' });
-    yPosition += lineHeight * 2;
-    
-    doc.setFontSize(11);
-    resource.questions.forEach((question, index) => {
-      doc.setFont("helvetica", "bold");
-      doc.text(`${index + 1}. `, margin, yPosition);
-      doc.setFont("helvetica", "normal");
-      
-      // Show correct answer
-      const answer = question.answer || question.correctAnswer || '';
-      doc.text(answer, margin + 15, yPosition);
-      yPosition += lineHeight;
-      
+    if (question.type === 'skill_assessment') {
+      // Skill assessment format
+      doc.text(`${index + 1}. ${question.mainQuestion}`, margin, yPosition);
+      yPosition += lineHeight * 1.5;
 
-    });
-  }
+      if (question.task) {
+        doc.setFont("helvetica", "bold");
+        doc.text('Task:', margin + 10, yPosition);
+        doc.setFont("helvetica", "normal");
+        const taskLines = doc.splitTextToSize(question.task, contentWidth - 60);
+        doc.text(taskLines, margin + 45, yPosition);
+        yPosition += taskLines.length * lineHeight + lineHeight;
+      }
 
-  console.log("Completed quiz PDF generation");
+      if (question.steps?.length) {
+        doc.setFont("helvetica", "bold");
+        doc.text('Steps:', margin + 10, yPosition);
+        yPosition += lineHeight;
+        doc.setFont("helvetica", "normal");
+        question.steps.forEach((step, stepIndex) => {
+          doc.text(`${stepIndex + 1}. ${step}`, margin + 45, yPosition);
+          yPosition += lineHeight;
+        });
+        yPosition += lineHeight;
+      }
+
+      if (question.successCriteria?.length) {
+        doc.setFont("helvetica", "bold");
+        doc.text('Success Criteria:', margin + 10, yPosition);
+        yPosition += lineHeight;
+        doc.setFont("helvetica", "normal");
+        question.successCriteria.forEach((criterion, index) => {
+          doc.text(`• ${criterion}`, margin + 45, yPosition);
+          yPosition += lineHeight;
+        });
+        yPosition += lineHeight;
+      }
+    } else {
+      // Standard question format
+      doc.text(`${index + 1}. ${question.question}`, margin, yPosition);
+      yPosition += lineHeight * 1.5;
+
+      if (question.options?.length) {
+        doc.setFont("helvetica", "normal");
+        question.options.forEach((option, optIndex) => {
+          doc.text(`${String.fromCharCode(97 + optIndex)}) ${option}`, margin + 20, yPosition);
+          yPosition += lineHeight;
+        });
+        yPosition += lineHeight;
+      }
+
+      if (question.explanation) {
+        doc.setFont("helvetica", "italic");
+        const explanationLines = doc.splitTextToSize(question.explanation, contentWidth - 40);
+        doc.text(explanationLines, margin + 20, yPosition);
+        yPosition += explanationLines.length * lineHeight + lineHeight;
+      }
+    }
+
+    // Add space between questions
+    yPosition += lineHeight;
+  });
+
   return Buffer.from(doc.output('arraybuffer'));
 }
 
@@ -937,7 +853,7 @@ export async function generateRubricPDF(resource: RubricResource): Promise<Buffe
 
 export async function generateExitSlipPDF(resource: ExitSlipResource): Promise<Buffer> {
   const doc = new jsPDF();
-  const lineHeight = 10;
+  const lineHeight = 7; // Reduced from 10 to 7
   let yPosition = 20;
   const margin = 20;
   const pageWidth = doc.internal.pageSize.width;
@@ -955,94 +871,256 @@ export async function generateExitSlipPDF(resource: ExitSlipResource): Promise<B
 
   // Title
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(24);
+  doc.setFontSize(20); // Reduced from 24 to 20
   doc.text(resource.title, pageWidth / 2, yPosition, { align: 'center' });
   yPosition += lineHeight * 2;
 
-  // Name and Date fields
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(11);
+  // Name and Date fields in a more compact layout
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(11);
   const columnWidth = (pageWidth - margin * 2) / 2;
   const nameX = margin;
   const dateX = margin + columnWidth + 10;
   
-  // Name field
-      doc.setFont("helvetica", "bold");
+  // Name and Date on same line
+  doc.setFont("helvetica", "bold");
   doc.text('Name:', nameX, yPosition);
-      doc.setFont("helvetica", "normal");
-  doc.line(nameX + 25, yPosition, nameX + columnWidth - 10, yPosition);
-
-  // Date field
-        doc.setFont("helvetica", "bold");
   doc.text('Date:', dateX, yPosition);
-        doc.setFont("helvetica", "normal");
+  doc.setFont("helvetica", "normal");
+  doc.line(nameX + 25, yPosition, nameX + columnWidth - 10, yPosition);
   doc.line(dateX + 25, yPosition, dateX + columnWidth - 10, yPosition);
-  yPosition += lineHeight * 1.5;
+  yPosition += lineHeight * 1.2;
 
-  // Subject and Grade Level
-        doc.setFont("helvetica", "bold");
+  // Subject and Grade Level on same line
+  doc.setFont("helvetica", "bold");
   doc.text(`Subject: `, margin, yPosition);
-        doc.setFont("helvetica", "normal");
+  doc.setFont("helvetica", "normal");
   doc.text(resource.subject, margin + 35, yPosition);
-        yPosition += lineHeight;
+  doc.setFont("helvetica", "bold");
+  doc.text(`Grade Level: `, margin + columnWidth, yPosition);
+  doc.setFont("helvetica", "normal");
+  doc.text(resource.grade_level, margin + columnWidth + 45, yPosition);
+  yPosition += lineHeight * 1.2;
 
-        doc.setFont("helvetica", "bold");
-  doc.text(`Grade Level: `, margin, yPosition);
-        doc.setFont("helvetica", "normal");
-  doc.text(resource.grade_level, margin + 45, yPosition);
-  yPosition += lineHeight * 1.5;
+  // Instructions
+  if (resource.instructions) {
+    doc.setFont("helvetica", "bold");
+    doc.text('Instructions:', margin, yPosition);
+    yPosition += lineHeight;
+    doc.setFont("helvetica", "normal");
+    const instructionLines = doc.splitTextToSize(resource.instructions, pageWidth - margin * 2);
+    doc.text(instructionLines, margin, yPosition);
+    yPosition += instructionLines.length * lineHeight + lineHeight;
+  }
 
   // Questions
   if (resource.questions && resource.questions.length > 0) {
     resource.questions.forEach((question, index) => {
-      // Calculate total height needed for this question
-      const questionLines = doc.splitTextToSize(question.question, pageWidth - margin * 4);
-      let totalHeight = questionLines.length * lineHeight + lineHeight;
+      // Calculate space needed based on question type
+      let totalHeight = lineHeight * 1.5; // Reduced basic spacing
+      const contentWidth = pageWidth - margin * 2;
 
-      if (question.type === 'reflection_prompt' && question.sentence_starters) {
-        question.sentence_starters.forEach(starter => {
-          const starterLines = doc.splitTextToSize(starter, pageWidth - margin * 4);
-          totalHeight += starterLines.length * lineHeight + lineHeight * 2; // Space for writing
-    });
-  } else {
-        // For other types, add space for writing
-        totalHeight += lineHeight * 4;
-      }
+      if (question.type === 'vocabulary_check') {
+        // Calculate space needed for content
+        const termText = question.term || '';
+        const definitionText = question.definition || '';
+        const contextText = question.context || '';
+        const usagePromptText = question.usagePrompt || '';
+        
+        // Calculate line wrapping once
+        const termLines = doc.splitTextToSize(termText, contentWidth - 60);
+        const definitionLines = doc.splitTextToSize(definitionText, contentWidth - 60);
+        const contextLines = doc.splitTextToSize(contextText, contentWidth - 60);
+        const usageLines = doc.splitTextToSize(usagePromptText, contentWidth - 60);
+        
+        totalHeight += (termLines.length + definitionLines.length + contextLines.length + usageLines.length) * lineHeight;
+        if (question.examples?.length) totalHeight += question.examples.length * lineHeight;
+        totalHeight += lineHeight * 4; // Reduced extra space
 
-      // Check if we need a new page
-      if (yPosition + totalHeight > maxY) {
-        doc.addPage();
-        yPosition = margin;
-        doc.setFont("helvetica");
-        doc.setFontSize(11);
-      }
+        // Check if we need a new page
+        checkAndAddPage(totalHeight);
 
-      // Question number
-      doc.setFont("helvetica", "bold");
-      doc.text(`${index + 1}.`, margin, yPosition);
-      
-      // Question text
-      doc.setFont("helvetica", "normal");
-      doc.text(questionLines, margin + 10, yPosition);
-      yPosition += questionLines.length * lineHeight + lineHeight;
+        // Question number and Term on same line
+        doc.setFont("helvetica", "bold");
+        doc.text(`${index + 1}.`, margin, yPosition);
+        doc.text('Term:', margin + 10, yPosition);
+        doc.setFont("helvetica", "normal");
+        doc.text(termText, margin + 35, yPosition);
+        yPosition += lineHeight * 1.2;
 
-      // Handle different question types
-      if (question.type === 'reflection_prompt' && question.sentence_starters) {
-        question.sentence_starters.forEach(starter => {
-          const starterLines = doc.splitTextToSize(starter, pageWidth - margin * 4);
-          doc.text(starterLines, margin + 10, yPosition);
-          yPosition += starterLines.length * lineHeight;
+        // Definition
+        doc.setFont("helvetica", "bold");
+        doc.text('Definition:', margin + 10, yPosition);
+        doc.setFont("helvetica", "normal");
+        doc.text(definitionLines, margin + 45, yPosition);
+        yPosition += definitionLines.length * lineHeight + lineHeight * 0.5;
 
-          // Add writing lines after each starter
-          doc.setDrawColor(200, 200, 200);
-          for (let i = 0; i < 2; i++) {
-            doc.line(margin + 10, yPosition + (i * lineHeight), 
-                    pageWidth - margin, yPosition + (i * lineHeight));
-          }
-          yPosition += lineHeight * 2.5;
-        });
-      } else {
-        // Add writing lines for other types
+        // Context
+        if (contextText) {
+          doc.setFont("helvetica", "bold");
+          doc.text('Context:', margin + 10, yPosition);
+          doc.setFont("helvetica", "normal");
+          doc.text(contextLines, margin + 45, yPosition);
+          yPosition += contextLines.length * lineHeight + lineHeight * 0.5;
+        }
+
+        // Examples
+        if (question.examples?.length) {
+          doc.setFont("helvetica", "bold");
+          doc.text('Examples:', margin + 10, yPosition);
+          yPosition += lineHeight * 0.8;
+          doc.setFont("helvetica", "normal");
+          question.examples.forEach(example => {
+            doc.text(`• ${example}`, margin + 45, yPosition);
+            yPosition += lineHeight;
+          });
+          yPosition += lineHeight * 0.5;
+        }
+
+        // Usage Prompt
+        if (usagePromptText) {
+          doc.setFont("helvetica", "bold");
+          doc.text('Practice:', margin + 10, yPosition);
+          doc.setFont("helvetica", "normal");
+          doc.text(usageLines, margin + 45, yPosition);
+          yPosition += usageLines.length * lineHeight + lineHeight * 0.5;
+        }
+
+        // Add lines for writing with reduced spacing
+        doc.setDrawColor(200, 200, 200);
+        for (let i = 0; i < 2; i++) {
+          doc.line(margin + 45, yPosition + (i * lineHeight), 
+                  pageWidth - margin, yPosition + (i * lineHeight));
+        }
+        yPosition += lineHeight * 2.5;
+      } else if (question.type === 'reflection_prompt') {
+        // Handle reflection prompts more compactly
+        const questionLines = doc.splitTextToSize(question.mainQuestion || '', contentWidth - 20);
+        totalHeight += questionLines.length * lineHeight;
+        if (question.reflectionGuides?.length) {
+          totalHeight += question.reflectionGuides.length * lineHeight;
+        }
+        if (question.sentenceStarters?.length) {
+          totalHeight += question.sentenceStarters.length * lineHeight * 2;
+        }
+
+        checkAndAddPage(totalHeight);
+
+        doc.setFont("helvetica", "bold");
+        doc.text(`${index + 1}.`, margin, yPosition);
+        doc.setFont("helvetica", "normal");
+        doc.text(questionLines, margin + 10, yPosition);
+        yPosition += questionLines.length * lineHeight + lineHeight * 0.5;
+
+        if (question.reflectionGuides?.length) {
+          doc.setFont("helvetica", "bold");
+          doc.text('Consider these points:', margin + 10, yPosition);
+          yPosition += lineHeight;
+          doc.setFont("helvetica", "normal");
+          question.reflectionGuides.forEach(guide => {
+            doc.text(`• ${guide}`, margin + 15, yPosition);
+            yPosition += lineHeight;
+          });
+          yPosition += lineHeight * 0.5;
+        }
+
+        if (question.sentenceStarters?.length) {
+          doc.setFont("helvetica", "bold");
+          doc.text('Sentence Starters:', margin + 10, yPosition);
+          yPosition += lineHeight;
+          doc.setFont("helvetica", "normal");
+          question.sentenceStarters.forEach(starter => {
+            doc.text(starter, margin + 10, yPosition);
+            yPosition += lineHeight;
+            doc.setDrawColor(200, 200, 200);
+            doc.line(margin + 10, yPosition, pageWidth - margin, yPosition);
+            yPosition += lineHeight * 1.5;
+          });
+        }
+      } else if (question.type === 'skill_assessment') {
+        // Handle skill assessment more compactly
+        const taskLines = doc.splitTextToSize(question.task || '', contentWidth - 55); // Increased margin for better wrapping
+        const skillNameLines = doc.splitTextToSize(question.skillName || '', contentWidth - 55);
+        const applicationContextLines = question.applicationContext ? doc.splitTextToSize(question.applicationContext, contentWidth - 55) : [];
+        
+        // Calculate total height needed
+        totalHeight += skillNameLines.length * lineHeight;
+        totalHeight += taskLines.length * lineHeight;
+        if (question.steps?.length) totalHeight += question.steps.length * lineHeight;
+        if (applicationContextLines.length) totalHeight += applicationContextLines.length * lineHeight;
+        if (question.successCriteria?.length) totalHeight += question.successCriteria.length * lineHeight;
+        totalHeight += lineHeight * 5; // Extra space for section gaps
+
+        checkAndAddPage(totalHeight);
+
+        // Question number and Skill Name
+        doc.setFont("helvetica", "bold");
+        doc.text(`${index + 1}.`, margin, yPosition);
+        
+        if (question.skillName) {
+          doc.text('Skill:', margin + 10, yPosition);
+          doc.setFont("helvetica", "normal");
+          doc.text(skillNameLines, margin + 45, yPosition);
+          yPosition += skillNameLines.length * lineHeight + lineHeight;
+        }
+        
+        // Task
+        if (question.task) {
+          doc.setFont("helvetica", "bold");
+          doc.text('Task:', margin + 10, yPosition);
+          doc.setFont("helvetica", "normal");
+          doc.text(taskLines, margin + 45, yPosition);
+          yPosition += taskLines.length * lineHeight + lineHeight;
+        }
+
+        // Steps
+        if (question.steps?.length) {
+          doc.setFont("helvetica", "bold");
+          doc.text('Steps:', margin + 10, yPosition);
+          yPosition += lineHeight;
+          doc.setFont("helvetica", "normal");
+          question.steps.forEach((step, stepIndex) => {
+            const stepLines = doc.splitTextToSize(`${stepIndex + 1}. ${step}`, contentWidth - 55);
+            doc.text(stepLines, margin + 45, yPosition);
+            yPosition += stepLines.length * lineHeight;
+          });
+          yPosition += lineHeight;
+        }
+
+        // Application Context (moved after steps)
+        if (question.applicationContext) {
+          // Add a bit more space before this section
+          yPosition += lineHeight * 0.5;
+          
+          doc.setFont("helvetica", "bold");
+          doc.text('Real-World', margin + 10, yPosition);
+          doc.text('Application:', margin + 10, yPosition + lineHeight);
+          yPosition += lineHeight * 2;
+          
+          doc.setFont("helvetica", "normal");
+          // Ensure proper wrapping for the application context
+          const wrappedContextLines = doc.splitTextToSize(question.applicationContext, contentWidth - 55);
+          doc.text(wrappedContextLines, margin + 45, yPosition);
+          yPosition += wrappedContextLines.length * lineHeight + lineHeight;
+        }
+
+        // Success Criteria
+        if (question.successCriteria?.length) {
+          doc.setFont("helvetica", "bold");
+          doc.text('Success Criteria:', margin + 10, yPosition);
+          yPosition += lineHeight;
+          doc.setFont("helvetica", "normal");
+          question.successCriteria.forEach((criterion, index) => {
+            const criterionLines = doc.splitTextToSize(criterion, contentWidth - 60);
+            doc.text(`□`, margin + 45, yPosition);
+            doc.text(criterionLines, margin + 55, yPosition);
+            yPosition += criterionLines.length * lineHeight;
+          });
+          yPosition += lineHeight;
+        }
+
+        // Add space for work/response
+        yPosition += lineHeight;
         doc.setDrawColor(200, 200, 200);
         for (let i = 0; i < 3; i++) {
           doc.line(margin + 10, yPosition + (i * lineHeight), 
