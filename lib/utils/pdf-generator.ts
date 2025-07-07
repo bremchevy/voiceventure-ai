@@ -1,5 +1,16 @@
 import { jsPDF } from 'jspdf';
 import { Resource, WorksheetResource, QuizResource, RubricResource, ExitSlipResource, LessonPlanResource } from '../types/resource';
+import { themeEmojis } from '../constants/theme-emojis';
+
+// Add this interface at the top of the file with other interfaces
+interface SkillAssessmentQuestion {
+  type: 'skill_assessment';
+  task: string;
+  realWorldApplication?: string;
+  steps?: string[];
+  successCriteria?: string[];
+  mainQuestion?: string;
+}
 
 // Add the Helvetica font family for a clean, modern look
 export async function generateWorksheetPDF(resource: WorksheetResource): Promise<Buffer> {
@@ -48,12 +59,11 @@ export async function generateWorksheetPDF(resource: WorksheetResource): Promise
   // Set default font to Helvetica
   doc.setFont("helvetica");
 
-  // Title with modern styling
+  // Title without theme decorations
   doc.setFont("helvetica", "bold");
   doc.setFontSize(24);
-  checkAndAddPage(lineHeight * 2);
   doc.text(resource.title, pageWidth / 2, yPosition, { align: 'center' });
-  yPosition += lineHeight * 1.5;
+  yPosition += lineHeight * 3;
 
   // Name and Date fields with modern styling
   checkAndAddPage(lineHeight * 2);
@@ -451,10 +461,7 @@ export async function generateQuizPDF(resource: QuizResource): Promise<Buffer> {
     });
   };
 
-  // Set default font
-  doc.setFont("helvetica");
-
-  // Title
+  // Title without theme decorations
   doc.setFont("helvetica", "bold");
   doc.setFontSize(24);
   doc.text(resource.title, pageWidth / 2, yPosition, { align: 'center' });
@@ -503,23 +510,17 @@ export async function generateQuizPDF(resource: QuizResource): Promise<Buffer> {
 
   // Questions
     resource.questions.forEach((question, index) => {
-    // Calculate space needed
-    let totalHeight = lineHeight * 2;
+    // Calculate space needed based on question type with better estimates
+    let totalHeight = lineHeight * 2; // More reasonable basic spacing
     const contentWidth = pageWidth - margin * 2;
 
     if (question.type === 'skill_assessment') {
-      // Type guard for skill assessment questions
-      type SkillAssessmentQuestion = Extract<ExitSlipResource['questions'][number], { type: 'skill_assessment' }>;
-
       function isSkillAssessmentQuestion(q: any): q is SkillAssessmentQuestion {
         return q.type === 'skill_assessment' && 'task' in q;
       }
 
-      // Ensure this is a skill assessment question
-      if (!isSkillAssessmentQuestion(question)) {
-        continue;
-      }
-
+      // Ensure this is a skill assessment question and handle it
+      if (isSkillAssessmentQuestion(question)) {
       const skillQuestion = question;
       
       // Handle skill assessment more compactly
@@ -587,90 +588,65 @@ export async function generateQuizPDF(resource: QuizResource): Promise<Buffer> {
           yPosition += criterionLines.length * lineHeight;
         });
         yPosition += lineHeight;
+        }
       }
     } else {
       // Handle standard question types
-      const questionLines = doc.splitTextToSize(question.question, contentWidth - 20);
-      totalHeight += questionLines.length * lineHeight;
+    doc.setFont("helvetica", "bold");
+      doc.text(`${index + 1}.`, margin, yPosition);
+      doc.setFont("helvetica", "normal");
       
+      // Wrap question text with proper indentation
+      const questionIndent = 10;
+      const questionWidth = pageWidth - (margin * 2) - questionIndent;
+      const questionLines = doc.splitTextToSize(question.question, questionWidth);
+      doc.text(questionLines, margin + questionIndent, yPosition);
+      yPosition += questionLines.length * lineHeight + lineHeight;
+
+      // Handle options if present
       if (question.options?.length) {
-        totalHeight += question.options.length * lineHeight;
+        question.options.forEach((option, optIndex) => {
+          checkAndAddPage();
+          const optionLetter = String.fromCharCode(65 + optIndex); // A, B, C, D...
+          const optionIndent = 20;
+          const optionWidth = pageWidth - (margin * 2) - optionIndent;
+          const optionLines = doc.splitTextToSize(option, optionWidth);
+          doc.text(`${optionLetter}.`, margin + questionIndent, yPosition);
+          doc.text(optionLines, margin + optionIndent, yPosition);
+          yPosition += optionLines.length * lineHeight;
+        });
+        yPosition += lineHeight;
       }
-      
-      if (question.explanation) {
-        const explanationLines = doc.splitTextToSize(question.explanation, contentWidth - 20);
-        totalHeight += explanationLines.length * lineHeight;
-      }
-      
-      totalHeight += lineHeight * 2; // Space for answer
     }
 
     // Check if we need a new page
     checkAndAddPage(totalHeight);
 
-    // Question number
+    // Remove duplicate question rendering code here - the questions are already rendered above
+    yPosition += lineHeight; // Just add some spacing between questions
+  });
+
+  // Add answer key on a new page
+  doc.addPage();
+  yPosition = margin;
+  
+  // Answer key title
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(18);
+  doc.text('Answer Key', pageWidth / 2, yPosition, { align: 'center' });
+  yPosition += lineHeight * 3;
+  
+  // Answer key content
+  doc.setFontSize(12);
+  resource.questions.forEach((question, index) => {
+    checkAndAddPage(lineHeight * 2);
+    
+    // Question number and answer
     doc.setFont("helvetica", "bold");
-    if (question.type === 'skill_assessment') {
-      // Skill assessment format
-      doc.text(`${index + 1}. ${question.mainQuestion}`, margin, yPosition);
-      yPosition += lineHeight * 1.5;
-
-      if (question.task) {
-      doc.setFont("helvetica", "bold");
-        doc.text('Task:', margin + 10, yPosition);
-      doc.setFont("helvetica", "normal");
-        const taskLines = doc.splitTextToSize(question.task, contentWidth - 60);
-        doc.text(taskLines, margin + 45, yPosition);
-        yPosition += taskLines.length * lineHeight + lineHeight;
-      }
-
-      if (question.steps?.length) {
-        doc.setFont("helvetica", "bold");
-        doc.text('Steps:', margin + 10, yPosition);
-      yPosition += lineHeight;
-        doc.setFont("helvetica", "normal");
-        question.steps.forEach((step, stepIndex) => {
-          doc.text(`${stepIndex + 1}. ${step}`, margin + 45, yPosition);
-          yPosition += lineHeight;
-        });
-        yPosition += lineHeight;
-      }
-
-      if (question.successCriteria?.length) {
-        doc.setFont("helvetica", "bold");
-        doc.text('Success Criteria:', margin + 10, yPosition);
-        yPosition += lineHeight;
-        doc.setFont("helvetica", "normal");
-        question.successCriteria.forEach((criterion, index) => {
-          doc.text(`• ${criterion}`, margin + 45, yPosition);
-          yPosition += lineHeight;
-        });
-        yPosition += lineHeight;
-      }
-    } else {
-      // Standard question format
-      doc.text(`${index + 1}. ${question.question}`, margin, yPosition);
-      yPosition += lineHeight * 1.5;
-
-      if (question.options?.length) {
-        doc.setFont("helvetica", "normal");
-        question.options.forEach((option, optIndex) => {
-          doc.text(`${String.fromCharCode(97 + optIndex)}) ${option}`, margin + 20, yPosition);
-          yPosition += lineHeight;
-        });
-        yPosition += lineHeight;
-      }
-
-      if (question.explanation) {
-        doc.setFont("helvetica", "italic");
-        const explanationLines = doc.splitTextToSize(question.explanation, contentWidth - 40);
-        doc.text(explanationLines, margin + 20, yPosition);
-        yPosition += explanationLines.length * lineHeight + lineHeight;
-      }
-    }
-
-    // Add space between questions
-    yPosition += lineHeight;
+    doc.text(`${index + 1}.`, margin, yPosition);
+    doc.setFont("helvetica", "normal");
+    doc.text(question.correctAnswer || question.answer, margin + 20, yPosition);
+    yPosition += lineHeight * 1.5; // Space between answers
   });
 
   return Buffer.from(doc.output('arraybuffer'));
@@ -724,14 +700,13 @@ export async function generateRubricPDF(resource: RubricResource): Promise<Buffe
     return totalHeight || lineHeight;
   };
 
-  // Set default font
-  doc.setFont("helvetica");
-
-  // Title
+  // Title with theme decorations
   doc.setFont("helvetica", "bold");
   doc.setFontSize(24);
-  doc.text(resource.title, pageWidth / 2, yPosition, { align: 'center' });
-  yPosition += lineHeight * 2;
+  const themeEmoji = resource.theme ? themeEmojis[resource.theme] || '' : '';
+  const titleWithTheme = `${themeEmoji} ${resource.title} ${themeEmoji}`;
+  doc.text(titleWithTheme, pageWidth / 2, yPosition, { align: 'center' });
+  yPosition += lineHeight * 3;
 
   // Metadata
   doc.setFontSize(11);
@@ -916,7 +891,7 @@ export async function generateRubricPDF(resource: RubricResource): Promise<Buffe
 
 export async function generateExitSlipPDF(resource: ExitSlipResource): Promise<Buffer> {
   const doc = new jsPDF();
-  const lineHeight = 7; // Reduced from 10 to 7
+  const lineHeight = 8; // Increased from 7 to 8 for better readability
   let yPosition = 20;
   const margin = 20;
   const pageWidth = doc.internal.pageSize.width;
@@ -932,11 +907,11 @@ export async function generateExitSlipPDF(resource: ExitSlipResource): Promise<B
     }
   }
 
-  // Title
+  // Title without theme decorations
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(20); // Reduced from 24 to 20
+  doc.setFontSize(24);
   doc.text(resource.title, pageWidth / 2, yPosition, { align: 'center' });
-  yPosition += lineHeight * 2;
+  yPosition += lineHeight * 2.5; // Reduced title spacing
 
   // Name and Date fields in a more compact layout
   doc.setFont("helvetica", "normal");
@@ -952,7 +927,7 @@ export async function generateExitSlipPDF(resource: ExitSlipResource): Promise<B
   doc.setFont("helvetica", "normal");
   doc.line(nameX + 25, yPosition, nameX + columnWidth - 10, yPosition);
   doc.line(dateX + 25, yPosition, dateX + columnWidth - 10, yPosition);
-  yPosition += lineHeight * 1.2;
+  yPosition += lineHeight * 1.5; // Better spacing
 
   // Subject and Grade Level on same line
   doc.setFont("helvetica", "bold");
@@ -963,7 +938,7 @@ export async function generateExitSlipPDF(resource: ExitSlipResource): Promise<B
   doc.text(`Grade Level: `, margin + columnWidth, yPosition);
   doc.setFont("helvetica", "normal");
   doc.text(resource.grade_level, margin + columnWidth + 45, yPosition);
-  yPosition += lineHeight * 1.2;
+  yPosition += lineHeight * 1.5; // Better spacing
 
   // Instructions
   if (resource.instructions) {
@@ -973,18 +948,18 @@ export async function generateExitSlipPDF(resource: ExitSlipResource): Promise<B
     doc.setFont("helvetica", "normal");
     const instructionLines = doc.splitTextToSize(resource.instructions, pageWidth - margin * 2);
     doc.text(instructionLines, margin, yPosition);
-    yPosition += instructionLines.length * lineHeight + lineHeight;
+    yPosition += instructionLines.length * lineHeight + lineHeight * 1.2; // Better spacing
   }
 
   // Questions
   if (resource.questions && resource.questions.length > 0) {
     resource.questions.forEach((question, index) => {
-      // Calculate space needed based on question type
-      let totalHeight = lineHeight * 1.5; // Reduced basic spacing
+      // Calculate space needed based on question type with better estimates
+      let totalHeight = lineHeight * 2; // More reasonable basic spacing
       const contentWidth = pageWidth - margin * 2;
 
       if (question.type === 'vocabulary_check') {
-        // Calculate space needed for content
+        // Calculate space needed for content more accurately
         const termText = question.term || '';
         const definitionText = question.definition || '';
         const contextText = question.context || '';
@@ -993,69 +968,72 @@ export async function generateExitSlipPDF(resource: ExitSlipResource): Promise<B
         // Calculate line wrapping once
         const termLines = doc.splitTextToSize(termText, contentWidth - 60);
         const definitionLines = doc.splitTextToSize(definitionText, contentWidth - 60);
-        const contextLines = doc.splitTextToSize(contextText, contentWidth - 60);
-        const usageLines = doc.splitTextToSize(usagePromptText, contentWidth - 60);
+        const contextLines = contextText ? doc.splitTextToSize(contextText, contentWidth - 60) : [];
+        const usageLines = usagePromptText ? doc.splitTextToSize(usagePromptText, contentWidth - 60) : [];
         
         totalHeight += (termLines.length + definitionLines.length + contextLines.length + usageLines.length) * lineHeight;
         if (question.examples?.length) totalHeight += question.examples.length * lineHeight;
-        totalHeight += lineHeight * 4; // Reduced extra space
+        totalHeight += lineHeight * 6; // More realistic extra space
 
         // Check if we need a new page
         checkAndAddPage(totalHeight);
 
         // Question number and Term on same line
-      doc.setFont("helvetica", "bold");
+        doc.setFont("helvetica", "bold");
         doc.text(`${index + 1}.`, margin, yPosition);
         doc.text('Term:', margin + 10, yPosition);
         doc.setFont("helvetica", "normal");
         doc.text(termText, margin + 35, yPosition);
-        yPosition += lineHeight * 1.2;
+        yPosition += lineHeight * 1.3; // Better spacing
 
-      // Definition
-      doc.setFont("helvetica", "bold");
+        // Definition
+        doc.setFont("helvetica", "bold");
         doc.text('Definition:', margin + 10, yPosition);
-      doc.setFont("helvetica", "normal");
+        doc.setFont("helvetica", "normal");
         doc.text(definitionLines, margin + 45, yPosition);
-        yPosition += definitionLines.length * lineHeight + lineHeight * 0.5;
+        yPosition += definitionLines.length * lineHeight + lineHeight * 0.7; // Better spacing
 
-      // Context
+        // Context
         if (contextText) {
-        doc.setFont("helvetica", "bold");
+          doc.setFont("helvetica", "bold");
           doc.text('Context:', margin + 10, yPosition);
-        doc.setFont("helvetica", "normal");
+          doc.setFont("helvetica", "normal");
           doc.text(contextLines, margin + 45, yPosition);
-          yPosition += contextLines.length * lineHeight + lineHeight * 0.5;
-      }
+          yPosition += contextLines.length * lineHeight + lineHeight * 0.7; // Better spacing
+        }
 
-      // Examples
+        // Examples
         if (question.examples?.length) {
-        doc.setFont("helvetica", "bold");
+          doc.setFont("helvetica", "bold");
           doc.text('Examples:', margin + 10, yPosition);
-          yPosition += lineHeight * 0.8;
-        doc.setFont("helvetica", "normal");
+          yPosition += lineHeight;
+          doc.setFont("helvetica", "normal");
           question.examples.forEach(example => {
             doc.text(`• ${example}`, margin + 45, yPosition);
-        yPosition += lineHeight;
+            yPosition += lineHeight;
           });
-          yPosition += lineHeight * 0.5;
-      }
+          yPosition += lineHeight * 0.5; // Better spacing
+        }
 
         // Usage Prompt
         if (usagePromptText) {
-        doc.setFont("helvetica", "bold");
+          doc.setFont("helvetica", "bold");
           doc.text('Practice:', margin + 10, yPosition);
-        doc.setFont("helvetica", "normal");
+          doc.setFont("helvetica", "normal");
           doc.text(usageLines, margin + 45, yPosition);
-          yPosition += usageLines.length * lineHeight + lineHeight * 0.5;
+          yPosition += usageLines.length * lineHeight + lineHeight * 0.7; // Better spacing
         }
 
-        // Add lines for writing with reduced spacing
+        // Add lines for writing with better spacing
         doc.setDrawColor(200, 200, 200);
         for (let i = 0; i < 2; i++) {
           doc.line(margin + 45, yPosition + (i * lineHeight), 
                   pageWidth - margin, yPosition + (i * lineHeight));
         }
-        yPosition += lineHeight * 2.5;
+        yPosition += lineHeight * 3; // Better spacing after lines
+        
+        // Add spacing before next question
+        yPosition += lineHeight;
       } else if (question.type === 'reflection_prompt') {
         // Handle reflection prompts more compactly
         const questionLines = doc.splitTextToSize(question.mainQuestion || '', contentWidth - 20);
@@ -1064,15 +1042,15 @@ export async function generateExitSlipPDF(resource: ExitSlipResource): Promise<B
           totalHeight += question.reflectionGuides.length * lineHeight;
         }
         if (question.sentenceStarters?.length) {
-          totalHeight += question.sentenceStarters.length * lineHeight * 2;
+          totalHeight += question.sentenceStarters.length * lineHeight * 1.5; // Reduced from 2
         }
 
         checkAndAddPage(totalHeight);
 
-      doc.setFont("helvetica", "bold");
-      doc.text(`${index + 1}.`, margin, yPosition);
-      doc.setFont("helvetica", "normal");
-      doc.text(questionLines, margin + 10, yPosition);
+        doc.setFont("helvetica", "bold");
+        doc.text(`${index + 1}.`, margin, yPosition);
+        doc.setFont("helvetica", "normal");
+        doc.text(questionLines, margin + 10, yPosition);
         yPosition += questionLines.length * lineHeight + lineHeight * 0.5;
 
         if (question.reflectionGuides?.length) {
@@ -1081,38 +1059,37 @@ export async function generateExitSlipPDF(resource: ExitSlipResource): Promise<B
           yPosition += lineHeight;
           doc.setFont("helvetica", "normal");
           question.reflectionGuides.forEach(guide => {
-            doc.text(`• ${guide}`, margin + 15, yPosition);
-          yPosition += lineHeight;
-        });
-          yPosition += lineHeight * 0.5;
+            const guideLines = doc.splitTextToSize(`• ${guide}`, pageWidth - margin - 25);
+            doc.text(guideLines, margin + 15, yPosition);
+            yPosition += guideLines.length * lineHeight;
+          });
+          yPosition += lineHeight * 0.3; // Reduced spacing
         }
 
         if (question.sentenceStarters?.length) {
           doc.setFont("helvetica", "bold");
           doc.text('Sentence Starters:', margin + 10, yPosition);
-        yPosition += lineHeight;
+          yPosition += lineHeight;
           doc.setFont("helvetica", "normal");
           question.sentenceStarters.forEach(starter => {
-            doc.text(starter, margin + 10, yPosition);
-        yPosition += lineHeight;
-        doc.setDrawColor(200, 200, 200);
+            const starterLines = doc.splitTextToSize(starter, pageWidth - margin - 20);
+            doc.text(starterLines, margin + 10, yPosition);
+            yPosition += starterLines.length * lineHeight;
+            doc.setDrawColor(200, 200, 200);
             doc.line(margin + 10, yPosition, pageWidth - margin, yPosition);
-            yPosition += lineHeight * 1.5;
+            yPosition += lineHeight; // Reduced from 1.5
           });
         }
+        
+        // Add minimal spacing before next question
+        yPosition += lineHeight * 1.5;
       } else if (question.type === 'skill_assessment') {
-        // Type guard for skill assessment questions
-        type SkillAssessmentQuestion = Extract<ExitSlipResource['questions'][number], { type: 'skill_assessment' }>;
-
         function isSkillAssessmentQuestion(q: any): q is SkillAssessmentQuestion {
           return q.type === 'skill_assessment' && 'task' in q;
         }
 
-        // Ensure this is a skill assessment question
-        if (!isSkillAssessmentQuestion(question)) {
-          continue;
-        }
-
+        // Ensure this is a skill assessment question and handle it
+        if (isSkillAssessmentQuestion(question)) {
         const skillQuestion = question;
         
         // Handle skill assessment more compactly
@@ -1180,6 +1157,7 @@ export async function generateExitSlipPDF(resource: ExitSlipResource): Promise<B
             yPosition += criterionLines.length * lineHeight;
           });
           yPosition += lineHeight;
+          }
         }
       }
     });
@@ -1234,13 +1212,13 @@ export const generateLessonPlanPDF = async (resource: LessonPlanResource): Promi
     yPosition += lines.length * lineHeight + lineHeight/2;
   };
 
-  // Title and metadata section
-  doc.setFontSize(16);
+  // Title with theme decorations
   doc.setFont("helvetica", "bold");
-  const title = resource.title || "Lesson Plan";
-  const titleWidth = doc.getTextWidth(title);
-  doc.text(title, (pageWidth - titleWidth) / 2, yPosition);
-  yPosition += lineHeight * 2;
+  doc.setFontSize(24);
+  const themeEmoji = resource.theme ? themeEmojis[resource.theme] || '' : '';
+  const titleWithTheme = `${themeEmoji} ${resource.title} ${themeEmoji}`;
+  doc.text(titleWithTheme, pageWidth / 2, yPosition, { align: 'center' });
+  yPosition += lineHeight * 3;
 
   // Subject and Grade
   doc.setFontSize(12);

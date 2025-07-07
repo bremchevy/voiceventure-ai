@@ -1,8 +1,9 @@
 import { useState, useRef, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, Download, Edit, Store, CheckCircle, Sparkles, ArrowLeft, Check, Loader2 } from "lucide-react";
+import { ChevronLeft, Download, Edit, Store, CheckCircle, Sparkles, ArrowLeft, Check, Loader2, Share2 } from "lucide-react";
 import { generatePDF } from "@/lib/utils/pdf";
 import { toast } from "@/components/ui/use-toast";
+import { ShareModal } from "@/components/ui/share-modal";
 import { BaseGeneratorProps, BaseGeneratorSettings, themeEmojis, suggestedTopics, isFormat1, isFormat2, isFormat3 } from '@/lib/types/generator-types';
 import { Resource, WorksheetResource, QuizResource, LessonPlanResource } from '@/lib/types/resource';
 import { generateWorksheetPDF } from '@/lib/utils/pdf-generator';
@@ -62,6 +63,7 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
   const [currentGenerationStep, setCurrentGenerationStep] = useState(0);
   const [generatedResource, setGeneratedResource] = useState<R | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const resourceRef = useRef<HTMLDivElement>(null);
 
   // Extract readable text from request
@@ -176,6 +178,7 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
         title: response.title || `${settings.subject} Exit Slip`,
         subject: settings.subject,
         grade_level: settings.grade,
+        theme: settings.theme,  // Add theme to resource
         topic: settings.topicArea || response.exit_slip_topic,
         format: settings.format || 'reflection_prompt',
         questions: transformedQuestions,
@@ -531,6 +534,7 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
       grade_level: response.grade_level || '',
       subject: response.subject || '',
       topic: response.topic || '',
+      theme: settings.theme, // Add theme
       format: response.subject === 'Reading' ? (response.format === 'worksheet' ? 'comprehension' : response.format) : (response.format || 'standard'),
       instructions: response.instructions || instructions,
       problems: [],
@@ -1130,10 +1134,12 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
 
         {/* Resource Preview */}
         <div className="bg-white p-8 rounded-lg shadow-lg max-w-3xl mx-auto" ref={resourceRef}>
-          {/* Title */}
+          {/* Title with theme decorations */}
           <div className="space-y-2 mb-6">
-            <h2 className="text-2xl font-bold">{generatedResource.title}</h2>
-            <div className="text-gray-600">
+            <h2 className="text-2xl font-bold text-center">
+              {themeEmojis[settings.theme]} {generatedResource.title} {themeEmojis[settings.theme]}
+            </h2>
+            <div className="text-gray-600 text-center">
               <div>{generatedResource.subject}</div>
               <div>{generatedResource.grade_level}</div>
             </div>
@@ -1790,6 +1796,14 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
             <Button variant="outline" onClick={() => setCurrentStep("settings")}>
               Edit
             </Button>
+            <Button 
+              variant="outline" 
+              onClick={() => setIsShareModalOpen(true)}
+              disabled={isLoading}
+            >
+              <Share2 className="w-4 h-4 mr-2" />
+              Share
+            </Button>
             <Button onClick={handleDownloadPDF} disabled={isLoading}>
               {isLoading ? (
                 <>
@@ -1915,6 +1929,15 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
           margin-left: 4px;
         }
       `}</style>
+
+      {/* Share Modal */}
+      {generatedResource && (
+        <ShareModal
+          isOpen={isShareModalOpen}
+          onClose={() => setIsShareModalOpen(false)}
+          resource={generatedResource}
+        />
+      )}
     </div>
   );
 } 

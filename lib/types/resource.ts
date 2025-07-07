@@ -11,6 +11,7 @@ export interface BaseResource {
   grade_level: string;
   instructions?: string;
   topic?: string;
+  theme?: string;  // Theme property for emoji decorations
 }
 
 // Math-specific types

@@ -19,11 +19,13 @@ type ResourceFormats = {
   };
 };
 
+type Theme = 'Halloween' | 'Winter' | 'Spring' | 'General' | 'dinosaurs';
+
 export function WorksheetGenerator({ onBack, onComplete, request }: BaseGeneratorProps) {
   const [settings, setSettings] = useState<WorksheetSettings>({
     grade: "3rd Grade",
     subject: "Math",
-    theme: "General",
+    theme: "General" as Theme,
     problemCount: 10,
     topicArea: "",
     resourceType: "worksheet",
@@ -83,73 +85,89 @@ export function WorksheetGenerator({ onBack, onComplete, request }: BaseGenerato
     return 'standard';
   };
 
+  // Helper function to extract subject from text
+  const extractSubject = (text: string): string => {
+    const lowerText = text.toLowerCase();
+    if (lowerText.includes('math') || /\b(addition|subtraction|multiplication|division|fraction|geometry|algebra)\b/i.test(text)) {
+      return 'Math';
+    }
+    if (lowerText.includes('reading') || /\b(comprehension|vocabulary|story|text|book|literature|writing)\b/i.test(text)) {
+      return 'Reading';
+    }
+    if (lowerText.includes('science') || /\b(experiment|lab|observation|hypothesis|scientific|biology|chemistry|physics)\b/i.test(text)) {
+      return 'Science';
+    }
+    return 'Math'; // Default to Math if no subject is detected
+  };
+
+  // Helper function to extract grade from text
+  const extractGrade = (text: string): string => {
+    const gradeMatch = text.match(/\b(\d+)(st|nd|rd|th)?\s*grade\b/i);
+    if (gradeMatch) {
+      const gradeNum = gradeMatch[1];
+      const suffix = ['1', '2', '3'].includes(gradeNum) ? 
+        ['st', 'nd', 'rd'][parseInt(gradeNum) - 1] : 'th';
+      return `${gradeNum}${suffix} Grade`;
+    }
+    if (text.toLowerCase().includes('kindergarten')) {
+      return 'Kindergarten';
+    }
+    return '3rd Grade'; // Default to 3rd Grade if no grade is detected
+  };
+
+  // Helper function to extract resource type from text
+  const extractResourceType = (text: string): string => {
+    const lowerText = text.toLowerCase();
+    if (lowerText.includes('lesson plan')) return 'lesson_plan';
+    if (lowerText.includes('rubric')) return 'rubric';
+    if (lowerText.includes('quiz')) return 'quiz';
+    if (lowerText.includes('exit slip')) return 'exit_slip';
+    return 'worksheet';
+  };
+
+  // Helper function to extract theme from text
+  const extractTheme = (text: string): Theme => {
+    const lowerText = text.toLowerCase();
+    if (lowerText.includes('halloween') || lowerText.includes('spooky')) {
+      return 'Halloween';
+    }
+    if (lowerText.includes('winter') || lowerText.includes('snow')) {
+      return 'Winter';
+    }
+    if (lowerText.includes('spring') || lowerText.includes('flower')) {
+      return 'Spring';
+    }
+    return 'General';
+  };
+
   // Parse initial request if provided
   useEffect(() => {
-    if (request) {
-      // Helper function to extract subject from text
-      const extractSubject = (text: string): string => {
-        const lowerText = text.toLowerCase();
-        if (lowerText.includes('math') || /\b(addition|subtraction|multiplication|division|fraction|geometry|algebra)\b/i.test(text)) {
-          return 'Math';
-        }
-        if (lowerText.includes('reading') || /\b(comprehension|vocabulary|story|text|book|literature|writing)\b/i.test(text)) {
-          return 'Reading';
-        }
-        if (lowerText.includes('science') || /\b(experiment|lab|observation|hypothesis|scientific|biology|chemistry|physics)\b/i.test(text)) {
-          return 'Science';
-        }
-        return 'Math'; // Default to Math if no subject is detected
-      };
-
-      // Helper function to extract grade from text
-      const extractGrade = (text: string): string => {
-        const gradeMatch = text.match(/\b(\d+)(st|nd|rd|th)?\s*grade\b/i);
-        if (gradeMatch) {
-          const gradeNum = gradeMatch[1];
-          const suffix = ['1', '2', '3'].includes(gradeNum) ? 
-            ['st', 'nd', 'rd'][parseInt(gradeNum) - 1] : 'th';
-          return `${gradeNum}${suffix} Grade`;
-        }
-        if (text.toLowerCase().includes('kindergarten')) {
-          return 'Kindergarten';
-        }
-        return '3rd Grade'; // Default to 3rd Grade if no grade is detected
-      };
-
-      // Helper function to extract resource type from text
-      const extractResourceType = (text: string): string => {
-        const lowerText = text.toLowerCase();
-        if (lowerText.includes('lesson plan')) return 'lesson_plan';
-        if (lowerText.includes('rubric')) return 'rubric';
-        if (lowerText.includes('quiz')) return 'quiz';
-        if (lowerText.includes('exit slip')) return 'exit_slip';
-        return 'worksheet';
-      };
-
+    if (request && typeof request === 'string') {
       // First, check if it looks like a JSON string
       if (request.trim().startsWith('{') && request.trim().endsWith('}')) {
-      try {
-        const parsedRequest = JSON.parse(request);
-        const subject = parsedRequest.subject || 'Math';
-        const resourceType = parsedRequest.resourceType || 'worksheet';
-        const bestFormat = inferBestFormat(parsedRequest.text, subject, resourceType);
-        
-        setRequestedType(resourceType);
-        
-        setSettings(prev => ({
-          ...prev,
-          grade: parsedRequest.grade || prev.grade,
-          subject: subject,
-          resourceType: resourceType,
-          theme: parsedRequest.specifications?.theme || prev.theme,
+        try {
+          const parsedRequest = JSON.parse(request);
+          const subject = parsedRequest.subject || 'Math';
+          const resourceType = parsedRequest.resourceType || 'worksheet';
+          const bestFormat = inferBestFormat(parsedRequest.text || '', subject, resourceType);
+          const theme = extractTheme(parsedRequest.text || '');
+          
+          setRequestedType(resourceType);
+          
+          setSettings(prev => ({
+            ...prev,
+            grade: parsedRequest.grade || prev.grade,
+            subject: subject,
+            resourceType: resourceType,
+            theme: (parsedRequest.specifications?.theme || theme || prev.theme) as Theme,
             topicArea: parsedRequest.specifications?.topicArea || parsedRequest.text || prev.topicArea,
-          problemCount: parsedRequest.specifications?.questionCount || prev.problemCount,
-          format: bestFormat,
-          customInstructions: prev.customInstructions,
-          questionCount: prev.questionCount,
-          selectedQuestionTypes: prev.selectedQuestionTypes
-        }));
-      } catch (e) {
+            problemCount: parsedRequest.specifications?.questionCount || prev.problemCount,
+            format: bestFormat,
+            customInstructions: prev.customInstructions,
+            questionCount: prev.questionCount,
+            selectedQuestionTypes: prev.selectedQuestionTypes
+          }));
+        } catch (e) {
           console.error('Error parsing JSON request:', e);
           // Fall back to text processing
           handleTextRequest(request);
@@ -167,6 +185,7 @@ export function WorksheetGenerator({ onBack, onComplete, request }: BaseGenerato
     const resourceType = extractResourceType(text);
     const grade = extractGrade(text);
     const bestFormat = inferBestFormat(text, subject, resourceType);
+    const theme = extractTheme(text);
 
     setRequestedType(resourceType);
     setSettings(prev => ({
@@ -175,7 +194,8 @@ export function WorksheetGenerator({ onBack, onComplete, request }: BaseGenerato
       subject: subject,
       resourceType: resourceType,
       topicArea: text,
-      format: bestFormat
+      format: bestFormat,
+      theme: theme
     }));
   };
 
@@ -196,7 +216,7 @@ export function WorksheetGenerator({ onBack, onComplete, request }: BaseGenerato
   };
 
   // Handle theme change
-  const handleThemeChange = (value: WorksheetSettings['theme']) => {
+  const handleThemeChange = (value: Theme) => {
     setSettings(prev => ({
       ...prev,
       theme: value
@@ -486,7 +506,7 @@ export function WorksheetGenerator({ onBack, onComplete, request }: BaseGenerato
       request={request}
       renderSpecificSettings={renderSpecificSettings}
       icon={resourceFormats[settings.subject]?.[settings.resourceType]?.[0].icon || "📝"}
-      title={`${settings.resourceType.charAt(0).toUpperCase()}${settings.resourceType.slice(1)} Generator`}
+      title={`${themeEmojis[settings.theme]} ${settings.resourceType.charAt(0).toUpperCase()}${settings.resourceType.slice(1)} ${themeEmojis[settings.theme]}`}
     />
   );
 } 
