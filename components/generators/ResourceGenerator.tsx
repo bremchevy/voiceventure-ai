@@ -997,21 +997,6 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
         </div>
       </div>
 
-      {/* Custom Instructions Field */}
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-3">
-          Custom Instructions
-          <span className="text-xs text-gray-500 ml-2">(Optional - any specific requirements)</span>
-        </label>
-        <textarea
-          value={settings.customInstructions || ""}
-          onChange={(e) => setSettings((prev) => ({ ...prev, customInstructions: e.target.value }))}
-          placeholder="Add any specific requirements, topics, or instructions..."
-          className="w-full p-3 rounded-lg border-2 border-gray-200 text-sm resize-none focus:border-purple-500 focus:outline-none"
-          rows={3}
-        />
-      </div>
-
       {/* Generate Button */}
       <Button
         onClick={generateResource}

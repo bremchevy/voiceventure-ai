@@ -427,16 +427,6 @@ export function VoiceResourceForm({ onSubmit, className }: VoiceResourceFormProp
           />
         </div>
 
-        {/* Custom Instructions */}
-        <div className="space-y-2">
-          <Label>Custom Instructions</Label>
-          <Textarea
-            value={formState.fields.customInstructions?.value || ''}
-            onChange={(e) => updateField('customInstructions', e.target.value)}
-            placeholder="Any specific requirements or notes"
-          />
-        </div>
-
         {/* Suggested Corrections */}
         {suggestedCorrections && Object.keys(suggestedCorrections).length > 0 && (
           <Alert>

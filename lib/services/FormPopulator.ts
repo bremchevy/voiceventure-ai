@@ -181,10 +181,6 @@ export class FormPopulator {
       });
     }
 
-    if (specifications.customInstructions) {
-      this.updateField('customInstructions', specifications.customInstructions);
-    }
-
     // Validate the populated form
     const formValidation = this.validateForm();
     validation.errors.push(...formValidation.errors);

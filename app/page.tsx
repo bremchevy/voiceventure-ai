@@ -102,6 +102,12 @@ interface NotificationOptions {
   body: string
 }
 
+// Add these interfaces at the top with other interfaces
+interface SpeechRecognitionErrorEvent extends Event {
+  error: string;
+  message?: string;
+}
+
 export default function VoiceVentureAI() {
   const [isListening, setIsListening] = useState(false)
   const [isPaused, setIsPaused] = useState(false)
@@ -263,7 +269,7 @@ export default function VoiceVentureAI() {
           setContextHint("Try: 'Create a math worksheet for 3rd grade about dinosaurs'")
         }
 
-        recognitionRef.current.onerror = (event) => {
+        recognitionRef.current.onerror = (event: SpeechRecognitionErrorEvent) => {
           console.error("❌ Speech recognition error:", event.error, event)
           setIsListening(false)
           setContextHint("Try: 'Create a math worksheet for 3rd grade about dinosaurs'")
@@ -272,7 +278,7 @@ export default function VoiceVentureAI() {
             case "not-allowed":
               console.log("🚫 Microphone access denied")
               alert(
-                "Microphone access denied.\n\nTo fix this:\n1. Click the microphone icon in your browser's address bar\n2. Select 'Allow'\n3. Refresh the page and try again\n\nOr use the example prompts below instead.",
+                "Microphone access denied.\n\nTo fix this:\n1. Click the microphone icon in your browser's address bar\n2. Select 'Allow'\n3. Refresh the page and try again\n\nOr use the example prompts below.",
               )
               break
             case "no-speech":
@@ -557,7 +563,7 @@ export default function VoiceVentureAI() {
       const match = text.match(pattern)
       if (match) {
         if (typeof grade === "function") {
-          info.grade = grade(match)
+          info.grade = grade(match as RegExpMatchArray)
         } else {
           info.grade = grade
         }
@@ -616,9 +622,6 @@ export default function VoiceVentureAI() {
 
     console.log("🔍 Final detected info:", info)
     setDetectedInfo(info)
-
-    // Process the voice command based on content (enhanced with category detection)
-    processVoiceCommand(text, info, resourceInfo)
   }
 
   const processVoiceCommand = (
@@ -1136,7 +1139,7 @@ What subject and grade level would you like this for?`
 
       // Set up event handlers
       recognitionRef.current.onstart = () => {
-        console.log("🎤 Speech recognition started successfully")
+        console.log("🎤 Speech recognition started")
         setIsListening(true)
         setContextHint("Listening... speak naturally")
         lastSpeechTime = Date.now()
@@ -1190,19 +1193,14 @@ What subject and grade level would you like this for?`
         setContextHint("Try: 'Create a math worksheet for 3rd grade about dinosaurs'")
       }
 
-      recognitionRef.current.onerror = (event) => {
-        console.error("❌ Speech recognition error:", {
-          error: event.error,
-          message: event.message,
-          type: event.type,
-        })
-        
+      recognitionRef.current.onerror = (event: SpeechRecognitionErrorEvent) => {
+        console.error("❌ Speech recognition error:", event.error, event)
         setIsListening(false)
         setContextHint("Try: 'Create a math worksheet for 3rd grade about dinosaurs'")
 
         switch (event.error) {
           case "not-allowed":
-            console.log("🚫 Speech recognition not allowed")
+            console.log("🚫 Microphone access denied")
             alert(`🚫 Microphone access denied during speech recognition.
 
 To fix this:
@@ -1779,6 +1777,19 @@ ${solution}`)
     }
   }
 
+  // Add handleMicrophoneError function
+  const handleMicrophoneError = (error: unknown) => {
+    console.error("Microphone error:", error)
+    setIsListening(false)
+    
+    // Type guard for Error objects
+    if (error instanceof Error) {
+      alert(`Microphone error: ${error.message}\n\nPlease check your microphone settings and try again.`)
+    } else {
+      alert("An unknown error occurred with the microphone. Please check your settings and try again.")
+    }
+  }
+
   // Render the appropriate view
   if (currentView === "substitute") {
     return (
@@ -1877,26 +1888,44 @@ ${solution}`)
                       )}
                     </div>
 
-                    {/* Test Microphone and Start Over Buttons */}
-                    <div className="flex gap-3 mb-4">
-                      <Button onClick={testMicrophone} size="sm" variant="outline" className="text-xs">
-                        🧪 Test Microphone
-                      </Button>
-                      <Button onClick={handleStartOver} size="sm" variant="outline" className="text-xs">
-                        🔄 Start Over
-                      </Button>
-                    </div>
-
                     {/* Transcript Display */}
                     {transcript && (
                       <div className="w-full bg-white rounded-lg p-4 shadow-sm mb-4 border border-gray-100">
-                        <p className="text-sm font-medium text-gray-700 mb-1">You said:</p>
-                        <p className="text-sm text-gray-900">"{transcript}"</p>
+                        <p className="text-sm font-medium text-gray-700 mb-2">You said:</p>
+                        <p className="text-sm text-gray-900 mb-4">"{transcript}"</p>
+                        
+                        {/* New Confirmation Buttons */}
+                        <div className="flex gap-3">
+                          <Button 
+                            onClick={() => {
+                              // Process the voice command based on content
+                              processVoiceCommand(transcript, detectedInfo)
+                            }}
+                            className="flex-1 bg-purple-600 hover:bg-purple-700 text-white"
+                            size="sm"
+                          >
+                            Process Request
+                          </Button>
+                          <Button 
+                            onClick={() => {
+                              // Clear transcript and reset
+                              setTranscript("")
+                              setDetectedInfo({})
+                              setVoiceResponse(null)
+                              setContextHint("Try: 'Create a math worksheet for 3rd grade about dinosaurs'")
+                            }}
+                            variant="outline"
+                            className="flex-1"
+                            size="sm"
+                          >
+                            Clear & Try Again
+                          </Button>
+                        </div>
                       </div>
                     )}
 
-                    {/* Voice Response */}
-                    {voiceResponse?.text && (
+                    {/* Voice Response - Only show after processing */}
+                    {voiceResponse?.text && transcript && (
                       <div className="w-full bg-white rounded-lg p-4 shadow-sm border border-gray-100">
                         <div className="flex items-start mb-4">
                           <div className="w-8 h-8 rounded-full bg-purple-100 flex items-center justify-center mr-3">
