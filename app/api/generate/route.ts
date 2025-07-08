@@ -229,7 +229,7 @@ export async function POST(req: Request) {
   try {
     const {
       subject,
-      gradeLevel,
+      grade,
       resourceType,
       theme,
       difficulty,
@@ -242,7 +242,7 @@ export async function POST(req: Request) {
     } = await req.json();
 
     // Validate required fields
-    if (!subject || !gradeLevel || !resourceType || !topicArea) {
+    if (!subject || !grade || !resourceType || !topicArea) {
       return NextResponse.json(
         { error: 'Missing required fields' },
         { status: 400 }
@@ -250,7 +250,7 @@ export async function POST(req: Request) {
     }
 
     // Build the system prompt based on resource type
-    let systemPrompt = `You are an expert ${subject} teacher specializing in creating educational resources for ${gradeLevel} students. `;
+    let systemPrompt = `You are an expert ${subject} teacher specializing in creating educational resources for ${grade} students. `;
     systemPrompt += `Create a ${resourceType} about ${topicArea} at a ${difficulty || 'moderate'} difficulty level. `;
 
     if (customInstructions) {
@@ -303,7 +303,7 @@ export async function POST(req: Request) {
               }
 
               // Add specific instructions for reading passages
-              systemPrompt += `Create a grade-appropriate passage about ${topicArea}. The passage should be engaging and suitable for ${gradeLevel} students. `;
+              systemPrompt += `Create a grade-appropriate passage about ${topicArea}. The passage should be engaging and suitable for ${grade} students. `;
               
               switch (readingFormat) {
                 case 'comprehension':
@@ -333,7 +333,7 @@ export async function POST(req: Request) {
                   systemPrompt += `Create a comprehensive explanation about ${topicArea}. Return the response in this exact JSON format:
 {
   "title": "${topicArea} Overview",
-  "grade_level": "${gradeLevel}",
+  "grade_level": "${grade}",
   "topic": "${topicArea}",
   "subject": "Science",
   "format": "science_context",
@@ -350,7 +350,7 @@ export async function POST(req: Request) {
                   systemPrompt += `Create a comprehensive explanation about ${topicArea} with ${questionCount} questions. Return the response in this exact JSON format:
 {
   "title": "${topicArea} Study",
-  "grade_level": "${gradeLevel}",
+  "grade_level": "${grade}",
   "topic": "${topicArea}",
   "subject": "Science",
   "format": "science_context",
@@ -381,7 +381,7 @@ export async function POST(req: Request) {
                   systemPrompt += `Create an analytical breakdown of ${topicArea}. Return the response in this exact JSON format:
 {
   "title": "${topicArea} Analysis",
-  "grade_level": "${gradeLevel}",
+  "grade_level": "${grade}",
   "topic": "${topicArea}",
   "subject": "Science",
   "format": "analysis_focus",
@@ -398,7 +398,7 @@ export async function POST(req: Request) {
                   systemPrompt += `Create an analytical breakdown of ${topicArea} with ${questionCount} analytical questions. Return the response in this exact JSON format:
 {
   "title": "${topicArea} Analysis",
-  "grade_level": "${gradeLevel}",
+  "grade_level": "${grade}",
   "topic": "${topicArea}",
   "subject": "Science",
   "format": "analysis_focus",
@@ -427,7 +427,7 @@ export async function POST(req: Request) {
                 systemPrompt += `Create a comprehensive explanation about ${topicArea}. Return the response in this exact JSON format:
 {
   "title": "${topicArea} Overview",
-  "grade_level": "${gradeLevel}",
+  "grade_level": "${grade}",
   "topic": "${topicArea}",
   "subject": "Science",
   "format": "science_context",
@@ -459,7 +459,7 @@ export async function POST(req: Request) {
             lessonFormat = `Design a comprehensive 45-60 minute lesson plan with detailed objectives, activities, and assessment strategies. Return the response in this exact JSON format:
 {
   "title": "${topicArea} Lesson Plan",
-  "grade_level": "${gradeLevel}",
+  "grade_level": "${grade}",
   "subject": "${subject}",
   "duration": "45-60 minutes",
   "objectives": ["Learning objective 1", "Learning objective 2"],
@@ -501,7 +501,7 @@ export async function POST(req: Request) {
             lessonFormat = `Design a focused 15-20 minute mini-lesson that targets a specific skill or concept. Return the response in this exact JSON format:
 {
   "title": "${topicArea} Mini-Lesson",
-  "grade_level": "${gradeLevel}",
+  "grade_level": "${grade}",
   "subject": "${subject}",
   "duration": "15-20 minutes",
   "objectives": ["Focused learning objective"],
@@ -543,7 +543,7 @@ export async function POST(req: Request) {
             lessonFormat = `Design a standalone hands-on learning activity that can be completed in 20-30 minutes. Return the response in this exact JSON format:
 {
   "title": "${topicArea} Activity",
-  "grade_level": "${gradeLevel}",
+  "grade_level": "${grade}",
   "subject": "${subject}",
   "duration": "20-30 minutes",
   "objectives": ["Activity-specific learning objective"],
@@ -585,7 +585,7 @@ export async function POST(req: Request) {
             lessonFormat = `Design a comprehensive lesson plan with objectives, activities, and assessment strategies. Return the response in this exact JSON format:
 {
   "title": "${topicArea} Lesson Plan",
-  "grade_level": "${gradeLevel}",
+  "grade_level": "${grade}",
   "subject": "${subject}",
   "duration": "${lessonDuration || '45 minutes'}",
   "objectives": ["Learning objective 1", "Learning objective 2"],
@@ -632,7 +632,7 @@ export async function POST(req: Request) {
             {
               "title": "${topicArea} Exit Slip",
               "subject": "${subject}",
-              "grade_level": "${gradeLevel}",
+              "grade_level": "${grade}",
               "exit_slip_topic": "${topicArea}",
               "difficulty_level": "Basic/Intermediate/Advanced",
               "questions": [
@@ -650,7 +650,7 @@ export async function POST(req: Request) {
             {
               "title": "${topicArea} Vocabulary Check",
               "subject": "${subject}",
-              "grade_level": "${gradeLevel}",
+              "grade_level": "${grade}",
               "exit_slip_topic": "${topicArea}",
               "difficulty_level": "Basic/Intermediate/Advanced",
               "questions": [
@@ -671,7 +671,7 @@ export async function POST(req: Request) {
             {
               "title": "${topicArea} Skill Assessment",
               "subject": "${subject}",
-              "grade_level": "${gradeLevel}",
+              "grade_level": "${grade}",
               "exit_slip_topic": "${topicArea}",
               "difficulty_level": "Basic/Intermediate/Advanced",
               "questions": [
@@ -691,7 +691,7 @@ export async function POST(req: Request) {
             {
               "title": "${topicArea} Exit Slip",
               "subject": "${subject}",
-              "grade_level": "${gradeLevel}",
+              "grade_level": "${grade}",
               "exit_slip_topic": "${topicArea}",
               "difficulty_level": "Basic/Intermediate/Advanced",
               "questions": [

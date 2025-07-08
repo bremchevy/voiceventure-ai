@@ -205,6 +205,9 @@ export function ContentGenerator({ onGenerate, isGenerating, streamingContent }:
                 <TabsTrigger value="reading">Reading</TabsTrigger>
                 <TabsTrigger value="science">Science</TabsTrigger>
               </TabsList>
+              {!subject && (
+                <div className="text-sm text-red-500 mt-1">Please select a subject</div>
+              )}
 
               <div className="space-y-6">
                 {subject === 'math' && (
@@ -233,6 +236,9 @@ export function ContentGenerator({ onGenerate, isGenerating, streamingContent }:
                     className="w-full"
                   />
                   <div className="text-sm text-gray-500 mt-1">Grade {grade}</div>
+                  {!grade && (
+                    <div className="text-sm text-red-500 mt-1">Please select a grade</div>
+                  )}
                 </div>
 
                 <div>

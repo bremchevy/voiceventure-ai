@@ -231,7 +231,7 @@ export default function VoiceVentureAI() {
           lang: recognitionRef.current.lang,
         })
 
-        recognitionRef.current.onresult = (event) => {
+        recognitionRef.current.onresult = (event: SpeechRecognitionEvent) => {
           console.log("📝 Speech recognition result event:", event)
           let interimTranscript = ""
           let finalTranscript = ""
@@ -550,7 +550,7 @@ export default function VoiceVentureAI() {
       { pattern: /\bfor\s+(k|kindergarten)\b/i, grade: "Kindergarten" },
       {
         pattern: /\bfor\s+(\d+)(st|nd|rd|th)?\s+grad/i,
-        grade: (match) => {
+        grade: (match: RegExpMatchArray) => {
           const num = Number.parseInt(match[1])
           const suffix = num === 1 ? "st" : num === 2 ? "nd" : num === 3 ? "rd" : "th"
           return `${num}${suffix} Grade`
@@ -664,8 +664,8 @@ export default function VoiceVentureAI() {
       const structuredData = {
         text,
         subject: processedCommand.subject,
-        grade: processedCommand.gradeLevel,
-        resourceType: processedCommand.resourceType || 'worksheet', // Default to worksheet if not specified
+        grade: processedCommand.grade,  // Changed from gradeLevel
+        resourceType: processedCommand.resourceType || 'worksheet',
         specifications: processedCommand.specifications
       };
 
@@ -1341,17 +1341,18 @@ You can now use voice input in the app!`)
 
       // Clean up
       stream.getTracks().forEach((track) => track.stop())
-    } catch (error) {
+    } catch (error: unknown) {
+      const err = error as Error;
       console.error("❌ Microphone test FAILED:", {
-        name: error.name,
-        message: error.message,
-        constraint: error.constraint,
+        name: err.name,
+        message: err.message,
+        constraint: (error as any).constraint,
       })
 
       // Provide specific solutions based on error type
       let solution = ""
 
-      switch (error.name) {
+      switch (err.name) {
         case "NotAllowedError":
         case "PermissionDeniedError":
           solution = `🚫 PERMISSION DENIED
@@ -1386,7 +1387,7 @@ SOLUTIONS:
           break
 
         default:
-          solution = `❓ UNKNOWN ERROR: ${error.name}
+          solution = `❓ UNKNOWN ERROR: ${err.name}
 
 GENERAL SOLUTIONS:
 1. Refresh the page
@@ -1398,8 +1399,8 @@ GENERAL SOLUTIONS:
 
       alert(`❌ Microphone test FAILED
 
-Error: ${error.name}
-${error.message}
+Error: ${err.name}
+${err.message}
 
 ${solution}`)
     }
@@ -1795,8 +1796,7 @@ ${solution}`)
     return (
       <>
         <SubstituteBookingSystem
-          onBack={() => setCurrentView("main")}
-          onComplete={() => {
+          onBack={() => {
             setCurrentView("main")
             setSuccessNotification("✅ Substitute request submitted successfully!")
           }}
@@ -1807,7 +1807,7 @@ ${solution}`)
     return (
       <>
         <WorksheetGenerator
-          request={worksheetRequest}
+          request={JSON.parse(worksheetRequest || '{}')}
           onComplete={(worksheet) => {
             console.log("Worksheet completed:", worksheet)
             setShowWorksheetGenerator(false)
@@ -1824,7 +1824,7 @@ ${solution}`)
     return (
       <>
         <QuizGenerator
-          request={quizRequest}
+          request={JSON.parse(quizRequest || '{}')}
           onComplete={(quiz) => {
             console.log("Quiz completed:", quiz)
             setShowQuizGenerator(false)
@@ -2221,7 +2221,7 @@ ${solution}`)
             onClose={() => setShowAssistant(false)}
             voiceResponse={assistantMessage}
             onSendMessage={handleSendMessage}
-            onSmartSuggestion={handleSmartSuggestionFromAssistant}
+            onSmartSuggestion={(category: string) => handleSmartSuggestionFromAssistant(category as ResponseCategory)}
           />
         )}
 

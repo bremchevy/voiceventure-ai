@@ -336,6 +336,9 @@ export function VoiceResourceForm({ onSubmit, className }: VoiceResourceFormProp
               <SelectItem value="5">5th Grade</SelectItem>
             </SelectContent>
           </Select>
+          {!formState.fields.gradeLevel?.value && (
+            <div className="text-sm text-red-500">Please select a grade</div>
+          )}
         </div>
 
         {/* Subject */}
@@ -351,6 +354,9 @@ export function VoiceResourceForm({ onSubmit, className }: VoiceResourceFormProp
               <SelectItem value="science">Science</SelectItem>
             </SelectContent>
           </Select>
+          {!formState.fields.subject?.value && (
+            <div className="text-sm text-red-500">Please select a subject</div>
+          )}
         </div>
 
         {/* Resource Type */}

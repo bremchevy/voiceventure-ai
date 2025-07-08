@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { BaseGeneratorProps, QuizSettings } from '@/lib/types/generator-types';
+import { BaseGeneratorProps, QuizSettings, ResourceType, Format } from '@/lib/types/generator-types';
 import { QuizResource } from '@/lib/types/resource';
 import { ResourceGenerator } from './ResourceGenerator';
 import { getQuizDifficultyParams, getQuizPromptEnhancements } from '@/lib/services/AIContentGenerator/quiz-difficulty';
@@ -71,14 +71,14 @@ const transformQuizResponse = (apiResponse: any, settings: QuizSettings): QuizRe
 
 export function QuizGenerator({ onBack, onComplete, request }: BaseGeneratorProps) {
   const [settings, setSettings] = useState<QuizSettings>(() => ({
-    grade: request?.grade || "",
-    subject: request?.subject || "",
-    theme: request?.theme || "General",
+    grade: typeof request === 'object' ? request?.grade || "" : "",
+    subject: typeof request === 'object' ? request?.subject || "" : "",
+    theme: (typeof request === 'object' ? request?.theme || "General" : "General") as "General" | "Halloween" | "Winter" | "Spring",
     questionCount: 10,
     selectedQuestionTypes: ["Multiple Choice"],
-    topicArea: request?.topicArea || "",
-    resourceType: request?.resourceType || "quiz",
-    format: request?.format || "multiple_choice"
+    topicArea: typeof request === 'object' ? request?.topicArea || "" : "",
+    resourceType: typeof request === 'object' ? request?.resourceType || "quiz" : "quiz",
+    format: typeof request === 'object' ? request?.format || "multiple_choice" : "multiple_choice"
   }));
 
   // Format options for different resource types
@@ -262,17 +262,28 @@ export function QuizGenerator({ onBack, onComplete, request }: BaseGeneratorProp
 
   useEffect(() => {
     if (request) {
-      setSettings(prev => ({
+      setSettings(prev => {
+        if (typeof request === 'string') return prev;
+        const reqObj = request as {
+          grade?: string;
+          subject?: string;
+          theme?: "General" | "Halloween" | "Winter" | "Spring";
+          topicArea?: string;
+          resourceType?: ResourceType;
+          format?: Format;
+        };
+        return {
         ...prev,
-        ...request,
+          ...reqObj,
         // Set default format based on resource type if not specified
-        format: request.format || (
-          request.resourceType === 'quiz' ? 'multiple_choice' :
-          request.resourceType === 'worksheet' ? 'standard' :
-          request.resourceType === 'exit_slip' ? 'reflection_prompt' :
+          format: reqObj.format || (
+            reqObj.resourceType === 'quiz' ? 'multiple_choice' as Format :
+            reqObj.resourceType === 'worksheet' ? 'standard' as Format :
+            reqObj.resourceType === 'exit_slip' ? 'reflection_prompt' as Format :
           prev.format
         )
-      }));
+        };
+      });
     }
   }, [request]);
 
@@ -352,7 +363,7 @@ export function QuizGenerator({ onBack, onComplete, request }: BaseGeneratorProp
                   setSettings(prev => ({
                     ...prev,
                     selectedQuestionTypes: [format.type],
-                    format: format.format
+                    format: format.format as Format
                   }));
                 }}
                 className={`p-3 rounded-lg border-2 text-sm font-medium transition-all text-left flex items-center justify-between ${
@@ -367,7 +378,7 @@ export function QuizGenerator({ onBack, onComplete, request }: BaseGeneratorProp
                     <div className="font-medium">{format.type}</div>
                     <div className="text-xs text-gray-500">{format.desc}</div>
                     <div className="text-xs text-gray-400 mt-1 italic">
-                      Example: {format.examples[settings.subject]}
+                      Example: {format.examples[settings.subject as keyof typeof format.examples]}
                     </div>
                   </div>
                 </div>
@@ -400,7 +411,7 @@ export function QuizGenerator({ onBack, onComplete, request }: BaseGeneratorProp
 
   return (
     <ResourceGenerator<QuizSettings, QuizResource>
-      type={settings.resourceType}
+      type={settings.resourceType || 'quiz'}
       settings={settings}
       setSettings={setSettings}
       onBack={onBack}
@@ -409,7 +420,6 @@ export function QuizGenerator({ onBack, onComplete, request }: BaseGeneratorProp
       renderSpecificSettings={renderSpecificSettings}
       icon="🧠"
       title={`${settings.resourceType?.charAt(0).toUpperCase()}${settings.resourceType?.slice(1)} Generator`}
-      transformResponse={transformQuizResponse}
     />
   );
 } 

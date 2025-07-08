@@ -128,6 +128,7 @@ export interface WorksheetResource extends BaseResource {
 // Quiz resource type
 export interface QuizResource extends BaseResource {
   resourceType: 'quiz';
+  format: Format;
   questions: Array<{
     type: QuestionType;
     question: string;

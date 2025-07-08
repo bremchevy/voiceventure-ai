@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { BaseGeneratorProps, WorksheetSettings, Format } from '@/lib/types/generator-types';
+import { BaseGeneratorProps, WorksheetSettings, Format, ResourceType, Subject } from '@/lib/types/generator-types';
 import { WorksheetResource } from '@/lib/types/resource';
 import { ResourceGenerator } from './ResourceGenerator';
 import { Label } from '@/components/ui/label';
@@ -19,7 +19,22 @@ type ResourceFormats = {
   };
 };
 
-type Theme = 'Halloween' | 'Winter' | 'Spring' | 'General' | 'dinosaurs';
+type Theme = 'Halloween' | 'Winter' | 'Spring' | 'General';
+
+interface ProcessedRequest {
+  subject: string | null;
+  grade: string | null;
+  resourceType: string | null;
+  specifications: {
+    format?: string;
+    theme?: string;
+    topicArea?: string;
+    difficulty?: string;
+    questionCount?: number;
+    customInstructions?: string;
+  };
+  confidence: number;
+}
 
 export function WorksheetGenerator({ onBack, onComplete, request }: BaseGeneratorProps) {
   const [settings, setSettings] = useState<WorksheetSettings>({
@@ -88,31 +103,65 @@ export function WorksheetGenerator({ onBack, onComplete, request }: BaseGenerato
   // Helper function to extract subject from text
   const extractSubject = (text: string): string => {
     const lowerText = text.toLowerCase();
-    if (lowerText.includes('math') || /\b(addition|subtraction|multiplication|division|fraction|geometry|algebra)\b/i.test(text)) {
-      return 'Math';
-    }
-    if (lowerText.includes('reading') || /\b(comprehension|vocabulary|story|text|book|literature|writing)\b/i.test(text)) {
-      return 'Reading';
-    }
-    if (lowerText.includes('science') || /\b(experiment|lab|observation|hypothesis|scientific|biology|chemistry|physics)\b/i.test(text)) {
+    
+    // Check for science keywords first since they're more specific
+    if (lowerText.includes('science') || 
+        /\b(experiment|lab|observation|hypothesis|scientific|biology|chemistry|physics|photosynthesis|cells|atoms|molecules|ecosystem)\b/i.test(text)) {
       return 'Science';
     }
-    return 'Math'; // Default to Math if no subject is detected
+    
+    // Then check for math keywords
+    if (lowerText.includes('math') || 
+        /\b(addition|subtraction|multiplication|division|fraction|geometry|algebra|equation|calculate|solve)\b/i.test(text)) {
+      return 'Math';
+    }
+    
+    // Finally check for reading keywords
+    if (lowerText.includes('reading') || 
+        /\b(comprehension|vocabulary|story|text|book|literature|writing|essay|grammar)\b/i.test(text)) {
+      return 'Reading';
+    }
+
+    // Look for subject-specific content to make a best guess
+    if (/\b(plant|animal|weather|earth|space|energy|force|matter|chemical|physical)\b/i.test(text)) {
+      return 'Science';
+    }
+    
+    return 'Science'; // Default to Science if scientific terms are detected
   };
 
   // Helper function to extract grade from text
   const extractGrade = (text: string): string => {
-    const gradeMatch = text.match(/\b(\d+)(st|nd|rd|th)?\s*grade\b/i);
+    // First try to match explicit grade numbers with optional suffixes
+    const gradeMatch = text.match(/\b(\d+)(?:st|nd|rd|th)?\s*grade\b/i);
     if (gradeMatch) {
-      const gradeNum = gradeMatch[1];
-      const suffix = ['1', '2', '3'].includes(gradeNum) ? 
-        ['st', 'nd', 'rd'][parseInt(gradeNum) - 1] : 'th';
+      const gradeNum = parseInt(gradeMatch[1]);
+      if (gradeNum >= 1 && gradeNum <= 12) {
+        const suffix = gradeNum === 1 ? 'st' : 
+                      gradeNum === 2 ? 'nd' : 
+                      gradeNum === 3 ? 'rd' : 'th';
       return `${gradeNum}${suffix} Grade`;
+      }
     }
+
+    // Check for kindergarten
     if (text.toLowerCase().includes('kindergarten')) {
       return 'Kindergarten';
     }
-    return '3rd Grade'; // Default to 3rd Grade if no grade is detected
+
+    // Look for grade numbers without 'grade' keyword
+    const numMatch = text.match(/\b(\d+)\b/);
+    if (numMatch) {
+      const gradeNum = parseInt(numMatch[1]);
+      if (gradeNum >= 1 && gradeNum <= 12) {
+        const suffix = gradeNum === 1 ? 'st' : 
+                      gradeNum === 2 ? 'nd' : 
+                      gradeNum === 3 ? 'rd' : 'th';
+        return `${gradeNum}${suffix} Grade`;
+      }
+    }
+
+    return '7th Grade'; // Default to 7th Grade if no grade is detected
   };
 
   // Helper function to extract resource type from text
@@ -142,62 +191,80 @@ export function WorksheetGenerator({ onBack, onComplete, request }: BaseGenerato
 
   // Parse initial request if provided
   useEffect(() => {
-    if (request && typeof request === 'string') {
-      // First, check if it looks like a JSON string
+    if (request) {
+      // Handle object request (from CommandProcessor)
+      if (typeof request === 'object' && request !== null) {
+        const processedRequest = request as ProcessedRequest;
+        const subject = processedRequest.subject || 'Science';
+        const resourceType = processedRequest.resourceType || 'worksheet';
+        const bestFormat = inferBestFormat(processedRequest.specifications?.topicArea || '', subject, resourceType);
+        const theme = extractTheme(processedRequest.specifications?.topicArea || '');
+        
+        setRequestedType(resourceType);
+        
+        setSettings(prev => ({
+          ...prev,
+          grade: processedRequest.grade || prev.grade,
+          subject: subject,
+          resourceType: resourceType as ResourceType,
+          theme: (processedRequest.specifications?.theme || theme || prev.theme) as Theme,
+          topicArea: processedRequest.specifications?.topicArea || prev.topicArea,
+          problemCount: processedRequest.specifications?.questionCount || prev.problemCount,
+          format: bestFormat,
+          customInstructions: prev.customInstructions,
+        }));
+        return;
+      }
+      
+      // Handle string request (legacy support)
+      if (typeof request === 'string') {
       if (request.trim().startsWith('{') && request.trim().endsWith('}')) {
         try {
-          const parsedRequest = JSON.parse(request);
-          const subject = parsedRequest.subject || 'Math';
+            const parsedRequest = JSON.parse(request) as ProcessedRequest;
+            const subject = parsedRequest.subject || 'Science';
           const resourceType = parsedRequest.resourceType || 'worksheet';
-          const bestFormat = inferBestFormat(parsedRequest.text || '', subject, resourceType);
-          const theme = extractTheme(parsedRequest.text || '');
+            const bestFormat = inferBestFormat(parsedRequest.specifications?.topicArea || '', subject, resourceType);
+            const theme = extractTheme(parsedRequest.specifications?.topicArea || '');
+            
+            setRequestedType(resourceType);
+            
+            setSettings(prev => ({
+              ...prev,
+              grade: parsedRequest.grade || prev.grade,
+              subject: subject,
+              resourceType: resourceType as ResourceType,
+              theme: (parsedRequest.specifications?.theme || theme || prev.theme) as Theme,
+              topicArea: parsedRequest.specifications?.topicArea || prev.topicArea,
+              problemCount: parsedRequest.specifications?.questionCount || prev.problemCount,
+              format: bestFormat,
+              customInstructions: prev.customInstructions,
+            }));
+          } catch (e) {
+            console.error('Failed to parse request JSON:', e);
+          }
+        } else {
+          // Handle plain text request
+          const subject = extractSubject(request);
+          const grade = extractGrade(request);
+          const resourceType = extractResourceType(request);
+          const bestFormat = inferBestFormat(request, subject, resourceType);
+          const theme = extractTheme(request);
           
           setRequestedType(resourceType);
           
           setSettings(prev => ({
             ...prev,
-            grade: parsedRequest.grade || prev.grade,
+            grade: grade,
             subject: subject,
-            resourceType: resourceType,
-            theme: (parsedRequest.specifications?.theme || theme || prev.theme) as Theme,
-            topicArea: parsedRequest.specifications?.topicArea || parsedRequest.text || prev.topicArea,
-            problemCount: parsedRequest.specifications?.questionCount || prev.problemCount,
+            resourceType: resourceType as ResourceType,
+            theme: theme,
+            topicArea: request,
             format: bestFormat,
-            customInstructions: prev.customInstructions,
-            questionCount: prev.questionCount,
-            selectedQuestionTypes: prev.selectedQuestionTypes
           }));
-        } catch (e) {
-          console.error('Error parsing JSON request:', e);
-          // Fall back to text processing
-          handleTextRequest(request);
         }
-      } else {
-        // Process as plain text
-        handleTextRequest(request);
       }
     }
   }, [request]);
-
-  // Function to handle text-based requests
-  const handleTextRequest = (text: string) => {
-    const subject = extractSubject(text);
-    const resourceType = extractResourceType(text);
-    const grade = extractGrade(text);
-    const bestFormat = inferBestFormat(text, subject, resourceType);
-    const theme = extractTheme(text);
-
-    setRequestedType(resourceType);
-    setSettings(prev => ({
-      ...prev,
-      grade: grade,
-      subject: subject,
-      resourceType: resourceType,
-      topicArea: text,
-      format: bestFormat,
-      theme: theme
-    }));
-  };
 
   // Handle problem count change
   const handleProblemCountChange = (value: number[]) => {

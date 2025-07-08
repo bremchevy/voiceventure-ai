@@ -10,7 +10,7 @@ export interface BaseGeneratorProps {
     topicArea?: string;
     resourceType?: ResourceType;
     format?: Format;
-  };
+  } | string;
 }
 
 export interface BaseGeneratorSettings {

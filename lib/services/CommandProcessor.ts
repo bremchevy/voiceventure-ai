@@ -1,9 +1,9 @@
 import { ResourceType, Subject, Format, MathFormat, ReadingFormat, ScienceFormat } from '@/lib/types/generator-types';
 
 export interface NLPResult {
-  gradeLevel: string | null;
   subject: string | null;
-  resourceType: ResourceType | null;
+  grade: string | null;
+  resourceType: string | null;
   specifications: ResourceSpecs;
   confidence: number;
 }
@@ -112,8 +112,32 @@ export class CommandProcessor {
 
   // Helper function to normalize grade format
   private normalizeGrade(grade: string): string | null {
-    const normalized = this.gradeNormalization[grade.toLowerCase()];
-    return normalized || null;
+    console.log('📝 Normalizing grade:', grade);
+
+    // Handle Kindergarten
+    if (/kindergarten/i.test(grade)) {
+      return 'Kindergarten';
+    }
+
+    // Extract numeric grade
+    const numericMatch = grade.match(/(\d+)/);
+    if (numericMatch) {
+      const gradeNum = parseInt(numericMatch[1]);
+      if (gradeNum >= 1 && gradeNum <= 12) {
+        const suffix = gradeNum === 1 ? 'st' : 
+                      gradeNum === 2 ? 'nd' : 
+                      gradeNum === 3 ? 'rd' : 'th';
+        return `${gradeNum}${suffix} Grade`;
+      }
+    }
+
+    // Handle grade ranges
+    if (/elementary/i.test(grade)) return '3rd Grade';
+    if (/middle/i.test(grade)) return '7th Grade';
+    if (/high/i.test(grade)) return '10th Grade';
+
+    console.log('⚠️ Could not normalize grade:', grade);
+    return grade; // Return the original grade if we can't normalize it
   }
 
   // Helper function to check educational context
@@ -215,58 +239,74 @@ export class CommandProcessor {
     }
   ];
 
+  // Subject detection patterns
+  private readonly SUBJECT_PATTERNS = {
+    Reading: /\b(?:reading|literacy|english|language\s*arts|ela|spelling|vocabulary|phonics|writing|grammar|main\s*idea|comprehension|literature|story|text|book)\b/i,
+    Math: /\b(?:math|mathematics|arithmetic|algebra|geometry|calculus|fractions?|decimals?|percentages?|ratios?|equations?|multiplication|division|addition|subtraction)\b/i,
+    Science: /\b(?:science|biology|chemistry|physics|earth\s*science|photosynthesis|cells?|atoms?|molecules?|ecosystem|plants?|animals?|weather|energy|force|matter|experiments?|lab(?:oratory)?|scientific|observation|hypothesis)\b/i
+  };
+
+  // Grade level detection patterns
+  private readonly GRADE_PATTERNS = {
+    explicit: /\b(\d+)(?:st|nd|rd|th)?\s*grade\b/i,
+    numeric: /\b(\d+)\b/,
+    kindergarten: /\bkindergarten\b/i,
+    gradeRanges: {
+      elementary: /\b(?:elementary|primary)\b/i,
+      middle: /\b(?:middle|junior\s*high)\b/i,
+      high: /\b(?:high\s*school|secondary)\b/i
+    }
+  };
+
   // Subject patterns with improved accuracy and context awareness
   private readonly subjectPatterns = [
-    // Reading and Language Arts patterns
     {
-      pattern: /\b(?:reading|literacy|english|language\s*arts|ela|spelling|vocabulary|phonics|writing|grammar|main\s*idea|comprehension)\b/i,
-      subject: "Reading" as Subject,
-      confidence: 0.9,
-      topics: [
-        { pattern: /\b(?:comprehension|understanding|main\s*idea)\b/i, weight: 0.2 },
-        { pattern: /\b(?:vocabulary|words?|definitions?|spelling|word\s*lists?)\b/i, weight: 0.1 },
-        { pattern: /\b(?:grammar|punctuation|sentences?|paragraphs?)\b/i, weight: 0.1 },
-        { pattern: /\b(?:stories?|narrative|fiction|non-fiction|literature)\b/i, weight: 0.1 },
-        { pattern: /\b(?:phonics|sounds?|blending|phonemes?)\b/i, weight: 0.1 }
-      ],
-      contextPatterns: [
-        /\b(?:book|text|passage|story|article)\b/i,
-        /\b(?:read|write|compose|analyze)\b/i,
-        /\b(?:lesson|teach|learn|understand)\b/i
-      ]
-    },
-    // Math patterns with specific topic recognition
-    {
-      pattern: /\b(?:math|mathematics|arithmetic|algebra|geometry|calculus|fractions?|decimals?|percentages?|ratios?)\b/i,
-      subject: "Math" as Subject,
-      confidence: 0.8,
-      topics: [
-        { pattern: /\b(?:addition|subtraction|multiplication|division|operations?)\b/i, weight: 0.1 },
-        { pattern: /\b(?:fractions?|decimals?|percentages?|ratios?)\b/i, weight: 0.1 },
-        { pattern: /\b(?:geometry|shapes?|angles?|area|perimeter)\b/i, weight: 0.1 },
-        { pattern: /\b(?:algebra|equations?|variables?|expressions?)\b/i, weight: 0.1 },
-        { pattern: /\b(?:numbers?|counting|place\s*value)\b/i, weight: 0.1 }
-      ],
-      contextPatterns: [
-        /\b(?:solve|calculate|compute|problem)\b/i,
-        /\b(?:number|equation|formula)\b/i
-      ]
-    },
-    // Science patterns with detailed topics
-    {
+      subject: 'Science',
       pattern: /\b(?:science|biology|chemistry|physics|earth\s*science)\b/i,
-      subject: "Science" as Subject,
-      confidence: 0.8,
       topics: [
-        { pattern: /\b(?:life\s*cycles?|plants?|animals?|ecosystems?|biology)\b/i, weight: 0.1 },
-        { pattern: /\b(?:matter|energy|forces?|motion|physics)\b/i, weight: 0.1 },
-        { pattern: /\b(?:weather|climate|earth|space|geology)\b/i, weight: 0.1 },
-        { pattern: /\b(?:scientific\s*method|experiments?|observations?|hypothesis)\b/i, weight: 0.1 },
-        { pattern: /\b(?:chemistry|reactions?|elements?|molecules?)\b/i, weight: 0.1 }
+        // Biology
+        { pattern: /\b(?:photosynthesis|cells?|organisms?|biology|ecosystem|plants?|animals?|life|living|genetics?)\b/i },
+        // Chemistry
+        { pattern: /\b(?:chemistry|chemical|reactions?|atoms?|molecules?|elements?|compounds?|matter)\b/i },
+        // Physics
+        { pattern: /\b(?:physics|force|motion|energy|gravity|light|sound|electricity|magnetism)\b/i },
+        // Earth Science
+        { pattern: /\b(?:earth|space|planets?|weather|climate|rocks?|minerals?|geology|atmosphere)\b/i }
       ],
-      contextPatterns: [
-        /\b(?:experiment|observe|investigate|research)\b/i,
-        /\b(?:scientific|natural|physical)\b/i
+      confidence: 0.9,
+      negativePatterns: [
+        /\b(?:math|calculate|solve|equation)\b/i,
+        /\b(?:reading|write|text|book)\b/i
+      ]
+    },
+    {
+      subject: 'Math',
+      pattern: /\b(?:math|mathematics|arithmetic|algebra|geometry|calculus)\b/i,
+      topics: [
+        { pattern: /\b(?:add|subtract|multiply|divide|operations?)\b/i },
+        { pattern: /\b(?:fractions?|decimals?|percentages?|ratios?)\b/i },
+        { pattern: /\b(?:geometry|shapes?|angles?|area|volume)\b/i },
+        { pattern: /\b(?:algebra|equations?|variables?|solve)\b/i }
+      ],
+      confidence: 0.9,
+      negativePatterns: [
+        /\b(?:science|experiment|hypothesis)\b/i,
+        /\b(?:reading|write|text|book)\b/i
+      ]
+    },
+    {
+      subject: 'Reading',
+      pattern: /\b(?:reading|literacy|english|language\s*arts|ela)\b/i,
+      topics: [
+        { pattern: /\b(?:comprehension|understand|summary|main\s*idea)\b/i },
+        { pattern: /\b(?:vocabulary|words?|spelling|definition)\b/i },
+        { pattern: /\b(?:grammar|punctuation|sentences?|paragraphs?)\b/i },
+        { pattern: /\b(?:literature|stories?|poems?|texts?)\b/i }
+      ],
+      confidence: 0.9,
+      negativePatterns: [
+        /\b(?:math|calculate|solve|equation)\b/i,
+        /\b(?:science|experiment|hypothesis)\b/i
       ]
     }
   ];
@@ -381,50 +421,31 @@ export class CommandProcessor {
 
       // Check for educational context
       if (this.hasEducationalContext(transcript)) {
-        confidence = Math.min(1.0, confidence + 0.3); // Increased from 0.2 to 0.3
-        console.log(`📚 Found educational context, boosting confidence to ${confidence}`);
+        console.log('📚 Found educational context, boosting confidence to 1');
+        confidence = Math.min(1.0, confidence + 0.1);
       }
 
-      // Check position in sentence (prefer grades mentioned earlier)
-      const position = transcript.indexOf(match.grade);
-      if (position !== -1) {
-        // Slight boost for grades mentioned at the start
-        if (position < transcript.length / 3) {
+      // Boost confidence for explicit grade mentions
+      if (/\b(\d+)(?:st|nd|rd|th)?\s*grade\b/i.test(match.grade)) {
+        console.log('📝 Found explicit grade mention, boosting confidence to 1');
           confidence = Math.min(1.0, confidence + 0.1);
-          console.log(`📍 Grade mentioned early in sentence, boosting confidence to ${confidence}`);
-        }
       }
 
-      // Check for grade clarity (e.g., "grade 5" is clearer than just "5")
-      if (/\b(?:grade|graders?)\b/i.test(transcript)) {
-        confidence = Math.min(1.0, confidence + 0.25); // Increased from 0.15 to 0.25
-        console.log(`📝 Found explicit grade mention, boosting confidence to ${confidence}`);
-      }
-      
-      // Extra boost for exact format like "5th grade" or "grade 5"
-      if (/\b(?:\d+(?:st|nd|rd|th)\s+grade|grade\s+\d+)\b/i.test(transcript)) {
-        confidence = Math.min(1.0, confidence + 0.2);
-        console.log(`🎯 Found exact grade format, boosting confidence to ${confidence}`);
+      // Boost confidence for exact grade format
+      if (/\b(?:kindergarten|\d+(?:st|nd|rd|th)\s*grade)\b/i.test(match.grade)) {
+        console.log('🎯 Found exact grade format, boosting confidence to 1');
+        confidence = Math.min(1.0, confidence + 0.1);
       }
 
-      // Update best match if this one has higher confidence
-      if (confidence > bestMatch.confidence || 
-         (confidence === bestMatch.confidence && position < bestMatch.position)) {
+      // Update best match if this is better
+      if (confidence > bestMatch.confidence) {
+        console.log(`✨ New best match: ${normalizedGrade} (confidence: ${confidence})`);
         bestMatch = {
           grade: normalizedGrade,
           confidence,
-          position
+          position: transcript.indexOf(match.grade)
         };
-        console.log(`✨ New best match: ${normalizedGrade} (confidence: ${confidence})`);
       }
-    }
-
-    // Require higher minimum confidence for the two-stage system
-    if (bestMatch.confidence < 0.6) { // Lowered from 0.7 to 0.6
-      console.log('⚠️ Best match confidence too low:', bestMatch.confidence);
-      console.log('🔍 Original transcript:', transcript);
-      console.log('📊 All matches:', gradeMatches);
-      return { grade: null, confidence: 0 };
     }
 
     console.log('✅ Final grade detection:', { grade: bestMatch.grade, confidence: bestMatch.confidence });
@@ -469,105 +490,56 @@ export class CommandProcessor {
    * Parse the subject from the transcript with improved accuracy
    */
   public parseSubject(transcript: string): { subject: Subject | null; confidence: number } {
-    console.log('🔍 Starting subject detection in CommandProcessor:', transcript);
+    console.log('🔍 Starting subject detection:', transcript);
+    
     let highestConfidence = 0;
     let detectedSubject: Subject | null = null;
 
-    for (const { pattern, subject, confidence, topics, contextPatterns } of this.subjectPatterns) {
-      console.log(`📚 Testing pattern for ${subject}:`, pattern);
-      if (pattern.test(transcript)) {
-        console.log(`✅ Found match for ${subject}`);
-        let matchConfidence = confidence;
+    // Check each subject pattern
+    for (const [subject, pattern] of Object.entries(this.SUBJECT_PATTERNS)) {
+      console.log(`🔍 Testing pattern for ${subject}:`, pattern);
+      const matches = transcript.match(pattern);
+      if (matches) {
+        // Base confidence starts at 0.8
+        let confidence = 0.8;
         
-        // Check for topic matches and add their weights
-        if (topics) {
-          const topicMatches = topics.filter(topic => topic.pattern.test(transcript));
-          console.log(`📖 Found ${topicMatches.length} topic matches for ${subject}`);
-          for (const match of topicMatches) {
-            matchConfidence = Math.min(1.0, matchConfidence + match.weight);
-          }
+        // Increase confidence based on number of matches
+        confidence += Math.min(matches.length * 0.1, 0.2);
+        
+        // Boost confidence for specific keywords
+        if (subject === 'Science' && /\b(photosynthesis|cells?|atoms?|molecules?|ecosystem|experiment)\b/i.test(transcript)) {
+          confidence += 0.2;
+        } else if (subject === 'Math' && /\b(algebra|geometry|calculus|equation)\b/i.test(transcript)) {
+          confidence += 0.2;
+        } else if (subject === 'Reading' && /\b(comprehension|literature|grammar|vocabulary)\b/i.test(transcript)) {
+          confidence += 0.2;
         }
-
-        // Check for context matches
-        if (contextPatterns) {
-          const contextMatches = contextPatterns.filter(pattern => pattern.test(transcript)).length;
-          if (contextMatches > 0) {
-            console.log(`🔍 Found ${contextMatches} context matches for ${subject}`);
-            matchConfidence = Math.min(1.0, matchConfidence + (contextMatches * 0.05));
-          }
-        }
-
-        // Check for negative patterns that might indicate a different subject
-        if (isValidSubject(subject)) {
-        const hasNegativeMatch = this.checkNegativePatterns(transcript, subject);
-        if (hasNegativeMatch) {
-          console.log(`⚠️ Found negative pattern match for ${subject}, reducing confidence`);
-          matchConfidence *= 0.5; // Reduce confidence if negative patterns found
-          }
-        }
-
-        // Multiple mentions boost confidence
-        const mentions = (transcript.match(pattern) || []).length;
-        if (mentions > 1) {
-          console.log(`📈 Found ${mentions} mentions of ${subject}, boosting confidence`);
-          matchConfidence = Math.min(1.0, matchConfidence + (0.05 * (mentions - 1)));
-        }
-
-        // Boost confidence if subject is mentioned with educational terms
-        if (this.hasEducationalContext(transcript)) {
-          console.log(`📚 Found educational terms with ${subject}, boosting confidence`);
-          matchConfidence = Math.min(1.0, matchConfidence + 0.05);
-        }
-
-        console.log(`🎯 Confidence for ${subject}:`, matchConfidence);
-
-        if (matchConfidence > highestConfidence) {
-          highestConfidence = matchConfidence;
-          detectedSubject = subject as Subject;
-          console.log(`✨ New highest confidence subject: ${subject} (${matchConfidence})`);
+        
+        // Cap confidence at 1.0
+        confidence = Math.min(confidence, 1.0);
+        
+        if (confidence > highestConfidence && isValidSubject(subject)) {
+          highestConfidence = confidence;
+          detectedSubject = subject;
         }
       }
     }
 
-    // If confidence is too low, return null instead of an uncertain subject
-    if (highestConfidence < 0.7) {
-      console.log('⚠️ Subject confidence too low, returning null');
-      return { subject: null, confidence: 0 };
+    // If no subject detected but we have science-specific content
+    if (!detectedSubject && /\b(photosynthesis|cells?|atoms?|molecules?|ecosystem|plants?|animals?|weather)\b/i.test(transcript)) {
+      highestConfidence = 0.9;
+      detectedSubject = 'Science';
     }
 
-    console.log('✅ Final subject detection:', { subject: detectedSubject, confidence: highestConfidence });
+    // Log the result
+    console.log('🎯 Subject detection result:', { subject: detectedSubject, confidence: highestConfidence });
+    
+    if (highestConfidence < 0.6) {
+      console.log('⚠️ Subject confidence too low, returning null');
+      return { subject: null, confidence: highestConfidence };
+    }
+
     return { subject: detectedSubject, confidence: highestConfidence };
-  }
-
-  /**
-   * Check for patterns that might indicate a different subject
-   */
-  private checkNegativePatterns(transcript: string, currentSubject: Subject): boolean {
-    const negativePatterns: Record<Subject, RegExp[]> = {
-      Math: [
-        /\bread\b.*\bstory\b/i,
-        /\bwrite\b.*\bessay\b/i,
-        /\bspelling\b.*\bwords\b/i,
-        /\bgrammar\b.*\brules\b/i,
-        /\bvocabulary\b.*\blist\b/i
-      ],
-      Reading: [
-        /\bsolve\b.*\bequation\b/i,
-        /\bcalculate\b/i,
-        /\bgeometry\b.*\bshapes\b/i,
-        /\bmath\b.*\bproblems?\b/i,
-        /\bnumbers?\b.*\boperations?\b/i
-      ],
-      Science: [
-        /\bspelling\b.*\btest\b/i,
-        /\bgrammar\b.*\brules\b/i,
-        /\bsolve\b.*\bmath\b/i,
-        /\bvocabulary\b.*\bwords?\b/i,
-        /\bread\b.*\bcomprehension\b/i
-      ]
-    };
-
-    return negativePatterns[currentSubject]?.some(pattern => pattern.test(transcript)) || false;
   }
 
   /**
@@ -666,114 +638,41 @@ export class CommandProcessor {
   public processCommand(transcript: string): NLPResult {
     console.log('🎯 Processing command:', transcript);
 
-    const { grade, confidence: gradeConfidence } = this.parseGradeLevel(transcript);
-    console.log('📚 Grade detection:', { grade, confidence: gradeConfidence });
-
-    const { subject, confidence: subjectConfidence } = this.parseSubject(transcript);
-    console.log('📖 Subject detection:', { subject, confidence: subjectConfidence });
-
-    const { type: resourceType, confidence: resourceConfidence, format } = this.parseResourceType(transcript);
-    console.log('📝 Resource type detection:', { resourceType, confidence: resourceConfidence, format });
-
-    const { theme, confidence: themeConfidence } = this.parseTheme(transcript);
-    console.log('🎨 Theme detection:', { theme, confidence: themeConfidence });
-
-    // Calculate overall confidence - only include confidences for detected values
-    let totalConfidence = 0;
-    let confidenceCount = 0;
-
-    if (grade) {
-      totalConfidence += gradeConfidence;
-      confidenceCount++;
-    }
-    if (subject) {
-      totalConfidence += subjectConfidence;
-      confidenceCount++;
-    }
-    if (resourceType) {
-      totalConfidence += resourceConfidence;
-      confidenceCount++;
-    }
-    if (theme) {
-      totalConfidence += themeConfidence;
-      confidenceCount++;
-    }
-
-    const confidence = confidenceCount > 0 ? totalConfidence / confidenceCount : 0;
-    console.log('🎯 Overall confidence:', confidence);
+    // Use improved subject detection
+    const subjectResult = this.parseSubject(transcript);
+    
+    // Use improved grade level detection
+    const gradeLevelResult = this.parseGradeLevel(transcript);
+    
+    // Parse resource type
+    const resourceTypeResult = this.parseResourceType(transcript);
+    
+    // Parse theme
+    const themeResult = this.parseTheme(transcript);
 
     // Extract additional specifications
     const specifications: ResourceSpecs = {
-      format: format || undefined,
-      theme: theme || undefined,
-      topicArea: this.extractTopicArea(transcript, subject),
+      topicArea: this.extractTopicArea(transcript, subjectResult.subject),
       difficulty: this.extractDifficulty(transcript),
+      format: resourceTypeResult.format,
       questionCount: this.extractQuestionCount(transcript),
-      customInstructions: this.extractCustomInstructions(transcript)
+      customInstructions: this.extractCustomInstructions(transcript),
+      theme: themeResult.theme
     };
-    console.log('🔍 Extracted specifications:', specifications);
 
-    // Validate the results before returning
-    // If confidence is too low or required fields are missing, return null values
-    if (confidence < 0.7 || (!grade && !subject && !resourceType)) {
-      console.log('⚠️ Validation failed: Low confidence or missing required fields');
-      return {
-        gradeLevel: null,
-        subject: null,
-        resourceType: null,
-        specifications: {
-          format: undefined,
-          theme: undefined,
-          topicArea: undefined,
-          difficulty: undefined,
-          questionCount: undefined,
-          customInstructions: undefined
-        },
-        confidence: 0
-      };
-    }
+    // Calculate overall confidence
+    const overallConfidence = this.calculateConfidence([
+      subjectResult.confidence,
+      gradeLevelResult.confidence,
+      resourceTypeResult.confidence
+    ]);
 
-    // If we have a subject but no grade, or vice versa, reduce confidence
-    if ((grade && !subject) || (!grade && subject)) {
-      console.log('⚠️ Incomplete detection: Missing grade or subject');
       return {
-        gradeLevel: null,
-        subject: null,
-        resourceType: resourceType,
+      subject: subjectResult.subject,
+      grade: gradeLevelResult.grade,
+      resourceType: resourceTypeResult.type,
         specifications,
-        confidence: confidence * 0.5
-      };
-    }
-
-    // If we have grade and subject but no resource type, try to infer from context
-    if (grade && subject && !resourceType) {
-      const inferredType = this.inferResourceTypeFromContext(transcript);
-      console.log('🤔 Attempting to infer resource type:', inferredType);
-      if (inferredType) {
-        return {
-          gradeLevel: grade,
-          subject: subject,
-          resourceType: inferredType,
-          specifications,
-          confidence: confidence * 0.8
-        };
-      }
-    }
-
-    console.log('✅ Command processing complete:', {
-      gradeLevel: grade,
-      subject,
-      resourceType,
-      specifications,
-      confidence
-    });
-
-    return {
-      gradeLevel: grade,
-      subject,
-      resourceType: resourceType || null,
-      specifications,
-      confidence
+      confidence: overallConfidence
     };
   }
 
@@ -876,11 +775,11 @@ export class CommandProcessor {
     const warnings: ValidationWarning[] = [];
 
     // Required fields validation
-    if (!formData.gradeLevel) {
+    if (!formData.grade) {
       errors.push({
-        field: 'gradeLevel',
-        message: 'Grade level is required',
-        suggestedFix: 'Please specify a grade level (e.g., "3rd grade")'
+        field: 'grade',
+        message: 'Grade is required',
+        suggestedFix: 'Please specify a grade (e.g., "3rd grade")'
       });
     }
 
@@ -957,5 +856,11 @@ export class CommandProcessor {
     };
 
     return defaultFormats[subject];
+  }
+
+  private calculateConfidence(confidences: number[]): number {
+    if (confidences.length === 0) return 0;
+    const sum = confidences.reduce((a, b) => a + b, 0);
+    return sum / confidences.length;
   }
 }

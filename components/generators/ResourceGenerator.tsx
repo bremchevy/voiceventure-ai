@@ -5,7 +5,7 @@ import { generatePDF } from "@/lib/utils/pdf";
 import { toast } from "@/components/ui/use-toast";
 import { ShareModal } from "@/components/ui/share-modal";
 import { BaseGeneratorProps, BaseGeneratorSettings, themeEmojis, suggestedTopics, isFormat1, isFormat2, isFormat3 } from '@/lib/types/generator-types';
-import { Resource, WorksheetResource, QuizResource, LessonPlanResource } from '@/lib/types/resource';
+import { Resource, WorksheetResource, QuizResource, LessonPlanResource, ExitSlipResource } from '@/lib/types/resource';
 import { generateWorksheetPDF } from '@/lib/utils/pdf-generator';
 
 interface ResourceGeneratorProps<T extends BaseGeneratorSettings, R extends Resource> extends BaseGeneratorProps {
@@ -678,7 +678,7 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
       
       const requestPayload = {
         subject: settings.subject,
-        gradeLevel: settings.grade,
+        grade: settings.grade,
         resourceType: type.replace('_', ' '),
         theme: settings.theme,
         difficulty: ('difficulty' in settings) ? settings.difficulty : undefined,
@@ -908,6 +908,9 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
             </button>
           ))}
         </div>
+        {!settings.grade && (
+          <div className="text-sm text-red-500 mt-2">Please select a grade</div>
+        )}
       </div>
 
       {/* Subject */}
@@ -932,6 +935,9 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
             </button>
           ))}
         </div>
+        {!settings.subject && (
+          <div className="text-sm text-red-500 mt-2">Please select a subject</div>
+        )}
       </div>
 
       {/* Theme */}
@@ -1175,7 +1181,7 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
 
               {/* Questions Section */}
               <div className="space-y-6">
-                {generatedResource.questions?.map((question: any, index: number) => (
+                {(generatedResource as ExitSlipResource).questions?.map((question: any, index: number) => (
                   <div key={index} className="p-4 bg-white rounded-lg border border-gray-200">
                     {question.type === 'reflection_prompt' && (
                       <div className="space-y-4">
@@ -1316,7 +1322,7 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
               {(generatedResource as QuizResource).questions.map((question, index) => (
                 <div key={index} className="p-4 bg-gray-50 rounded-lg space-y-4">
                   <div className="font-medium">
-                    {index + 1}. {question.question}
+                    {index + 1}. {question.type === 'skill_assessment' ? question.mainQuestion : question.question}
                   </div>
                   
                   {/* Multiple Choice Options */}
