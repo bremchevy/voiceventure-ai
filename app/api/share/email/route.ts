@@ -2,10 +2,26 @@ import { NextRequest, NextResponse } from 'next/server';
 import { Resend } from 'resend';
 import { WorksheetEmailTemplate } from '@/emails/worksheet-template';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+// Check for API key before initializing Resend
+if (!process.env.RESEND_API_KEY) {
+  console.error('RESEND_API_KEY is not configured in environment variables');
+}
+
+const resend = new Resend(process.env.RESEND_API_KEY || 'dummy_key');
 
 export async function POST(request: NextRequest) {
   try {
+    // Validate API key first
+    if (!process.env.RESEND_API_KEY) {
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: 'Email service is not configured. Please add RESEND_API_KEY to your environment variables.' 
+        },
+        { status: 500 }
+      );
+    }
+
     console.log('Received share request');
     const body = await request.json();
     console.log('Request body:', body);
@@ -34,14 +50,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { success: false, error: `Invalid email addresses: ${invalidEmails.join(', ')}` },
         { status: 400 }
-      );
-    }
-
-    if (!process.env.RESEND_API_KEY) {
-      console.error('RESEND_API_KEY is not configured');
-      return NextResponse.json(
-        { success: false, error: 'Email service is not configured' },
-        { status: 500 }
       );
     }
 
