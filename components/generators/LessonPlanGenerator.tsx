@@ -6,14 +6,12 @@ import { PDFService } from '@/lib/services/PDFService';
 
 export function LessonPlanGenerator({ onBack, onComplete, request }: BaseGeneratorProps) {
   const [settings, setSettings] = useState<LessonPlanSettings>({
-    grade: request?.grade || "3rd Grade",
-    subject: request?.subject || "Math",
-    theme: "General",
-    lessonType: "full-lesson",
-    lessonDuration: "45 minutes",
-    lessonObjectives: ["Students will understand", "Students will be able to"],
-    topicArea: request?.specifications?.topicArea || "",
-    format: "full_lesson" as Format
+    grade: "",
+    subject: "",
+    topicArea: "",
+    resourceType: "lesson_plan",
+    format: "standard",
+    lessonDuration: 45
   });
 
   const lessonTypes = [

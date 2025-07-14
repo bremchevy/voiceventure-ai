@@ -234,7 +234,7 @@ export async function POST(req: Request) {
       topic,
       grade,
       gradeLevel,
-      theme = 'General',
+      theme,  // Remove the default value here
       resourceType = 'worksheet',
       questionCount = 5,
       selectedQuestionTypes = [],
@@ -247,8 +247,18 @@ export async function POST(req: Request) {
     let systemPrompt = `You are an expert ${subject} teacher with years of experience creating engaging educational content. `;
 
     // Add theme-specific instructions
-    if (theme === 'Halloween') {
-      systemPrompt += `Create a Halloween-themed worksheet that incorporates spooky but age-appropriate elements. Use Halloween-themed word problems and scenarios where appropriate, but ensure the core educational content remains clear and effective. `;
+      if (theme && theme !== 'General') {
+        switch (theme) {
+          case 'Halloween':
+            systemPrompt += `Create a Halloween-themed worksheet that incorporates spooky but age-appropriate elements. Use Halloween-themed word problems, scenarios, and vocabulary where appropriate, but ensure the core educational content remains clear and effective. `;
+            break;
+          case 'Winter':
+            systemPrompt += `Create a Winter-themed worksheet that incorporates seasonal elements like snow, holidays, and winter activities. Use winter-themed word problems, scenarios, and vocabulary where appropriate, but ensure the core educational content remains clear and effective. `;
+            break;
+          case 'Spring':
+            systemPrompt += `Create a Spring-themed worksheet that incorporates seasonal elements like flowers, growth, and renewal. Use spring-themed word problems, scenarios, and vocabulary where appropriate, but ensure the core educational content remains clear and effective. `;
+            break;
+        }
     }
 
     // Create the resource prompt
@@ -649,15 +659,26 @@ export async function POST(req: Request) {
     }
 
     const generatedContent = await generateWithRetry();
+    
+    // Transform the response to match our expected format
+    let transformedContent = generatedContent;
+    
+    if (format === 'science_context' && generatedContent.scienceContent) {
+      transformedContent = {
+        ...generatedContent,
+        science_context: {
+          topic: generatedContent.topic || '',
+          explanation: generatedContent.scienceContent.explanation || '',
+          key_concepts: generatedContent.scienceContent.concepts || [],
+          key_terms: generatedContent.scienceContent.key_terms || {},
+          applications: generatedContent.scienceContent.applications || [],
+          problems: generatedContent.problems || []
+        }
+      };
+      delete transformedContent.scienceContent;
+    }
 
-    // Transform the API response using the format handler
-    const transformedResource = formatHandlerService.transformResource(
-      subject.toLowerCase(),
-      format,
-      generatedContent
-    );
-
-    return NextResponse.json(transformedResource);
+    return NextResponse.json(transformedContent);
 
   } catch (error: any) {
     console.error('Generation error:', error);

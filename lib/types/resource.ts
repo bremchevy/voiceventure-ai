@@ -4,129 +4,173 @@ export type ResourceType = 'worksheet' | 'quiz' | 'rubric' | 'lesson plan' | 'ex
 
 export type QuestionType = 'multiple_choice' | 'true_false' | 'short_answer' | 'skill_assessment';
 
-export interface BaseResource {
+// Base resource interface
+export interface Resource {
   resourceType: string;
-  title: string;
   subject: string;
+  format: string;
+  title: string;
   grade_level: string;
-  instructions?: string;
+  theme: string;
   topic?: string;
-  theme?: string;  // Theme property for emoji decorations
 }
 
-// Math-specific types
-interface MathProblem {
+// Base problem type with common fields
+export interface BaseProblem {
   type: string;
   question: string;
   answer: string;
   explanation?: string;
+}
+
+// Math-specific problem type
+export interface MathProblem extends BaseProblem {
+  type: 'math' | 'standard' | 'guided';
   steps?: string[];
+  visualAid?: {
+    type: 'shape' | 'graph' | 'diagram';
+    data: any;
+  };
   hints?: string[];
-  visuals?: string[];
+  thinking_points?: string[];
+}
+
+// Reading-specific problem type
+export interface ReadingProblem extends BaseProblem {
+  type: 'reading';
+  evidence_prompt?: string;
+  thinking_points?: string[];
+  data_analysis?: string;
+}
+
+// Vocabulary-specific types
+export interface VocabularyItem {
+  word: string;
+  definition: string;
+  context?: string;
+  usage?: string;
+}
+
+export interface VocabularyProblem extends BaseProblem {
+  type: 'vocabulary';
+  word: string;
+  definition: string;
+  usage?: string;
+  context?: string;
+  questions?: Array<{
+    question: string;
+    answer: string;
+  }>;
+  application?: string;
+  evidence_prompt?: string;
+  skill_focus?: string;
+  hints?: string[];
+}
+
+// Science-specific problem type
+export interface ScienceProblem extends BaseProblem {
+  type: 'science';
+  complexity?: string;
+  focus_area?: string;
 }
 
 // Reading-specific types
-interface ReadingPassage {
+export interface ReadingPassage {
   text: string;
-  type: 'fiction' | 'non-fiction' | 'poetry';
-  lexile_level?: string;
   target_words?: string[];
-  elements_focus?: string[];
 }
 
-interface ComprehensionProblem {
-  type: 'main_idea' | 'detail' | 'inference';
+export interface ComprehensionProblem {
+  type: string;
   question: string;
   answer: string;
-  evidence_prompt: string;
-  skill_focus: string;
+  evidence_prompt?: string;
+  explanation?: string;
+  thinking_points?: string[];
 }
 
-interface LiteraryAnalysisProblem {
-  type: 'analysis';
-  element: string;
-  question: string;
-  guiding_questions: string[];
-  evidence_prompt: string;
-  response_format: string;
-}
-
-interface VocabularyProblem {
+export interface VocabularyItem {
   word: string;
-  context: string;
+  context?: string;
   definition: string;
-  questions: {
-    type: 'meaning' | 'usage' | 'context';
+  questions: Array<{
     question: string;
     answer: string;
-  }[];
-  application: string;
+  }>;
+  explanation?: string;
+  thinking_points?: string[];
 }
 
 // Science-specific types
-interface LabExperimentProblem {
-  type: 'experiment';
+export interface ScienceContext {
+  explanation: string;
+  concepts: string[];
+  applications: string[];
+  key_terms?: Record<string, string>;
+  introduction?: string;
+  main_components?: string;
+  importance?: string;
+  causes_effects?: string;
+  additional_info?: string;
+  problems?: ScienceProblem[];
+}
+
+export interface AnalysisPoint {
+  type: string;
   question: string;
-  hypothesis_prompt: string;
-  procedure: string[];
-  data_collection: {
-    table_headers: string[];
-    rows: number;
-  };
-  analysis_questions: string[];
-  conclusion_prompt: string;
+  answer: string;
+  explanation: string;
+  thinking_points?: string[];
+  data_analysis?: string;
 }
 
-interface ObservationProblem {
-  type: 'observation';
-  phenomenon: string;
-  background: string;
-  observation_prompts: string[];
-  data_recording: {
-    type: 'diagram' | 'table' | 'text';
-    instructions: string;
-  };
-  analysis_questions: string[];
-  connections: string[];
+// Science specific content types
+export interface AnalysisFocusContent {
+  analysis_focus: string;
+  critical_aspects: string;
+  data_patterns: string;
+  implications: string;
+  key_points: string[];
 }
 
-interface ConceptApplicationProblem {
-  type: 'application';
-  scenario: string;
-  concept_connection: string;
-  questions: {
-    question: string;
-    answer: string;
-    explanation: string;
-  }[];
-  extension: string;
+export interface AnalysisProblem extends BaseProblem {
+  type: 'analysis';
+  thinking_points?: string[];
 }
 
 // Combined worksheet resource type
-export interface WorksheetResource extends BaseResource {
+export interface WorksheetResource extends Resource {
   resourceType: 'worksheet';
-  // Math formats
-  problems?: MathProblem[];
-  
-  // Reading formats
-  passage?: ReadingPassage;
-  comprehensionProblems?: ComprehensionProblem[];
-  literaryAnalysisProblems?: LiteraryAnalysisProblem[];
-  vocabularyProblems?: VocabularyProblem[];
-  
-  // Science formats
-  objective?: string;
-  safety_notes?: string;
+  instructions?: string;
+  passage?: string | { text: string; target_words?: string[] };
+  problems?: Array<MathProblem | ReadingProblem | VocabularyProblem | ScienceProblem | AnalysisProblem>;
+  comprehensionProblems?: Array<ComprehensionProblem>;
+  vocabulary?: Array<VocabularyItem>;
+  science_context?: {
+    topic: string;
+    explanation: string;
+    key_concepts: string[];
+    key_terms?: Record<string, string>;
+    applications?: string[];
+    problems?: ScienceProblem[];
+  };
+  analysis_content?: AnalysisFocusContent;
+  experiment?: {
+    objective: string;
+    hypothesis: string;
+    variables: {
+      independent: string;
+      dependent: string;
+      controlled: string[];
+    };
+    safety_notes: string[];
+  };
   materials?: string[];
-  labProblems?: LabExperimentProblem[];
-  observationProblems?: ObservationProblem[];
-  conceptProblems?: ConceptApplicationProblem[];
-  scienceContent?: ScienceContent;
-  vocabulary?: Record<string, string>;
+  procedure?: string[];
 }
 
 // Quiz resource type
-export interface QuizResource extends BaseResource {
+export interface QuizResource extends Resource {
   resourceType: 'quiz';
   format: Format;
   questions: Array<{
@@ -162,7 +206,7 @@ export interface QuizResource extends BaseResource {
 }
 
 // Exit slip resource type
-export interface ExitSlipResource extends BaseResource {
+export interface ExitSlipResource extends Resource {
   resourceType: 'exit_slip';
   format: 'reflection_prompt' | 'vocabulary_check' | 'skill_assessment';
   questions: Array<{
@@ -219,7 +263,7 @@ interface Differentiation {
 }
 
 // Lesson plan resource type
-export interface LessonPlanResource extends BaseResource {
+export interface LessonPlanResource extends Resource {
   resourceType: 'lesson_plan';
   duration: string;
   objectives: string[];
@@ -236,7 +280,7 @@ export interface LessonPlanResource extends BaseResource {
 }
 
 // Rubric resource type
-export interface RubricResource extends BaseResource {
+export interface RubricResource extends Resource {
   resourceType: 'rubric';
   format: 'checklist' | '3_point' | '4_point';
   criteria: {
@@ -248,8 +292,6 @@ export interface RubricResource extends BaseResource {
     }[];
   }[];
 }
-
-export type Resource = BaseResource | WorksheetResource | QuizResource | RubricResource | ExitSlipResource | LessonPlanResource;
 
 export interface ResourceGenerationOptions {
   subject: string;

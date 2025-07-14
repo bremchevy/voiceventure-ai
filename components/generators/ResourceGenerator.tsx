@@ -6,8 +6,7 @@ import { toast } from "@/components/ui/use-toast";
 import { ShareModal } from "@/components/ui/share-modal";
 import { BaseGeneratorProps, BaseGeneratorSettings, themeEmojis, suggestedTopics, isFormat1, isFormat2, isFormat3 } from '@/lib/types/generator-types';
 import { Resource, WorksheetResource, QuizResource, LessonPlanResource, ExitSlipResource, MathProblem, ReadingProblem, VocabularyProblem } from '@/lib/types/resource';
-import { transformResponse, generatePreview } from '@/lib/handlers/format-manager';
-import { formatHandlerService } from '../../lib/services/FormatHandlerService';
+import { formatHandlerService } from '@/lib/services/FormatHandlerService';
 
 
 interface ResourceGeneratorProps<T extends BaseGeneratorSettings, R extends Resource> extends BaseGeneratorProps {
@@ -140,6 +139,7 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
   const generateResource = async () => {
     try {
       setCurrentStep("generating");
+      setError(null); // Clear any previous errors
 
       // Step 1: Analyzing request
       updateGenerationProgress(0, 25);
@@ -154,11 +154,11 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
       const requestPayload = {
         subject: settings.subject,
         grade: settings.grade,
-        topic: settings.topicArea, // Map topicArea to topic as expected by API
-        resourceType: type,  // Don't replace underscore
+        topic: settings.topicArea,
+        resourceType: type,
         format: settings.format || 'standard',
         questionCount: ('problemCount' in settings) ? settings.problemCount : (settings.questionCount || 10),
-        theme: settings.theme || 'General',
+        theme: settings.theme, // Remove the default 'General' here
         customInstructions: settings.customInstructions || '',
         selectedQuestionTypes: settings.selectedQuestionTypes || []
       };
@@ -185,18 +185,20 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
 
       let content;
       try {
-        content = await response.text();
-        const rawResponse = JSON.parse(content);
+        const rawResponse = await response.json();
         console.log('Raw API response:', rawResponse);
 
-        // Create a modified response with the correct format
-        const modifiedResponse = {
-          ...rawResponse,
-          format: settings.format // Override the format before transformation
-        };
-        
-        // Transform the modified response
-        const transformedResponse = transformResponse(modifiedResponse);
+        // Transform the response using the format handler service
+        const transformedResponse = formatHandlerService.transformResource(
+          rawResponse.subject.toLowerCase(),
+          rawResponse.format,
+          {
+            ...rawResponse,
+            requestPayload: {
+              theme: settings.theme
+            }
+          }
+        );
         console.log('Transformed response:', transformedResponse);
 
         // Validate the transformed response based on resource type
@@ -288,7 +290,7 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
       // Debug logging
       console.log('PDF generation response status:', response.status);
 
-      // Get the PDF blob from the response
+      // Get the PDF blob directly from the response
       const pdfBlob = await response.blob();
       
       // Create a download link and trigger download
@@ -306,7 +308,7 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
         description: "PDF downloaded successfully!",
         variant: "default"
       });
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Error in PDF generation:', error);
       toast({
         title: "Error",
@@ -431,7 +433,13 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
           ].map((theme) => (
             <button
               key={theme.name}
-              onClick={() => setSettings((prev) => ({ ...prev, theme: theme.name as T['theme'] }))}
+              onClick={() => {
+                console.log('Setting theme to:', theme.name);
+                setSettings((prev) => ({
+                  ...prev,
+                  theme: theme.name as T['theme']
+                }));
+              }}
               className={`p-3 rounded-lg border-2 text-sm font-medium transition-all flex items-center gap-2 ${
                 settings.theme === theme.name
                   ? "border-purple-500 bg-purple-50 text-purple-700"

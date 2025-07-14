@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Resource } from '@/lib/types/resource';
+import { Resource, WorksheetResource } from '@/lib/types/resource';
 import { PDFService } from '@/lib/services/PDFService';
 
-export const runtime = 'nodejs'; // Required for @react-pdf/renderer
+export const runtime = 'nodejs';
 
 export async function GET(request: NextRequest) {
   try {
@@ -17,9 +17,9 @@ export async function GET(request: NextRequest) {
     }
 
     // Decode and parse the worksheet data
-    let resource: Resource;
+    let resource: WorksheetResource;
     try {
-      resource = JSON.parse(decodeURIComponent(dataParam)) as Resource;
+      resource = JSON.parse(decodeURIComponent(dataParam)) as WorksheetResource;
     } catch (parseError) {
       console.error('Error parsing worksheet data:', parseError);
       return NextResponse.json(
@@ -36,8 +36,8 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Generate PDF using PDFService
-    const pdfBuffer = await PDFService.generateFromResource(resource);
+    // Generate PDF using PDFService with server-side method
+    const pdfBuffer = await PDFService.generatePDF(resource, 'server');
 
     // Set response headers for PDF download
     const headers = new Headers();
@@ -52,10 +52,10 @@ export async function GET(request: NextRequest) {
       status: 200,
       headers
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error in PDF download:', error);
     return NextResponse.json(
-      { error: 'Failed to generate PDF for download' },
+      { error: error instanceof Error ? error.message : 'Failed to generate PDF for download' },
       { status: 500 }
     );
   }

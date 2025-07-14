@@ -5,20 +5,25 @@ import { generateScienceWorksheetContent } from '../utils/science-worksheet';
 // Science format handlers
 const scienceContext: FormatHandler = {
   transform: (response: any): WorksheetResource => {
+    // Handle both direct and nested response structures
+    const scienceData = response.science_context || response;
+    // Preserve the original theme from the request payload
+    const theme = response.theme || response.requestPayload?.theme;
+    
     return {
       resourceType: 'worksheet',
       subject: 'Science',
       format: 'science_context',
       title: response.title || 'Science Context Worksheet',
       grade_level: response.grade_level || '',
-      theme: response.theme || 'General',
+      theme,
       science_context: {
-        topic: response.topic || '',
-        explanation: response.scienceContent?.explanation || '',
-        key_concepts: response.scienceContent?.concepts || [],
-        key_terms: response.scienceContent?.key_terms || {},
-        applications: response.scienceContent?.applications || [],
-        problems: response.problems || []
+        topic: scienceData.topic || '',
+        explanation: scienceData.explanation || '',
+        key_concepts: scienceData.key_concepts || [],
+        key_terms: scienceData.key_terms || {},
+        applications: scienceData.applications || [],
+        problems: scienceData.problems || []
       }
     };
   },
@@ -34,6 +39,8 @@ const analysisFormat: FormatHandler = {
   transform: (response: any): WorksheetResource => {
     // Extract content from response, handling potential nesting
     const content = response.content || response;
+    // Preserve the original theme from the request payload
+    const theme = response.theme || response.requestPayload?.theme;
     
     // Extract analysis content, handling both direct and nested structures
     const analysis_focus = content.analysis_focus || '';
@@ -48,7 +55,7 @@ const analysisFormat: FormatHandler = {
       format: 'analysis_focus',
       title: response.title || content.title || 'Science Analysis Worksheet',
       grade_level: response.grade_level || content.grade_level || '',
-      theme: response.theme || content.theme || 'General',
+      theme,
       topic: response.topic || content.topic || '',
       analysis_content: {
         analysis_focus,
@@ -70,13 +77,16 @@ const analysisFormat: FormatHandler = {
 
 const labExperiment: FormatHandler = {
   transform: (response: any): WorksheetResource => {
+    // Preserve the original theme from the request payload
+    const theme = response.theme || response.requestPayload?.theme;
+    
     return {
       resourceType: 'worksheet',
       subject: 'Science',
       format: 'lab_experiment',
       title: response.title || 'Lab Experiment Worksheet',
       grade_level: response.grade_level || '',
-      theme: response.theme || 'General',
+      theme,
       experiment: response.experiment || {},
       materials: response.materials || [],
       procedure: response.procedure || []

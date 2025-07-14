@@ -1,12 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { Resource } from '@/lib/types/resource';
+import { Resource, WorksheetResource } from '@/lib/types/resource';
 import { PDFService } from '@/lib/services/PDFService';
 
-export const runtime = 'nodejs'; // Required for @react-pdf/renderer
+export const runtime = 'nodejs';
 
 export async function POST(request: Request) {
   try {
-    const resource = await request.json() as Resource;
+    const resource = await request.json() as WorksheetResource;
     
     // Debug logging
     console.log('Resource data received by PDF API:', resource);
@@ -19,8 +19,8 @@ export async function POST(request: Request) {
       );
     }
 
-    // Generate PDF using PDFService
-    const pdfBuffer = await PDFService.generateFromResource(resource);
+    // Generate PDF using PDFService with server-side method
+    const pdfBuffer = await PDFService.generatePDF(resource, 'server');
 
     // Debug logging
     console.log('PDF generation completed, buffer size:', pdfBuffer.length);
@@ -35,10 +35,10 @@ export async function POST(request: Request) {
       status: 200,
       headers
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error in PDF generation:', error);
     return NextResponse.json(
-      { error: 'Failed to generate PDF' },
+      { error: error instanceof Error ? error.message : 'Failed to generate PDF' },
       { status: 500 }
     );
   }

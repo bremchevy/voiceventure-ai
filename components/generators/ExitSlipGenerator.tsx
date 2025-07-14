@@ -7,11 +7,11 @@ import { PDFService } from '@/lib/services/PDFService';
 export function ExitSlipGenerator({ onBack, onComplete, request }: BaseGeneratorProps) {
   const [settings, setSettings] = useState<ExitSlipSettings>({
     grade: "",
-    subject: "Math",
-    theme: "General",
-    format: "reflection_prompt",
-    questionCount: 3,
+    subject: "",
     topicArea: "",
+    resourceType: "exit_slip",
+    format: "reflection_prompt",
+    questionCount: 3
   });
 
   // Helper function to extract subject from text

@@ -16,13 +16,11 @@ export interface BaseGeneratorProps {
 export interface BaseGeneratorSettings {
   grade: string;
   subject: string;
-  theme: 'Halloween' | 'Winter' | 'Spring' | 'General';
+  theme?: Theme;  // Make theme optional
   topicArea: string;
+  resourceType: ResourceType;
+  format?: string;
   customInstructions?: string;
-  resourceType?: ResourceType;
-  questionCount?: number;
-  selectedQuestionTypes?: string[];
-  format?: Format;
 }
 
 export interface WorksheetSettings extends Omit<BaseGeneratorSettings, 'theme'> {

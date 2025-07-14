@@ -37,14 +37,29 @@ interface ProcessedRequest {
 }
 
 export function WorksheetGenerator({ onBack, onComplete, request }: BaseGeneratorProps) {
-  const [settings, setSettings] = useState<WorksheetSettings>({
+  const [settings, setSettings] = useState<WorksheetSettings>(() => {
+    // Initialize settings with request values if available
+    if (typeof request === 'object' && request !== null) {
+      const processedRequest = request as ProcessedRequest;
+      return {
+        grade: processedRequest.grade || "3rd Grade",
+        subject: processedRequest.subject || "Math",
+        theme: (processedRequest.specifications?.theme || undefined) as Theme | undefined,
+        problemCount: 10,
+        topicArea: processedRequest.specifications?.topicArea || "",
+        resourceType: processedRequest.resourceType as ResourceType || "worksheet",
+        format: processedRequest.specifications?.format as Format || "standard"
+      };
+    }
+    // Default settings without theme
+    return {
     grade: "3rd Grade",
     subject: "Math",
-    theme: "General" as Theme,
     problemCount: 10,
     topicArea: "",
     resourceType: "worksheet",
     format: "standard"
+    };
   });
 
   const [requestedType, setRequestedType] = useState<string | null>(null);
@@ -175,7 +190,7 @@ export function WorksheetGenerator({ onBack, onComplete, request }: BaseGenerato
   };
 
   // Helper function to extract theme from text
-  const extractTheme = (text: string): Theme => {
+  const extractTheme = (text: string): Theme | undefined => {
     const lowerText = text.toLowerCase();
     if (lowerText.includes('halloween') || lowerText.includes('spooky')) {
       return 'Halloween';
@@ -186,7 +201,7 @@ export function WorksheetGenerator({ onBack, onComplete, request }: BaseGenerato
     if (lowerText.includes('spring') || lowerText.includes('flower')) {
       return 'Spring';
     }
-    return 'General';
+    return undefined; // Don't default to 'General'
   };
 
   // Parse initial request if provided
@@ -198,7 +213,7 @@ export function WorksheetGenerator({ onBack, onComplete, request }: BaseGenerato
         const subject = processedRequest.subject || 'Science';
         const resourceType = processedRequest.resourceType || 'worksheet';
         const bestFormat = inferBestFormat(processedRequest.specifications?.topicArea || '', subject, resourceType);
-        const theme = extractTheme(processedRequest.specifications?.topicArea || '');
+        const theme = processedRequest.specifications?.theme ? processedRequest.specifications.theme as Theme : undefined;
         
         setRequestedType(resourceType);
         
@@ -207,7 +222,7 @@ export function WorksheetGenerator({ onBack, onComplete, request }: BaseGenerato
           grade: processedRequest.grade || prev.grade,
           subject: subject,
           resourceType: resourceType as ResourceType,
-          theme: (processedRequest.specifications?.theme || theme || prev.theme) as Theme,
+          theme: theme || prev.theme,
           topicArea: processedRequest.specifications?.topicArea || prev.topicArea,
           problemCount: processedRequest.specifications?.questionCount || prev.problemCount,
           format: bestFormat,
@@ -224,7 +239,7 @@ export function WorksheetGenerator({ onBack, onComplete, request }: BaseGenerato
             const subject = parsedRequest.subject || 'Science';
           const resourceType = parsedRequest.resourceType || 'worksheet';
             const bestFormat = inferBestFormat(parsedRequest.specifications?.topicArea || '', subject, resourceType);
-            const theme = extractTheme(parsedRequest.specifications?.topicArea || '');
+            const theme = parsedRequest.specifications?.theme ? parsedRequest.specifications.theme as Theme : undefined;
             
             setRequestedType(resourceType);
             
@@ -233,7 +248,7 @@ export function WorksheetGenerator({ onBack, onComplete, request }: BaseGenerato
               grade: parsedRequest.grade || prev.grade,
               subject: subject,
               resourceType: resourceType as ResourceType,
-              theme: (parsedRequest.specifications?.theme || theme || prev.theme) as Theme,
+              theme: theme || prev.theme,
               topicArea: parsedRequest.specifications?.topicArea || prev.topicArea,
               problemCount: parsedRequest.specifications?.questionCount || prev.problemCount,
               format: bestFormat,
@@ -257,7 +272,7 @@ export function WorksheetGenerator({ onBack, onComplete, request }: BaseGenerato
             grade: grade,
             subject: subject,
             resourceType: resourceType as ResourceType,
-            theme: theme,
+            theme: theme || prev.theme,
             topicArea: request,
             format: bestFormat,
           }));
@@ -573,7 +588,7 @@ export function WorksheetGenerator({ onBack, onComplete, request }: BaseGenerato
       request={request}
       renderSpecificSettings={renderSpecificSettings}
       icon={resourceFormats[settings.subject]?.[settings.resourceType]?.[0].icon || "📝"}
-      title={`${themeEmojis[settings.theme]} ${settings.resourceType.charAt(0).toUpperCase()}${settings.resourceType.slice(1)} ${themeEmojis[settings.theme]}`}
+      title={`${themeEmojis[settings.theme || 'General']} ${settings.resourceType.charAt(0).toUpperCase()}${settings.resourceType.slice(1)} ${themeEmojis[settings.theme || 'General']}`}
     />
   );
 } 
