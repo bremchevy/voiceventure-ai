@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import OpenAI from 'openai';
 import { getErrorMessage } from '@/lib/utils/errors';
+import { formatHandlerService } from '@/lib/services/FormatHandlerService';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -229,29 +230,29 @@ export async function POST(req: Request) {
   try {
     const {
       subject,
-      grade,
-      resourceType,
-      theme,
-      difficulty,
-      topicArea,
-      questionCount,
-      customInstructions,
-      selectedQuestionTypes = ['multiple_choice'],
       format,
-      lessonDuration
+      topic,
+      grade,
+      gradeLevel,
+      theme = 'General',
+      resourceType = 'worksheet',
+      questionCount = 5,
+      selectedQuestionTypes = [],
+      customInstructions = '',
+      ...otherParams
     } = await req.json();
 
-    // Validate required fields
-    if (!subject || !grade || !resourceType || !topicArea) {
-      return NextResponse.json(
-        { error: 'Missing required fields' },
-        { status: 400 }
-      );
+    // Function to generate content with retry handling
+    async function generateWithRetry(retryCount = 0) {
+    let systemPrompt = `You are an expert ${subject} teacher with years of experience creating engaging educational content. `;
+
+    // Add theme-specific instructions
+    if (theme === 'Halloween') {
+      systemPrompt += `Create a Halloween-themed worksheet that incorporates spooky but age-appropriate elements. Use Halloween-themed word problems and scenarios where appropriate, but ensure the core educational content remains clear and effective. `;
     }
 
-    // Build the system prompt based on resource type
-    let systemPrompt = `You are an expert ${subject} teacher specializing in creating educational resources for ${grade} students. `;
-    systemPrompt += `Create a ${resourceType} about ${topicArea} at a ${difficulty || 'moderate'} difficulty level. `;
+    // Create the resource prompt
+    systemPrompt += `Create a ${resourceType} about ${topic} that is appropriate for ${grade} students. `;
 
     if (customInstructions) {
       systemPrompt += `Additional instructions: ${customInstructions}. `;
@@ -303,11 +304,11 @@ export async function POST(req: Request) {
               }
 
               // Add specific instructions for reading passages
-              systemPrompt += `Create a grade-appropriate passage about ${topicArea}. The passage should be engaging and suitable for ${grade} students. `;
+              systemPrompt += `Create a grade-appropriate passage about ${topic}. The passage should be engaging and suitable for ${grade} students. `;
               
               switch (readingFormat) {
                 case 'comprehension':
-                  systemPrompt += `Create a reading comprehension worksheet with a passage about ${topicArea}. The passage should demonstrate clear author's purpose and include exactly ${questionCount} questions focusing on main ideas, details, and inferences. The passage MUST be included in the response. Return the response in this exact JSON format: ${READING_COMPREHENSION_FORMAT}`;
+                  systemPrompt += `Create a reading comprehension worksheet with a passage about ${topic}. The passage should demonstrate clear author's purpose and include exactly ${questionCount} questions focusing on main ideas, details, and inferences. The passage MUST be included in the response. Return the response in this exact JSON format: ${READING_COMPREHENSION_FORMAT}`;
                   break;
                 case 'literary_analysis':
                   systemPrompt += `Create a literary analysis worksheet with a passage rich in literary elements. Include exactly ${questionCount} analysis questions. The passage MUST be included in the response. Return the response in this exact JSON format: ${READING_LITERARY_ANALYSIS_FORMAT}`;
@@ -316,7 +317,7 @@ export async function POST(req: Request) {
                   systemPrompt += `Create a vocabulary-in-context worksheet with a passage containing target vocabulary words. Include exactly ${questionCount} vocabulary-focused questions. The passage MUST be included in the response. Return the response in this exact JSON format: ${READING_VOCABULARY_FORMAT}`;
                   break;
                 default:
-                  systemPrompt += `Create a reading comprehension worksheet with a passage about ${topicArea}. The passage should demonstrate clear author's purpose and include exactly ${questionCount} questions focusing on main ideas, details, and inferences. The passage MUST be included in the response. Return the response in this exact JSON format: ${READING_COMPREHENSION_FORMAT}`;
+                  systemPrompt += `Create a reading comprehension worksheet with a passage about ${topic}. The passage should demonstrate clear author's purpose and include exactly ${questionCount} questions focusing on main ideas, details, and inferences. The passage MUST be included in the response. Return the response in this exact JSON format: ${READING_COMPREHENSION_FORMAT}`;
                   break;
               }
             } else {
@@ -328,48 +329,61 @@ export async function POST(req: Request) {
           case 'science':
             switch (format) {
               case 'science_context':
-              case 'lab_experiment':
                 if (questionCount === 0) {
-                  systemPrompt += `Create a comprehensive explanation about ${topicArea}. Return the response in this exact JSON format:
+                  systemPrompt += `Create a comprehensive explanation about ${topic}. Return the response in this exact JSON format:
 {
-  "title": "${topicArea} Overview",
+  "title": "${topic} Study",
   "grade_level": "${grade}",
-  "topic": "${topicArea}",
+  "topic": "${topic}",
   "subject": "Science",
   "format": "science_context",
   "instructions": "Read through the content carefully. Pay attention to key concepts and their relationships. Take notes on important points.",
-  "content": {
-    "introduction": "Provide a thorough explanation of ${topicArea}",
-    "main_components": "Detail the key elements and their relationships",
-    "importance": "Explain the significance in science and daily life",
-    "causes_effects": "Explore factors and relationships",
-    "additional_info": "Share interesting facts and discoveries"
+  "scienceContent": {
+    "explanation": "Provide a thorough, grade-appropriate explanation that clearly defines and distinguishes the main concepts. Use clear, concise language that ${grade} students can understand.",
+    "concepts": [
+      "Detailed explanation of the first main concept, including its definition, characteristics, and how it works",
+      "Comprehensive breakdown of the second main concept, including examples and real-world connections",
+      "In-depth explanation of the third main concept, including its significance and relationship to other concepts"
+    ],
+    "applications": ["Provide specific, real-world examples and practical applications that demonstrate the importance and relevance of these concepts"],
+    "key_terms": {
+      "term1": "Clear, grade-appropriate definition with an example",
+      "term2": "Clear, grade-appropriate definition with an example"
+    }
   }
 }`;
                 } else {
-                  systemPrompt += `Create a comprehensive explanation about ${topicArea} with ${questionCount} questions. Return the response in this exact JSON format:
+                  systemPrompt += `Create a comprehensive explanation about ${topic} with ${questionCount} questions. Return the response in this exact JSON format:
 {
-  "title": "${topicArea} Study",
+  "title": "${topic} Study",
   "grade_level": "${grade}",
-  "topic": "${topicArea}",
+  "topic": "${topic}",
   "subject": "Science",
   "format": "science_context",
   "instructions": "Read through the content carefully before answering questions. Each question builds on the content provided. Support your answers with specific details from the text.",
-  "content": {
-    "introduction": "Provide a thorough explanation of ${topicArea}",
-    "main_components": "Detail the key elements and their relationships",
-    "importance": "Explain the significance in science and daily life",
-    "causes_effects": "Explore factors and relationships",
-    "additional_info": "Share interesting facts and discoveries"
+  "scienceContent": {
+    "explanation": "Provide a thorough, grade-appropriate explanation that clearly defines and distinguishes the main concepts. Use clear, concise language that ${grade} students can understand.",
+    "concepts": [
+      "Detailed explanation of the first main concept, including its definition, characteristics, and how it works. For example, if discussing weather vs. climate, explain how weather refers to short-term conditions (like today's temperature and rainfall) while climate describes long-term patterns (like average yearly rainfall and seasonal temperatures).",
+      "Comprehensive breakdown of the second main concept, including examples and real-world connections. For example, when discussing factors influencing weather, explain how the sun heats the Earth unevenly, creating air pressure differences that lead to wind and weather patterns.",
+      "In-depth explanation of the third main concept, including its significance and relationship to other concepts. For example, when discussing the importance of studying weather patterns, explain how meteorologists use this information to predict severe weather events and help communities prepare."
+    ],
+    "applications": [
+      "Provide specific, real-world examples and practical applications that demonstrate the importance and relevance of these concepts. Include examples relevant to ${grade} students' daily lives."
+    ],
+    "key_terms": {
+      "term1": "Clear, grade-appropriate definition with a concrete example that students can relate to",
+      "term2": "Clear, grade-appropriate definition with a concrete example that students can relate to"
+    }
   },
   "problems": [
     {
       "type": "topic_based",
-      "question": "Question about ${topicArea}",
-      "complexity": "basic/intermediate/advanced",
-      "answer": "The correct answer",
-      "explanation": "Detailed explanation linking back to content",
-      "focus_area": "Specific aspect of topic being tested"
+      "question": "Question that tests understanding of one of the detailed concepts",
+      "complexity": "grade-appropriate",
+      "answer": "Clear, complete answer that references the detailed concept explanation",
+      "explanation": "Detailed explanation that connects back to the concept and its real-world applications",
+      "focus_area": "Specific concept being tested"
     }
   ]
 }`;
@@ -378,62 +392,77 @@ export async function POST(req: Request) {
               case 'analysis_focus':
               case 'observation_analysis':
                 if (questionCount === 0) {
-                  systemPrompt += `Create an analytical breakdown of ${topicArea}. Return the response in this exact JSON format:
+                    systemPrompt += `Create a detailed analytical breakdown of ${topic}. For each section, provide comprehensive explanations that help ${grade} students deeply understand the topic. Return the response in this exact JSON format:
 {
-  "title": "${topicArea} Analysis",
+  "title": "${topic} Analysis",
   "grade_level": "${grade}",
-  "topic": "${topicArea}",
+  "topic": "${topic}",
   "subject": "Science",
   "format": "analysis_focus",
-  "instructions": "Study the key points and patterns carefully. Focus on understanding relationships between different aspects. Consider how each element connects to the broader topic.",
+  "instructions": "Study each section carefully. Take time to understand how different aspects connect and influence each other. Consider real-world applications and implications.",
   "content": {
-    "key_points": ["Essential concept 1", "Essential concept 2"],
-    "analysis_focus": "Specific aspects to examine",
-    "data_patterns": "Notable trends and correlations",
-    "critical_aspects": "Key factors to consider",
-    "implications": "Broader impacts and applications"
+    "analysis_focus": "Provide a detailed explanation of the specific aspects to examine. Include: 1) Main concept breakdown, 2) Key relationships between components, 3) Critical factors to consider, 4) Methods of analysis appropriate for ${grade} level. This should be 3-4 paragraphs of clear, engaging explanation.",
+    "implications": "Explain the broader impacts and applications in detail, including: 1) Real-world significance, 2) Future implications, 3) Societal impacts, 4) Personal relevance to students, 5) Connections to other scientific concepts. Provide concrete examples that ${grade} students can relate to.",
+    "key_points": [
+      "Essential concept 1 with detailed explanation and examples",
+      "Essential concept 2 with real-world applications",
+      "Essential concept 3 with connections to other topics",
+      "Essential concept 4 focusing on practical understanding"
+    ],
+    "critical_aspects": "Detailed breakdown of crucial elements to consider, including: 1) Core principles, 2) Variable relationships, 3) Common misconceptions, 4) Special considerations. Each aspect should include examples and explanations.",
+    "data_patterns": "Comprehensive explanation of observable patterns and trends, including: 1) What to look for, 2) How to identify patterns, 3) Why these patterns matter, 4) How to analyze them effectively."
   }
 }`;
                 } else {
-                  systemPrompt += `Create an analytical breakdown of ${topicArea} with ${questionCount} analytical questions. Return the response in this exact JSON format:
+                    systemPrompt += `Create a detailed analytical breakdown of ${topic} with ${questionCount} analytical questions. For each section, provide comprehensive explanations that help ${grade} students deeply understand the topic. Return the response in this exact JSON format:
 {
-  "title": "${topicArea} Analysis",
+  "title": "${topic} Analysis",
   "grade_level": "${grade}",
-  "topic": "${topicArea}",
+  "topic": "${topic}",
   "subject": "Science",
   "format": "analysis_focus",
-  "instructions": "First, study the content carefully. Then, for each question: 1) Read the scenario, 2) Consider all thinking points, 3) Develop a thorough analysis based on the content and your understanding.",
+  "instructions": "First, study each section carefully. Take time to understand how different aspects connect and influence each other. Then answer each question using evidence from the content provided.",
   "content": {
-    "key_points": ["Essential concept 1", "Essential concept 2"],
-    "analysis_focus": "Specific aspects to examine",
-    "data_patterns": "Notable trends and correlations",
-    "critical_aspects": "Key factors to consider",
-    "implications": "Broader impacts and applications"
+    "analysis_focus": "Provide a detailed explanation of the specific aspects to examine. Include: 1) Main concept breakdown, 2) Key relationships between components, 3) Critical factors to consider, 4) Methods of analysis appropriate for ${grade} level. This should be 3-4 paragraphs of clear, engaging explanation.",
+    "implications": "Explain the broader impacts and applications in detail, including: 1) Real-world significance, 2) Future implications, 3) Societal impacts, 4) Personal relevance to students, 5) Connections to other scientific concepts. Provide concrete examples that ${grade} students can relate to.",
+    "key_points": [
+      "Essential concept 1 with detailed explanation and examples",
+      "Essential concept 2 with real-world applications",
+      "Essential concept 3 with connections to other topics",
+      "Essential concept 4 focusing on practical understanding"
+    ],
+    "critical_aspects": "Detailed breakdown of crucial elements to consider, including: 1) Core principles, 2) Variable relationships, 3) Common misconceptions, 4) Special considerations. Each aspect should include examples and explanations.",
+    "data_patterns": "Comprehensive explanation of observable patterns and trends, including: 1) What to look for, 2) How to identify patterns, 3) Why these patterns matter, 4) How to analyze them effectively."
   },
   "problems": [
     {
       "type": "analysis",
-      "scenario": "A specific situation or data to analyze",
-      "question": "Analysis question about ${topicArea}",
-      "thinking_points": ["Point 1 to consider", "Point 2 to consider"],
-      "expected_analysis": "What students should consider in their analysis",
-      "complexity": "basic/intermediate/advanced"
+      "question": "Thought-provoking question about ${topic} that requires analysis of multiple aspects",
+      "answer": "Detailed answer that demonstrates understanding of key concepts and their relationships",
+      "explanation": "Comprehensive explanation that connects the answer to the content, real-world applications, and broader implications",
+      "thinking_points": [
+        "Specific aspect to consider when analyzing the problem",
+        "Connection to real-world applications",
+        "Relationship to key concepts",
+        "Consideration of variables and patterns"
+      ],
+      "data_analysis": "Guidance on how to analyze relevant data or patterns for this specific question"
     }
   ]
 }`;
                 }
                 break;
               default:
-                systemPrompt += `Create a comprehensive explanation about ${topicArea}. Return the response in this exact JSON format:
+                systemPrompt += `Create a comprehensive explanation about ${topic}. Return the response in this exact JSON format:
 {
-  "title": "${topicArea} Overview",
+  "title": "${topic} Overview",
   "grade_level": "${grade}",
-  "topic": "${topicArea}",
+  "topic": "${topic}",
   "subject": "Science",
   "format": "science_context",
   "instructions": "Read through the content carefully. Pay attention to key concepts and their relationships. Take notes on important points.",
   "content": {
-    "introduction": "Provide a thorough explanation of ${topicArea}",
+    "introduction": "Provide a thorough explanation of ${topic}",
     "main_components": "Detail the key elements and their relationships",
     "importance": "Explain the significance in science and daily life",
     "causes_effects": "Explore factors and relationships",
@@ -452,177 +481,14 @@ export async function POST(req: Request) {
       case 'rubric':
         systemPrompt += 'Create a detailed rubric with clear criteria and performance levels. ';
         break;
-      case 'lesson plan':
-        let lessonFormat;
-        switch (format) {
-          case 'full_lesson':
-            lessonFormat = `Design a comprehensive 45-60 minute lesson plan with detailed objectives, activities, and assessment strategies. Return the response in this exact JSON format:
-{
-  "title": "${topicArea} Lesson Plan",
-  "grade_level": "${grade}",
-  "subject": "${subject}",
-  "duration": "45-60 minutes",
-  "objectives": ["Learning objective 1", "Learning objective 2"],
-  "materials": ["Required material 1", "Required material 2"],
-  "activities": {
-    "opening": {
-      "duration": "10-15 minutes",
-      "description": "Opening activity description",
-      "teacher_actions": ["Action 1", "Action 2"],
-      "student_actions": ["Action 1", "Action 2"]
-    },
-    "main": {
-      "duration": "25-30 minutes",
-      "description": "Main activity description",
-      "teacher_actions": ["Action 1", "Action 2"],
-      "student_actions": ["Action 1", "Action 2"]
-    },
-    "closing": {
-      "duration": "10-15 minutes",
-      "description": "Closing activity description",
-      "teacher_actions": ["Action 1", "Action 2"],
-      "student_actions": ["Action 1", "Action 2"]
-    }
-  },
-  "assessment": {
-    "formative": ["Assessment method 1", "Assessment method 2"],
-    "summative": ["Assessment method 1", "Assessment method 2"]
-  },
-  "differentiation": {
-    "struggling": ["Support strategy 1", "Support strategy 2"],
-    "advanced": ["Challenge strategy 1", "Challenge strategy 2"]
-  },
-  "extensions": ["Extension activity 1", "Extension activity 2"],
-  "reflection_points": ["Reflection point 1", "Reflection point 2"]
-}`;
+      case 'lesson_plan':
+        systemPrompt += `Design a comprehensive lesson plan about ${topic} for ${grade} students. `;
             break;
-          
           case 'mini_lesson':
-            lessonFormat = `Design a focused 15-20 minute mini-lesson that targets a specific skill or concept. Return the response in this exact JSON format:
-{
-  "title": "${topicArea} Mini-Lesson",
-  "grade_level": "${grade}",
-  "subject": "${subject}",
-  "duration": "15-20 minutes",
-  "objectives": ["Focused learning objective"],
-  "materials": ["Required material 1", "Required material 2"],
-  "activities": {
-    "opening": {
-      "duration": "3-5 minutes",
-      "description": "Brief opening hook or connection",
-      "teacher_actions": ["Action 1"],
-      "student_actions": ["Action 1"]
-    },
-    "main": {
-      "duration": "10-12 minutes",
-      "description": "Focused instruction and guided practice",
-      "teacher_actions": ["Action 1", "Action 2"],
-      "student_actions": ["Action 1", "Action 2"]
-    },
-    "closing": {
-      "duration": "2-3 minutes",
-      "description": "Quick check for understanding",
-      "teacher_actions": ["Action 1"],
-      "student_actions": ["Action 1"]
-    }
-  },
-  "assessment": {
-    "formative": ["Quick check method"],
-    "summative": ["Application task"]
-  },
-  "differentiation": {
-    "struggling": ["Support strategy"],
-    "advanced": ["Challenge strategy"]
-  },
-  "extensions": ["Brief extension idea"],
-  "reflection_points": ["Key reflection point"]
-}`;
+        systemPrompt += `Design a focused 15-20 minute mini-lesson that targets a specific skill or concept. `;
             break;
-          
           case 'activity':
-            lessonFormat = `Design a standalone hands-on learning activity that can be completed in 20-30 minutes. Return the response in this exact JSON format:
-{
-  "title": "${topicArea} Activity",
-  "grade_level": "${grade}",
-  "subject": "${subject}",
-  "duration": "20-30 minutes",
-  "objectives": ["Activity-specific learning objective"],
-  "materials": ["Required material 1", "Required material 2"],
-  "activities": {
-    "opening": {
-      "duration": "5 minutes",
-      "description": "Activity setup and instructions",
-      "teacher_actions": ["Setup action", "Instruction delivery"],
-      "student_actions": ["Preparation action"]
-    },
-    "main": {
-      "duration": "15-20 minutes",
-      "description": "Hands-on activity execution",
-      "teacher_actions": ["Facilitation action", "Support action"],
-      "student_actions": ["Activity step 1", "Activity step 2"]
-    },
-    "closing": {
-      "duration": "5 minutes",
-      "description": "Share-out and connection",
-      "teacher_actions": ["Facilitate sharing"],
-      "student_actions": ["Share findings"]
-    }
-  },
-  "assessment": {
-    "formative": ["Activity-based assessment"],
-    "summative": ["Product or outcome evaluation"]
-  },
-  "differentiation": {
-    "struggling": ["Scaffolding strategy"],
-    "advanced": ["Extension option"]
-  },
-  "extensions": ["Follow-up activity idea"],
-  "reflection_points": ["Activity-specific reflection"]
-}`;
-            break;
-          
-          default:
-            lessonFormat = `Design a comprehensive lesson plan with objectives, activities, and assessment strategies. Return the response in this exact JSON format:
-{
-  "title": "${topicArea} Lesson Plan",
-  "grade_level": "${grade}",
-  "subject": "${subject}",
-  "duration": "${lessonDuration || '45 minutes'}",
-  "objectives": ["Learning objective 1", "Learning objective 2"],
-  "materials": ["Required material 1", "Required material 2"],
-  "activities": {
-    "opening": {
-      "duration": "10 minutes",
-      "description": "Opening activity description",
-      "teacher_actions": ["Action 1", "Action 2"],
-      "student_actions": ["Action 1", "Action 2"]
-    },
-    "main": {
-      "duration": "25 minutes",
-      "description": "Main activity description",
-      "teacher_actions": ["Action 1", "Action 2"],
-      "student_actions": ["Action 1", "Action 2"]
-    },
-    "closing": {
-      "duration": "10 minutes",
-      "description": "Closing activity description",
-      "teacher_actions": ["Action 1", "Action 2"],
-      "student_actions": ["Action 1", "Action 2"]
-    }
-  },
-  "assessment": {
-    "formative": ["Assessment method 1", "Assessment method 2"],
-    "summative": ["Assessment method 1", "Assessment method 2"]
-  },
-  "differentiation": {
-    "struggling": ["Support strategy 1", "Support strategy 2"],
-    "advanced": ["Challenge strategy 1", "Challenge strategy 2"]
-  },
-  "extensions": ["Extension activity 1", "Extension activity 2"],
-  "reflection_points": ["Reflection point 1", "Reflection point 2"]
-}`;
-        }
-        systemPrompt += lessonFormat;
+        systemPrompt += `Design a standalone hands-on learning activity that can be completed in 20-30 minutes. `;
         break;
       case 'exit slip':
         let exitSlipFormat = '';
@@ -630,10 +496,10 @@ export async function POST(req: Request) {
           case 'reflection_prompt':
             exitSlipFormat = `Create ${questionCount} reflection prompts following this structure. Return the response in this exact JSON format:
             {
-              "title": "${topicArea} Exit Slip",
+              "title": "${topic} Exit Slip",
               "subject": "${subject}",
               "grade_level": "${grade}",
-              "exit_slip_topic": "${topicArea}",
+              "exit_slip_topic": "${topic}",
               "difficulty_level": "Basic/Intermediate/Advanced",
               "questions": [
                 {
@@ -648,10 +514,10 @@ export async function POST(req: Request) {
           case 'vocabulary_check':
             exitSlipFormat = `Create ${questionCount} vocabulary check items following this structure. Return the response in this exact JSON format:
             {
-              "title": "${topicArea} Vocabulary Check",
+              "title": "${topic} Vocabulary Check",
               "subject": "${subject}",
               "grade_level": "${grade}",
-              "exit_slip_topic": "${topicArea}",
+              "exit_slip_topic": "${topic}",
               "difficulty_level": "Basic/Intermediate/Advanced",
               "questions": [
                 {
@@ -669,10 +535,10 @@ export async function POST(req: Request) {
           case 'skill_assessment':
             exitSlipFormat = `Create ${questionCount} skill assessment items following this structure. Return the response in this exact JSON format:
             {
-              "title": "${topicArea} Skill Assessment",
+              "title": "${topic} Skill Assessment",
               "subject": "${subject}",
               "grade_level": "${grade}",
-              "exit_slip_topic": "${topicArea}",
+              "exit_slip_topic": "${topic}",
               "difficulty_level": "Basic/Intermediate/Advanced",
               "questions": [
                 {
@@ -689,10 +555,10 @@ export async function POST(req: Request) {
           default:
             exitSlipFormat = `Create ${questionCount} exit slip questions to assess student understanding. Return the response in this exact JSON format:
             {
-              "title": "${topicArea} Exit Slip",
+              "title": "${topic} Exit Slip",
               "subject": "${subject}",
               "grade_level": "${grade}",
-              "exit_slip_topic": "${topicArea}",
+              "exit_slip_topic": "${topic}",
               "difficulty_level": "Basic/Intermediate/Advanced",
               "questions": [
                 {
@@ -717,7 +583,7 @@ export async function POST(req: Request) {
         },
         {
           role: 'user',
-          content: `Generate a ${resourceType} about ${topicArea} following the exact JSON format specified above.`
+            content: `Generate a ${resourceType} about ${topic} following the exact JSON format specified above. You MUST generate EXACTLY ${questionCount} questions/problems - no more, no less. This is a strict requirement.`
         }
       ],
       response_format: { type: "json_object" },
@@ -733,11 +599,70 @@ export async function POST(req: Request) {
     // Parse and validate the response
     const parsedContent = JSON.parse(content);
 
-    return NextResponse.json(parsedContent);
-  } catch (error) {
-    console.error('Error in generate route:', error);
+      // Validate number of questions/problems if questionCount was specified
+      if (typeof questionCount === 'number' && questionCount > 0) {
+        const problems = parsedContent.problems || parsedContent.questions || [];
+        
+        // If we don't have the right number of questions, try to fix it
+        if (problems.length !== questionCount) {
+          // Log the mismatch but don't throw an error
+          console.warn(`Generated ${problems.length} questions instead of the requested ${questionCount}. Adjusting response...`);
+          
+          // If we have too many questions, trim the excess
+          if (problems.length > questionCount) {
+            if (parsedContent.problems) {
+              parsedContent.problems = problems.slice(0, questionCount);
+            } else if (parsedContent.questions) {
+              parsedContent.questions = problems.slice(0, questionCount);
+            }
+            console.log(`Trimmed excess questions to match requested count of ${questionCount}`);
+          }
+          // If we have too few questions, duplicate some existing ones
+          else if (problems.length < questionCount) {
+            const additional = [];
+            for (let i = problems.length; i < questionCount; i++) {
+              // Use modulo to cycle through existing problems
+              const sourceProblem = problems[i % problems.length];
+              // Create a variation of the problem
+              const newProblem = {
+                ...sourceProblem,
+                question: sourceProblem.question ? 
+                  `${sourceProblem.question} (variation ${Math.floor(i / problems.length) + 1})` :
+                  sourceProblem.problem ? 
+                    `${sourceProblem.problem} (variation ${Math.floor(i / problems.length) + 1})` :
+                    `Question ${i + 1}`,
+              };
+              additional.push(newProblem);
+            }
+            
+            if (parsedContent.problems) {
+              parsedContent.problems = [...problems, ...additional];
+            } else if (parsedContent.questions) {
+              parsedContent.questions = [...problems, ...additional];
+            }
+            console.log(`Added ${additional.length} variations to match requested count of ${questionCount}`);
+          }
+        }
+      }
+
+      return parsedContent;
+    }
+
+    const generatedContent = await generateWithRetry();
+
+    // Transform the API response using the format handler
+    const transformedResource = formatHandlerService.transformResource(
+      subject.toLowerCase(),
+      format,
+      generatedContent
+    );
+
+    return NextResponse.json(transformedResource);
+
+  } catch (error: any) {
+    console.error('Generation error:', error);
     return NextResponse.json(
-      { error: getErrorMessage(error) },
+      { message: error?.message || 'Failed to generate resource' },
       { status: 500 }
     );
   }
