@@ -27,15 +27,13 @@ yarn-error.log*
 next-env.d.ts
 
 # environment files
-.env
-.env.*
 !.env.example
 
 # Misc
 .DS_Store
 *.pem
 .idea/
-.vscode/
 
 # Testing
 coverage/
+config.bat
