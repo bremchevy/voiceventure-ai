@@ -193,7 +193,7 @@ export function ResourceGenerator<T extends BaseGeneratorSettings, R extends Res
           rawResponse.subject.toLowerCase(),
           rawResponse.format,
           {
-            ...rawResponse,
+          ...rawResponse,
             requestPayload: {
               theme: settings.theme
             }

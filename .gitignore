@@ -27,8 +27,6 @@ yarn-error.log*
 next-env.d.ts
 
 # environment files
-.env
-.env.*
 !.env.example
 
 # Misc
@@ -39,3 +37,4 @@ next-env.d.ts
 
 # Testing
 coverage/
+config.bat

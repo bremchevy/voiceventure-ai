@@ -226,6 +226,35 @@ const READING_VOCABULARY_FORMAT = `{
   ]
 }`;
 
+const QUIZ_FORMAT = `{
+  "title": "string (descriptive title of the quiz)",
+  "subject": "string (the subject)",
+  "grade_level": "string (the grade level)",
+  "topic": "string (the topic area)",
+  "format": "string (multiple_choice/short_answer)",
+  "questions": [
+    {
+      "type": "multiple_choice",
+      "question": "string (the question text)",
+      "options": ["string (option A)", "string (option B)", "string (option C)", "string (option D)"],
+      "correctAnswer": "string (the correct answer)",
+      "explanation": "string (explanation of why this is correct)",
+      "cognitiveLevel": "string (recall/comprehension/application/analysis)",
+      "points": "number (points for this question)"
+    }
+  ],
+  "metadata": {
+    "complexityLevel": "number (1-10)",
+    "languageLevel": "number (1-10)",
+    "cognitiveDistribution": {
+      "recall": "number (0-1)",
+      "comprehension": "number (0-1)",
+      "application": "number (0-1)",
+      "analysis": "number (0-1)"
+    }
+  }
+}`;
+
 export async function POST(req: Request) {
   try {
     const {
@@ -482,11 +511,9 @@ export async function POST(req: Request) {
                 break;
             }
             break;
-        }
-        break;
 
       case 'quiz':
-        systemPrompt += `Create a quiz with exactly ${questionCount} questions using these types: ${selectedQuestionTypes.join(', ')}. `;
+        systemPrompt += `Create a quiz with exactly ${questionCount} questions using these types: ${selectedQuestionTypes.join(', ')}. Each question should be appropriate for ${grade} students studying ${topic}. Include clear explanations for correct answers. Return the response in this exact JSON format: ${QUIZ_FORMAT}`;
         break;
       case 'rubric':
         systemPrompt += 'Create a detailed rubric with clear criteria and performance levels. ';
